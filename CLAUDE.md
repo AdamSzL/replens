@@ -168,6 +168,19 @@ threshold by the user's own proportions** (shoulder width / femur length in
 pixels) so rules survive different body sizes and camera distances. Tune against
 `~/replens-recordings/`.
 
+ML Kit's own [pose classification guide](https://developers.google.com/ml-kit/vision/pose-detection/classifying-poses)
+(k-NN over pairwise-joint-distance embeddings, a few hundred labelled images per
+exercise) was evaluated and **not adopted as the primary approach**: it tells you
+*which pose* you're in, not *what's wrong with it*, so form cues would need
+labelled bad-form classes per fault per exercise, and its output isn't
+explainable enough to speak. Two things taken from it anyway: **normalize poses
+to constant torso size and vertical torso orientation** before computing
+anything (that's the body-proportion normalization above, made concrete), and its
+rep counting via separate entry/exit probability thresholds is the same
+hysteresis our state machine needs. Reconsider classification only if hand-tuned
+thresholds prove brittle around exercise #3 — collecting samples scales better
+than hand-tuning a new state machine per exercise.
+
 **An LLM belongs in the post-workout summary, not the live loop** — aggregate the
 deterministic metrics into natural language server-side in Milestone 4 ("depth on
 8/12 reps; knees caved on the last three — likely fatigue"). No latency
