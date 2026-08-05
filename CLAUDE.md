@@ -205,6 +205,47 @@ backend needs a device-ID → account linking endpoint). Play requires in-app *a
 web account deletion if account creation exists — budget it in Milestone 5.
 Guest-first also matters for the portfolio goal: a recruiter will not sign up.
 
+## What makes it a product (engagement design)
+
+Real-time form correction alone is a *feature*. The product is: **your phone
+counts your reps, logs your workouts, scores your form, and shows you the rep you
+got wrong.** Same tech and same scope guard — better product. Lead with rep
+counting and automatic logging ("I don't have to count, and it logs itself"):
+that's the hook that doesn't decay. Form checking is what makes someone *choose*
+RepLens; auto-logging is what makes them *keep* it.
+
+Three risks to design against, not discover after launch:
+
+1. **Setup friction is the biggest threat.** Clear the space, prop the phone,
+   check framing, walk back — a ~60 s tax before a 3 min workout. Evidence: the
+   first three test recordings were unusable because of phone placement, made by
+   the most motivated user this app will ever have. The pre-rep setup check is
+   necessary but not sufficient: also audio-guided framing (you can't read the
+   screen from 3 m), a "you're good" chime, remembering a working setup, and
+   ultra-wide 0.5x for small rooms.
+2. **The screen is invisible during a set.** Nobody watches the overlay mid-squat,
+   least of all side-on. **Audio is the real UX; the skeleton is marketing** (and
+   a great first-30-seconds moment). Spend effort accordingly.
+3. **Cue novelty decays.** After ~3 sessions the user has learned "go deeper,
+   knees out" and the app has nothing new to say.
+
+Features that answer those (and are also what "complete product" means here):
+
+- **A form score that trends** — "average depth 88%, up from 81% last week".
+  Converts one-off cues into something to chase; gives the stats screen a purpose.
+- **Structured sets** — "3×10 squats" with rest timers, so a session is something
+  you *complete*. Completion makes streaks meaningful.
+- **Post-workout summary** (see the LLM note above) as the closing moment.
+- **Replay the worst rep as a skeleton animation.** Store the landmark stream, not
+  video — kilobytes, no privacy problem, and impossible for a mirror to do.
+  "Here's rep 7, where your knees caved." This is what makes pose data valuable
+  *after* the workout, which is where the app currently has nothing.
+
+Completeness is **not** more exercises (scope guard: 2–3, done well). It's the app
+*around* the camera: onboarding, setup guidance that works in a small room,
+history worth browsing, stats worth opening, sensible empty/error states, and cues
+that feel like a coach rather than a nagging timer.
+
 ## Testing & CI (planned)
 
 Good test coverage is an explicit goal of this project, not an afterthought —
