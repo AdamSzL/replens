@@ -75,6 +75,35 @@ replens/
 
 *(to be expanded as modules take shape)*
 
+## Current status (2026-08-05)
+
+- Client scaffold committed and building: AGP 9.3.1, Kotlin 2.4.10, Gradle 9.6.1,
+  SDK 37, Java 21, R8 + resource shrinking on for release. Server not started.
+- **Milestone 1 (camera + skeleton overlay): DONE and validated on a real device.**
+  The spike lives unstructured in `client/app/` by design (`MainActivity.kt`
+  permission gate, `WorkoutScreen.kt` CameraX + ML Kit pipeline, `PoseOverlay.kt`
+  Canvas skeleton) — do not "clean it up" in place; it gets extracted in the
+  structural pass.
+- Findings from on-device squat footage (front, side, 45° both directions):
+  - Overlay alignment and front-camera mirroring are correct (FILL_CENTER math).
+  - Bottom-of-squat tracking holds in all views. 45° is the best angle (depth +
+    knees, both legs resolved) and should be the recommended user setup.
+  - Pure side view: far-side limbs are inferred — compute side-view metrics from
+    near-side joints only, gate the rest by `inFrameLikelihood`.
+  - Bad framing (phone low + tilted up, too close, feet out of frame) makes leg
+    landmarks hallucinate → Milestone 2 must include a pre-rep setup check
+    (nose + both ankles in frame with likelihood above threshold, else guide the
+    user: upright phone, ~hip height, 2–3 m).
+  - Sustained accurate-model inference warms the phone; acceptable. Levers if
+    needed later: base `pose-detection` model, or throttle analysis to ~15 fps.
+- Known-good squat test footage (ground truth for tuning smoothing / rep
+  detection) lives outside the repo in `~/replens-recordings/` — keep it out of
+  git; delete once the rep counter is tuned against it.
+- **Next step: structural pass** — extract the spike into multi-module
+  architecture (`build-logic` convention plugins, Hilt, Navigation 3,
+  `:core:*` / `:feature:workout`) before writing Milestone 2 logic (smoothing +
+  rep state machine as pure, unit-tested Kotlin).
+
 ## Roadmap
 
 1. **Camera + skeleton overlay** — the risky part first: CameraX preview with live
@@ -89,6 +118,11 @@ replens/
    leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy policy
    (camera!), data-safety form, release signing, crash reporting.
+
+Backlog (not scheduled): camera flip (front/back — overlay `mirrored` flag must
+flip with it) and zoom control incl. 0.5x ultra-wide via
+`cameraControl.setZoomRatio` (ultra-wide usually back-camera only; helps in small
+rooms where the phone can't be placed far enough away).
 
 Scope guard: **2–3 exercises max, done well.** Form-correction heuristics are the
 hard part, not ML Kit — landmarks jitter (smoothing + hysteresis are
