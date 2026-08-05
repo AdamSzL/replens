@@ -182,6 +182,44 @@ backend needs a device-ID → account linking endpoint). Play requires in-app *a
 web account deletion if account creation exists — budget it in Milestone 5.
 Guest-first also matters for the portfolio goal: a recruiter will not sign up.
 
+## Testing & CI (planned)
+
+Good test coverage is an explicit goal of this project, not an afterthought —
+there is no delivery deadline, so experimenting here is worth the time.
+
+**Unit tests carry the weight, and the architecture is built for it.** The
+interesting logic — angle math, One Euro smoothing, the rep state machine, form
+rules — lives in `replens.jvm.library` modules with no Android dependencies, so
+it runs on plain JUnit in milliseconds. Rep detection should be tested against
+known-good sequences derived from `~/replens-recordings/` (e.g. "this frame
+sequence contains exactly 5 reps").
+
+**Compose Preview Screenshot Testing** (`com.android.compose.screenshot`) — to
+try once there is UI worth pinning; best fit is `:core:designsystem` components
+and `WorkoutContent` rendered against fixed `WorkoutUiState` values (it takes
+plain state, which is exactly why it's previewable).
+
+- Status: **alpha** (`0.0.1-alpha15`+), APIs may change. Our toolchain already
+  meets the requirements (AGP 9.3.1, Kotlin 2.4.10, JDK 21).
+- Setup: `android.experimental.enableScreenshotTest=true` in `gradle.properties`
+  *and* `experimentalProperties["android.experimental.enableScreenshotTest"] = true`
+  per module; `screenshotTestImplementation` of `screenshot-validation-api` +
+  `ui-tooling`; tests annotated `@PreviewTest` + `@Preview` in a `screenshotTest`
+  source set. Tasks: `updateDebugScreenshotTest` (regenerate references),
+  `validateDebugScreenshotTest` (verify).
+- **Host-side — no emulator or device**, which is what makes it CI-friendly,
+  unlike instrumented tests.
+- Gotchas: renaming a `@PreviewTest` function orphans its reference image
+  (regenerate); memory-hungry (`android.compose.screenshot.maxHeapSize=4g`);
+  reference PNGs are committed, so watch repo size.
+- If it works out, enabling it belongs in a convention plugin rather than
+  per-module boilerplate.
+
+**GitHub Actions** — verify build + tests on push/PR: `assembleDebug`,
+`assembleRelease` (catches R8 breakage from new libraries), unit tests, and
+`validateDebugScreenshotTest` once screenshot tests exist. Cache the Gradle
+distribution and build cache; the daemon JVM is pinned to 21.
+
 ## Current status (2026-08-06)
 
 - Client builds on AGP 9.3.1, Kotlin 2.4.10, Gradle 9.6.1, SDK 37, Java 21,
