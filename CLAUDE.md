@@ -81,6 +81,15 @@ replens/
   destinations. Decided 2026-08-05: api/impl modules are deliberate overkill for a
   solo ~4-feature app — revisit only if build times hurt or features need to embed
   each other's UI.
+- **Every feature screen follows the same quartet: `Screen` + `ViewModel` +
+  `UiState` + `Action`/`Event`.** The ViewModel exposes `state: StateFlow<UiState>`
+  and one-shot `events: Flow<Event>` (channel-backed), and takes user intent
+  through `onAction(action)`. Events are for things that must fire exactly once —
+  navigation, and TTS cues especially (a cue must not replay on recomposition or
+  rotation). Implement it as a per-feature convention, **not** a generic
+  `BaseViewModel<S, A, E>`; inheritance-based MVI frameworks are where this
+  pattern goes to die. Adopt alongside Hilt + Navigation 3, while `:feature:workout`
+  is still the only feature.
 - Convention plugins live in `client/build-logic/` (included build):
   `replens.android.application`, `replens.android.library`,
   `replens.android.compose` (additive: compose flag + BOM + tooling — modules
@@ -133,6 +142,45 @@ Dependency rules:
 - Version catalog, plugin aliases and project accessors (`projects.core.pose`,
   enabled via `TYPESAFE_PROJECT_ACCESSORS`) are all type-safe — no string
   dependency notation.
+
+## Product decisions
+
+**Voice feedback: platform TTS (`android.speech.tts.TextToSpeech`), on-device.**
+Free, offline once voice data is installed, no dependency. Non-obvious
+requirements, all of which make or break the feel:
+
+- Request **transient ducking** audio focus with `AudioAttributes` usage
+  `ASSISTANCE_ACCESSIBILITY` — users exercise with music on; it should dip, not stop.
+- Speak with `QUEUE_FLUSH`, never `QUEUE_ADD` — a cue that lands four seconds late
+  is worse than silence. One cue at a time, chosen by priority, with a cooldown.
+- Language availability is not guaranteed (`LANG_MISSING_DATA` /
+  `LANG_NOT_SUPPORTED`, engine varies by device): try device locale, fall back to
+  English, keep every phrase in `strings.xml`.
+- Keep one engine instance alive (init costs a few hundred ms).
+
+**Form feedback: hand-written geometry rules, not an LLM.** Cues must fire within
+~100 ms; on-device inference is far too slow and a fault like knee valgus is a
+measurement, not a judgement. Per-exercise rule = detector + threshold +
+hysteresis + cooldown + priority. Squat signals: depth (hip–knee–ankle angle),
+valgus (knee-x vs the hip→ankle line), forward lean (shoulder→hip vs vertical),
+heel lift (heel-y vs foot-index-y), left/right asymmetry. **Normalize every
+threshold by the user's own proportions** (shoulder width / femur length in
+pixels) so rules survive different body sizes and camera distances. Tune against
+`~/replens-recordings/`.
+
+**An LLM belongs in the post-workout summary, not the live loop** — aggregate the
+deterministic metrics into natural language server-side in Milestone 4 ("depth on
+8/12 reps; knees caved on the last three — likely fatigue"). No latency
+constraint, no hallucination risk in the safety-critical path.
+
+**Login is optional; never gate the core loop.** Anonymous/guest by default (Room
+history needs no identity at all). Signing in unlocks sync, multi-device and the
+leaderboard — which needs a display name anyway, so it's an honest incentive.
+Decide the **anonymous→account data-migration path before writing sync**
+(Firebase anonymous auth linking to Google Sign-In preserves the UID; a custom
+backend needs a device-ID → account linking endpoint). Play requires in-app *and*
+web account deletion if account creation exists — budget it in Milestone 5.
+Guest-first also matters for the portfolio goal: a recruiter will not sign up.
 
 ## Current status (2026-08-06)
 
