@@ -7,9 +7,19 @@ automatic rep counting that only counts technically correct reps. Workout histor
 stored locally (Room) and synced to a backend for stats and leaderboards.
 *"Every rep, seen."*
 
-**Goals:** portfolio "wow" piece first, real Google Play release second. Traction is
-a bonus — the shipping experience (Play Console, signing, privacy policy, crash
-reporting) is itself the payoff.
+**Goals (reframed 2026-08-06):** **fun to build, and shipped to Google Play as a
+complete product.** Enjoying the work and getting a real release out (Play
+Console, signing, privacy policy, crash reporting) is the payoff; portfolio value
+and traction are welcome side effects, not drivers.
+
+**This is explicitly not a race to a minimum release.** v1 should feel like a
+finished app someone would enjoy using — polished UX, more than a camera with
+lines drawn on it: workout history, stats, sync and leaderboard, a few exercises,
+guidance that makes the camera setup painless. There is no deadline, so quality
+and experimentation win over speed. Corollary: **the backend is built by hand
+(Kotlin + Spring Boot) and is part of v1** — Firebase/BaaS was considered and
+rejected; building and running it is part of both the fun and the "complete
+product" bar.
 
 ## Repository layout
 
