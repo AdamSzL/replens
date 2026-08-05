@@ -35,7 +35,9 @@ replens/
 - Android `applicationId`: `com.replens.app` — **permanent on Google Play after
   first publish; never `com.example.*`**
 - Server: group `com.replens`, artifact `server`
-- Domain (planned): `replens.app`, future API host `api.replens.app`
+- Domain: `replens.app` — **owned** (bought 2026-08-05, Cloudflare Registrar,
+  auto-renew on, expires 2027-08-05). Parked until Milestone 4; future API host
+  `api.replens.app` (note: `.app` TLD is HSTS-preloaded — HTTPS mandatory).
 
 ## Client tech stack
 
