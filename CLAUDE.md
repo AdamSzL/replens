@@ -98,17 +98,47 @@ replens/
 
 ## Architecture
 
-*(to be expanded as modules take shape)*
+Module map (client) — each module's `build.gradle.kts` is convention plugins +
+namespace + dependencies, nothing else:
 
-## Current status (2026-08-05)
+```
+:app                MainActivity: camera permission gate -> WorkoutScreen. Nothing else.
+:feature:workout    WorkoutScreen (public) / WorkoutContent (private, pure render),
+                    WorkoutViewModel (owns the session), WorkoutUiState, PoseOverlay.
+:core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>,
+                    plus surfaceRequests: StateFlow<SurfaceRequest?>. PoseMapper is
+                    internal — the ML Kit boundary.
+:core:designsystem  RepLensTheme + the app's Compose gateway (see below).
+:core:model         Landmark, LandmarkType, BodyPose, PoseFrame. Pure Kotlin.
+```
 
-- Client scaffold committed and building: AGP 9.3.1, Kotlin 2.4.10, Gradle 9.6.1,
-  SDK 37, Java 21, R8 + resource shrinking on for release. Server not started.
+Layering inside the workout feature: the composable renders and hands over the
+`LifecycleOwner` (CameraX binds the camera to UI visibility — that handoff looks
+like a layering violation but is the intended pattern); the ViewModel owns the
+session and derives UI state; the data source owns hardware and ML.
+
+Dependency rules:
+
+- **`api` only for types in a module's public signatures**, `implementation`
+  otherwise. Watch for deps that "work" only via someone else's transitive graph
+  (`:core:pose` needs `api(coroutines)` because `Flow`/`StateFlow` are in its
+  signatures).
+- **`:core:designsystem` is the Compose gateway.** It `api`s foundation,
+  material3, runtime, ui and ui-graphics, so UI modules get the toolkit from the
+  design system they already depend on for theming. The compose convention plugin
+  deliberately supplies only the compiler plugin, `buildFeatures.compose`, the BOM
+  (Compose catalog entries are version-less on purpose — the BOM is the single
+  version source) and preview annotations/renderer. Plugin = capability, design
+  system = toolkit; neither is sufficient alone.
+- Version catalog, plugin aliases and project accessors (`projects.core.pose`,
+  enabled via `TYPESAFE_PROJECT_ACCESSORS`) are all type-safe — no string
+  dependency notation.
+
+## Current status (2026-08-06)
+
+- Client builds on AGP 9.3.1, Kotlin 2.4.10, Gradle 9.6.1, SDK 37, Java 21,
+  R8 + resource shrinking on for release. Server not started.
 - **Milestone 1 (camera + skeleton overlay): DONE and validated on a real device.**
-  The spike lives unstructured in `client/app/` by design (`MainActivity.kt`
-  permission gate, `WorkoutScreen.kt` CameraX + ML Kit pipeline, `PoseOverlay.kt`
-  Canvas skeleton) — do not "clean it up" in place; it gets extracted in the
-  structural pass.
 - Findings from on-device squat footage (front, side, 45° both directions):
   - Overlay alignment and front-camera mirroring are correct (FILL_CENTER math).
   - Bottom-of-squat tracking holds in all views. 45° is the best angle (depth +
@@ -124,16 +154,21 @@ replens/
 - Known-good squat test footage (ground truth for tuning smoothing / rep
   detection) lives outside the repo in `~/replens-recordings/` — keep it out of
   git; delete once the rep counter is tuned against it.
-- **Structural pass in progress.** Done: `build-logic` convention plugins
-  (applied by `:app`, referenced via version-less catalog aliases under
-  `# Plugins defined by this project`). Next: extract modules
-  (`:core:model` as first `replens.jvm.library`, `:core:pose`,
-  `:core:designsystem`, `:feature:workout`), then Hilt + Navigation 3, before
-  writing Milestone 2 logic (smoothing + rep state machine as pure,
-  unit-tested Kotlin). When fleshing out the library convention plugin, port
-  NIA's touches: module-path `resourcePrefix`, default
+- **Structural pass: modules done** (see Architecture above). `build-logic`
+  convention plugins in place and the spike is fully extracted — `:app` is
+  MainActivity only. Builds green (debug + release); **not yet re-verified on a
+  device after the extraction** — do that before building on top of it.
+- **Next: Hilt** (`replens.hilt` convention plugin + KSP; `WorkoutViewModel`'s
+  constructor already has the right shape — its `viewModelFactory` companion goes
+  away), **then Navigation 3** (the nav host is where `WorkoutScreen`'s hoisted
+  callbacks get wired), then Milestone 2 logic: smoothing (One Euro filter, needs
+  `PoseFrame.timestampMillis`) and the rep state machine as pure, unit-tested
+  Kotlin in `replens.jvm.library` modules.
+- Parked, to port into the library convention plugin when they earn their keep
+  (NIA has them): module-path `resourcePrefix`, default
   `testInstrumentationRunner`, `animationsDisabled`,
-  `disableUnnecessaryAndroidTests`.
+  `disableUnnecessaryAndroidTests`. Also available if perf work needs it: Compose
+  compiler metrics/reports and a stability-configuration file.
 
 ## Roadmap
 
