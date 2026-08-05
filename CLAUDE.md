@@ -65,6 +65,28 @@ replens/
 - Release builds run R8 with resource shrinking; when adding libraries (ML Kit,
   Retrofit), verify `assembleRelease` still passes and add keep rules if needed.
 
+### Architecture decisions (client)
+
+- **Pure-Kotlin core:** domain models, smoothing, angle math, and the rep state
+  machine live in `replens.jvm.library` modules (no Android imports — enforced by
+  compilation). Android-bound code (CameraX/ML Kit, Compose, Room, TTS) wraps
+  around them. ML Kit types must not leak past `:core:pose` — it maps them into
+  our own landmark/pose data classes at the boundary.
+- **Feature navigation = callback hoisting (no api/impl split).** Features never
+  navigate to each other and never depend on each other. Each feature exposes its
+  screen with navigation lambdas (e.g. `WorkoutScreen(onWorkoutFinished: (Id) -> Unit)`)
+  and `:app`'s Navigation 3 host is the only place that maps callbacks to
+  destinations. Decided 2026-08-05: api/impl modules are deliberate overkill for a
+  solo ~4-feature app — revisit only if build times hurt or features need to embed
+  each other's UI.
+- Convention plugins live in `client/build-logic/` (included build):
+  `replens.android.application`, `replens.android.library`,
+  `replens.android.compose` (additive: compose flag + BOM + tooling — modules
+  without UI must not apply it). Planned when first needed: `replens.jvm.library`,
+  `replens.hilt`. AGP 9 plugin-code gotchas: `CommonExtension` has no generic type
+  parameters anymore, and DSL blocks are property access in plugin code
+  (`defaultConfig.minSdk = 26`), except `compileSdk { version = release(37) }`.
+
 ## Server tech stack
 
 - Kotlin, Spring Boot, Gradle Kotlin DSL, JDK 21
@@ -99,10 +121,16 @@ replens/
 - Known-good squat test footage (ground truth for tuning smoothing / rep
   detection) lives outside the repo in `~/replens-recordings/` — keep it out of
   git; delete once the rep counter is tuned against it.
-- **Next step: structural pass** — extract the spike into multi-module
-  architecture (`build-logic` convention plugins, Hilt, Navigation 3,
-  `:core:*` / `:feature:workout`) before writing Milestone 2 logic (smoothing +
-  rep state machine as pure, unit-tested Kotlin).
+- **Structural pass in progress.** Done: `build-logic` convention plugins
+  (applied by `:app`, referenced via version-less catalog aliases under
+  `# Plugins defined by this project`). Next: extract modules
+  (`:core:model` as first `replens.jvm.library`, `:core:pose`,
+  `:core:designsystem`, `:feature:workout`), then Hilt + Navigation 3, before
+  writing Milestone 2 logic (smoothing + rep state machine as pure,
+  unit-tested Kotlin). When fleshing out the library convention plugin, port
+  NIA's touches: module-path `resourcePrefix`, default
+  `testInstrumentationRunner`, `animationsDisabled`,
+  `disableUnnecessaryAndroidTests`.
 
 ## Roadmap
 
