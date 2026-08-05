@@ -1,0 +1,18 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Gradle (applies recursively to client/ and server/)
+.gradle/
+build/
+
+# Secrets & local config
+local.properties
+*.keystore
+*.jks
+.env
