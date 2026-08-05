@@ -25,4 +25,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "RepLens"
 include(":app")
+include(":core:model")
  
