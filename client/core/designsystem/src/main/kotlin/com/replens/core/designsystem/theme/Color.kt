@@ -1,4 +1,4 @@
-package com.replens.app.ui.theme
+package com.replens.core.designsystem.theme
 
 import androidx.compose.ui.graphics.Color
 

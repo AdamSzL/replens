@@ -23,6 +23,13 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
                 val bom = libs.findLibrary("androidx-compose-bom").get()
                 add("implementation", platform(bom))
                 add("androidTestImplementation", platform(bom))
+
+                // Previews work everywhere; the Compose toolkit itself comes from
+                // :core:designsystem, which re-exports it.
+                add(
+                    "implementation",
+                    libs.findLibrary("androidx-compose-ui-tooling-preview").get(),
+                )
                 add("debugImplementation", libs.findLibrary("androidx-compose-ui-tooling").get())
             }
         }
