@@ -84,8 +84,9 @@ replens/
 - Convention plugins live in `client/build-logic/` (included build):
   `replens.android.application`, `replens.android.library`,
   `replens.android.compose` (additive: compose flag + BOM + tooling — modules
-  without UI must not apply it). Planned when first needed: `replens.jvm.library`,
-  `replens.hilt`. AGP 9 plugin-code gotchas: `CommonExtension` has no generic type
+  without UI must not apply it), `replens.jvm.library` (pure Kotlin, no AGP —
+  must set kotlinc's jvmTarget explicitly since there's no built-in-Kotlin
+  alignment). Planned when first needed: `replens.hilt`. AGP 9 plugin-code gotchas: `CommonExtension` has no generic type
   parameters anymore, and DSL blocks are property access in plugin code
   (`defaultConfig.minSdk = 26`), except `compileSdk { version = release(37) }`.
 
