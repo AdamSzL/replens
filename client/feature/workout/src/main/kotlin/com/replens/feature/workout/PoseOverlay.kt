@@ -1,4 +1,4 @@
-package com.replens.app
+package com.replens.feature.workout
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
@@ -37,7 +37,7 @@ private val CONNECTIONS = listOf(
 private const val MIN_IN_FRAME_LIKELIHOOD = 0.5f
 
 @Composable
-fun PoseOverlay(frame: PoseFrame, mirrored: Boolean, modifier: Modifier = Modifier) {
+internal fun PoseOverlay(frame: PoseFrame, mirrored: Boolean, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         // Same FILL_CENTER mapping the viewfinder applies to the preview.
         val scale = max(size.width / frame.sourceWidth, size.height / frame.sourceHeight)
