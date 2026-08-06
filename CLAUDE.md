@@ -588,6 +588,35 @@ Order, decided 2026-08-06. Each step is finishable and verifiable on its own.
    - `minCutoff = 1`, `beta = 0.5` are the **paper's starting values, untuned**.
      Tune `minCutoff` first with `beta = 0` until rest is clean, then raise `beta`
      until fast reps stop lagging.
+
+   Two behaviours to remember when the rep counter misbehaves, both observed in
+   simulation: **noise inflates the resting cutoff** (leftover jitter in the speed
+   estimate looks like movement, and `beta` multiplies it — at ±2° of noise the
+   resting cutoff wanders to 2–5 Hz rather than sitting at `minCutoff`), and **the
+   cutoff decays slowly after motion stops** (the smoothed rate falls off
+   exponentially, so for ~10 frames after the descent there is less smoothing than
+   the resting case). The second lands exactly at the bottom of the squat, where
+   depth is read — the state machine's hysteresis has to absorb it.
+
+   **Kalman filtering was evaluated and rejected.** A constant-velocity Kalman
+   filter assumes motion continues; a rep is a sequence of direction reversals, so
+   the model is wrong precisely where the counter cares. Simulated on a synthetic
+   squat with ±2° noise it overshoots ~10° past the bottom and ~8° past the top
+   (mean abs error 3.6° vs 0.85° for One Euro), and a 10° error at the bottom is
+   the difference between "good depth" and "not deep enough". This is structural,
+   not mistuning: lowering `Q` smooths more but worsens the overshoot, raising it
+   reduces overshoot but converges on the raw signal. Also, for fixed `dt`/`Q`/`R`
+   the Kalman gain converges to a constant — a steady-state CV filter is an
+   alpha-beta filter, so it does not adapt to speed at all, which is the one thing
+   we want. (MediaPipe, same BlazePose lineage as ML Kit, also ships One Euro for
+   landmark smoothing.)
+
+   Where Kalman *would* win, if these ever bite: **missing measurements** — it
+   coasts on prediction while a landmark is occluded, which One Euro cannot do at
+   all, and side-view footage occludes far-side limbs by definition. Also sensor
+   fusion (camera + IMU) and velocity estimates with uncertainty. If gating on
+   `inFrameLikelihood` leaves gaps at step 3, try **holding the last value with
+   decaying confidence** first — a full Kalman is a large jump for that problem.
 3. **Rep state machine** — `STANDING → DESCENDING → BOTTOM → ASCENDING`, with
    separate entry/exit thresholds on the knee angle (the same hysteresis idea as
    ML Kit's classification rep counting).
