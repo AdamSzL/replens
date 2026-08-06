@@ -619,7 +619,8 @@ Order, decided 2026-08-06. Each step is finishable and verifiable on its own.
    decaying confidence** first — a full Kalman is a large jump for that problem.
 3. **Rep state machine** — `STANDING → DESCENDING → BOTTOM → ASCENDING`, with
    separate entry/exit thresholds on the knee angle (the same hysteresis idea as
-   ML Kit's classification rep counting).
+   ML Kit's classification rep counting). Design settled 2026-08-06 — see
+   *Rep counting* below.
 4. **Wire into `WorkoutViewModel`** — a live rep counter on device. First real
    use of the Hilt graph.
 5. **Form rules + TTS** — this is where `UiText`, `:core:ui`, and the
@@ -641,11 +642,90 @@ Non-obvious implementation notes for step 1:
 - Low `inFrameLikelihood` is **not** filtered here — that is the caller's call and
   varies per rule (side-view rules use near-side joints only).
 
-**The depth threshold is a product decision, not a constant.** Standing is
-~170–180° of knee angle, "parallel" (hip crease below the top of the knee) is
-roughly 90–100°. Set it at competition depth and most users' reps will not count
-and the app feels broken; set it too shallow and it counts junk. Research this
-specifically before step 3.
+### Rep counting (researched and settled 2026-08-06)
+
+**Convention trap — read this before touching any threshold.** Literature reports
+**knee flexion** (0° = straight leg); `angleDegrees(hip, knee, ankle)` returns the
+**interior angle** (180° = straight leg). `interior = 180 − flexion`. They coincide
+at 90°, which is the one value everyone quotes for parallel — so the mistake is
+invisible exactly where you would check it, and wrong everywhere else.
+
+| depth | flexion (literature) | **interior (ours)** |
+|---|---|---|
+| standing | 0° | 180° |
+| mini squat | 40–50° | 130–140° |
+| **parallel** (hip crease level with top of patella) | ~90° | ~90° |
+| below parallel (IPF standard) | ~120° | ~60° |
+| deep / ATG | 110–130° | 70–50° |
+
+**Counting and depth-scoring are separate questions.** One threshold forces a bad
+trade: set it at true parallel and casual users' reps do not count (app looks
+broken); set it lenient and quarter-squats count. So `bottomEnter` only decides
+"this was a rep attempt" and is deliberately forgiving, while depth *quality* is
+graded from `Rep.deepestAngle` and never affects the count. Ten shallow reps
+become "10 reps, depth 42%", not "0 reps".
+
+```
+standingExit    160°   descent under way
+bottomEnter     115°   counts as a rep — deliberately lenient
+bottomExit      125°   rising out of the bottom
+standingEnter   168°   back to standing; the rep is counted here
+goodDepthAngle   95°   scoring only, never affects counting (~parallel)
+```
+
+Starting points, not final — they live in a config data class so step 3½ can tune
+them against fixtures. Hysteresis bands (8° and 10°) must stay wider than
+post-smoothing noise, including the ~10 frames after a descent while the One Euro
+cutoff winds down.
+
+**Two layers.** `BodyPose -> SquatSignals` (per-leg knee angles gated on
+`inFrameLikelihood` across all three joints, averaged when both survive, falling
+back to whichever does, `null` when neither) then `Float? -> state machine`. The
+state machine never sees a pose — a test is then a readable list of angles rather
+than eight hand-built skeletons. `SquatSignals` doubles as the CSV fixture row
+format. Average rather than min/max: a large left/right disagreement is far more
+often measurement error than real asymmetry, and averaging cancels error where
+min/max amplify it.
+
+### Reference frames — which rules need true vertical
+
+Borrowed (as an idea, not code) from
+[learnopencv's squat trainer](https://learnopencv.com/ai-fitness-trainer-using-mediapipe/),
+which measures every segment against vertical. We do not copy that, but the
+underlying property is worth being deliberate about, because it decides which
+rules survive a sloppy camera setup:
+
+| signal | measured against | needs true vertical? |
+|---|---|---|
+| depth | interior knee angle | no |
+| knee valgus | the hip→ankle line | no |
+| left/right asymmetry | the other leg | no |
+| **forward lean** | **vertical** | **yes** |
+| **heel lift** | **the y-axis** | **yes** |
+
+Three of five are reference-free, including everything rep counting depends on.
+That is not luck — valgus is *defined* as the knee leaving the hip→ankle line, a
+purely internal relationship. But forward lean cannot be expressed without
+gravity, so those two rules inherit the fragility and must be gated on the setup
+check rather than trusted unconditionally.
+
+Precision worth keeping: what breaks a vertical reference is camera **roll**
+(rotation about the viewing axis), which a propped phone rarely has. The tilt in
+the Milestone 1 findings was **pitch** (phone low, angled up), which causes
+perspective distortion and degrades *every* measurement, reference-free or not.
+Interior angles are preferred for the simpler reason that they need no reference
+frame at all — one assumption fewer.
+
+Depth is measured by interior knee angle, **not** femur inclination from vertical,
+even though the latter states the parallel standard directly (thigh horizontal =
+90°). Compute it into `SquatSignals` anyway as the honest "below parallel" measure
+for scoring; just never let it decide the count.
+
+*Idea if roll ever bites:* during `STANDING` the shoulder→hip segment should be
+vertical, so whatever angle it reads is the camera roll — subtract it for the rest
+of the session. Self-calibrating, no UI, no sensors. Conflates posture with tilt,
+so not exact, but better than assuming image-vertical is true vertical, and the
+state machine already says exactly when the user is standing.
 
 Form-fault thresholds need more care and **later** research: much of the common
 advice is folklore that sports science has walked back ("knees must not pass the
