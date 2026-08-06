@@ -868,10 +868,23 @@ distribution and build cache; the daemon JVM is pinned to 21.
   30 tests). All pure Kotlin, 85 tests total. **Nothing consumes any of it yet:**
   the camera path still runs raw, unsmoothed landmarks straight into
   `WorkoutUiState` and counts nothing. Wiring happens at step 4.
-- **Next: Milestone 2 step 4** — wire `PoseSmoother` -> `squatSignals()` ->
-  `SquatRepCounter` into `WorkoutViewModel` and show a live rep counter. Also the
-  moment to do the two things already flagged: move `ImageAnalysis` off the main
-  executor, and defer the `PoseOverlay` state read into the `Canvas` draw lambda.
+- **Milestone 2 step 4 DONE and validated on device (2026-08-07): 8 reps done, 8
+  counted.** Full loop live — camera -> `PoseSmoother` -> `squatSignals()` ->
+  `SquatRepCounter` -> counter UI. Phase transitions were clean (no chatter at the
+  thresholds) and no phantom reps from walking to/from the phone at either end.
+  `WorkoutUiState` -> `WorkoutState` and `WorkoutScreen`/`WorkoutContent` ->
+  `WorkoutRoot`/`WorkoutScreen` renames done, with a `@Preview`. `ImageAnalysis`
+  now runs on its own single-thread executor, and `PoseOverlay` takes
+  `() -> PoseFrame?` read inside the `Canvas` draw scope. `poseFrame` is a
+  **separate `StateFlow`** from `state`: Compose subscribes per `State` object, so
+  sharing one would invalidate the rep counter at frame rate.
+  **What this does not prove:** the thresholds. Every rep in that clip was deep and
+  clean, nowhere near the 115° boundary, and `minCutoff`/`beta` are still the
+  paper's defaults. Shallow reps are what will expose them.
+- Two setup problems seen in that footage, both already-known and both UX rather
+  than code: **feet at/past the bottom edge** during deep reps (leg landmarks start
+  being inferred — will corrupt heel-lift and shin rules), and **arms held forward
+  occluding the legs** at the bottom, which front-on framing makes worst.
 - Deliberately deferred until they have a job to do: the `UiState` -> `State`
   rename and `Action`/`Event` files (the workout screen has no actions or events
   yet), `:core:ui` (`UiText`/`ObserveAsEvents` — no chosen text, no events yet),
