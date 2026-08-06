@@ -26,7 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.replens.core.designsystem.theme.RepLensTheme
-import com.replens.feature.workout.WorkoutScreen
+import com.replens.feature.workout.WorkoutRoot
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -56,7 +56,7 @@ private fun CameraPermissionGate() {
     ) { granted = it }
 
     if (granted) {
-        WorkoutScreen()
+        WorkoutRoot()
     } else {
         LaunchedEffect(Unit) { launcher.launch(Manifest.permission.CAMERA) }
         Column(

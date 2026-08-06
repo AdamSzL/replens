@@ -36,13 +36,23 @@ private val CONNECTIONS = listOf(
 
 private const val MIN_IN_FRAME_LIKELIHOOD = 0.5f
 
+/**
+ * @param frame invoked inside the draw scope, so a new frame invalidates only the
+ *   draw phase. **Do not hoist the read out of the lambda** — that puts it back
+ *   into composition and recomposes the screen 30 times a second.
+ */
 @Composable
-internal fun PoseOverlay(frame: PoseFrame, mirrored: Boolean, modifier: Modifier = Modifier) {
+internal fun PoseOverlay(
+    frame: () -> PoseFrame?,
+    mirrored: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Canvas(modifier = modifier) {
+        val currentFrame = frame() ?: return@Canvas
         // Same FILL_CENTER mapping the viewfinder applies to the preview.
-        val scale = max(size.width / frame.sourceWidth, size.height / frame.sourceHeight)
-        val dx = (size.width - frame.sourceWidth * scale) / 2f
-        val dy = (size.height - frame.sourceHeight * scale) / 2f
+        val scale = max(size.width / currentFrame.sourceWidth, size.height / currentFrame.sourceHeight)
+        val dx = (size.width - currentFrame.sourceWidth * scale) / 2f
+        val dy = (size.height - currentFrame.sourceHeight * scale) / 2f
 
         fun toCanvas(landmark: Landmark): Offset {
             val x = landmark.x * scale + dx
@@ -52,7 +62,7 @@ internal fun PoseOverlay(frame: PoseFrame, mirrored: Boolean, modifier: Modifier
             )
         }
 
-        val visible = frame.pose.all
+        val visible = currentFrame.pose.all
             .filter { it.inFrameLikelihood >= MIN_IN_FRAME_LIKELIHOOD }
             .associateBy { it.type }
 

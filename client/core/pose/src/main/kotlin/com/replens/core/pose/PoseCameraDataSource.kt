@@ -10,7 +10,6 @@ import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.pose.PoseDetection
@@ -26,6 +25,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import javax.inject.Inject
 
 /**
@@ -52,15 +53,19 @@ class PoseCameraDataSource @Inject constructor(
                 .setDetectorMode(AccuratePoseDetectorOptions.STREAM_MODE)
                 .build()
         )
+        // Off the main thread so the pipeline never queues behind Compose: a late
+        // imageProxy.close() silently drops frames under KEEP_ONLY_LATEST.
+        val analysisExecutor = Executors.newSingleThreadExecutor()
         val preview = Preview.Builder().build().apply {
             setSurfaceProvider { request -> _surfaceRequests.value = request }
         }
         val analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
-        analysis.setAnalyzer(ContextCompat.getMainExecutor(context)) { imageProxy ->
-            analyzeFrame(imageProxy, detector) { frame -> trySend(frame) }
+        analysis.setAnalyzer(analysisExecutor) { imageProxy ->
+            analyzeFrame(imageProxy, detector, analysisExecutor) { frame -> trySend(frame) }
         }
+        // Must run on the main thread — that is what the flowOn below is for.
         provider.bindToLifecycle(
             lifecycleOwner,
             CameraSelector.DEFAULT_FRONT_CAMERA,
@@ -70,6 +75,7 @@ class PoseCameraDataSource @Inject constructor(
         awaitClose {
             provider.unbindAll()
             detector.close()
+            analysisExecutor.shutdown()
         }
     }.flowOn(Dispatchers.Main)
 
@@ -77,6 +83,7 @@ class PoseCameraDataSource @Inject constructor(
     private fun analyzeFrame(
         imageProxy: ImageProxy,
         detector: PoseDetector,
+        callbackExecutor: Executor,
         onFrame: (PoseFrame) -> Unit,
     ) {
         val mediaImage = imageProxy.image
@@ -91,7 +98,7 @@ class PoseCameraDataSource @Inject constructor(
         val height = if (upright) imageProxy.height else imageProxy.width
         val timestampMillis = imageProxy.imageInfo.timestamp / 1_000_000
         detector.process(InputImage.fromMediaImage(mediaImage, rotation))
-            .addOnSuccessListener { pose ->
+            .addOnSuccessListener(callbackExecutor) { pose ->
                 onFrame(
                     PoseFrame(
                         pose = pose.toBodyPose(),
@@ -101,6 +108,6 @@ class PoseCameraDataSource @Inject constructor(
                     )
                 )
             }
-            .addOnCompleteListener { imageProxy.close() }
+            .addOnCompleteListener(callbackExecutor) { imageProxy.close() }
     }
 }
