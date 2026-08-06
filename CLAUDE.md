@@ -81,6 +81,22 @@ replens/
   times" inspection is a false positive; leave both.
 - Release builds run R8 with resource shrinking; when adding libraries (ML Kit,
   Retrofit), verify `assembleRelease` still passes and add keep rules if needed.
+- **Convention plugins can only apply plugins whose implementation is already on
+  the buildscript classpath.** `pluginManager.apply("com.google.devtools.ksp")`
+  resolves nothing by itself — hence every third-party plugin is declared
+  `alias(...) apply false` in the root `client/build.gradle.kts`, which is also
+  where its version is pinned. build-logic's own `compileOnly(...)` deps do not
+  help: they exist to compile the convention plugin's source, not to put anything
+  on the consumer's classpath. Verified by removing the declarations — the build
+  fails with `Plugin with id 'com.google.devtools.ksp' not found`.
+- **Hilt in Compose: use `androidx.hilt:hilt-lifecycle-viewmodel-compose`, not
+  `hilt-navigation-compose`.** Both expose `hiltViewModel()`, but the latter
+  depends on `androidx.navigation:navigation-compose` — Navigation *2* — which
+  this project does not use. `hiltViewModel()` itself is navigation-agnostic
+  (it resolves the factory from `LocalViewModelStoreOwner`). Under Navigation 3
+  it additionally needs `rememberViewModelStoreNavEntryDecorator()` in
+  `NavDisplay(entryDecorators = …)`, or every destination shares the Activity's
+  `ViewModelStore` — a silent scoping bug, not a compile error.
 
 ### Architecture decisions (client)
 
@@ -110,7 +126,9 @@ replens/
   `replens.android.compose` (additive: compose flag + BOM + tooling — modules
   without UI must not apply it), `replens.jvm.library` (pure Kotlin, no AGP —
   must set kotlinc's jvmTarget explicitly since there's no built-in-Kotlin
-  alignment). Planned when first needed: `replens.hilt`. AGP 9 plugin-code gotchas: `CommonExtension` has no generic type
+  alignment), `replens.hilt` (additive: KSP + Hilt Gradle plugin +
+  `hilt-android` + `ksp(hilt-compiler)`; Android modules only — the Hilt Gradle
+  plugin requires AGP). AGP 9 plugin-code gotchas: `CommonExtension` has no generic type
   parameters anymore, and DSL blocks are property access in plugin code
   (`defaultConfig.minSdk = 26`), except `compileSdk { version = release(37) }`.
 
@@ -409,9 +427,15 @@ measurement, not a judgement. Per-exercise rule = detector + threshold +
 hysteresis + cooldown + priority. Squat signals: depth (hip–knee–ankle angle),
 valgus (knee-x vs the hip→ankle line), forward lean (shoulder→hip vs vertical),
 heel lift (heel-y vs foot-index-y), left/right asymmetry. **Normalize every
-threshold by the user's own proportions** (shoulder width / femur length in
-pixels) so rules survive different body sizes and camera distances. Tune against
-`~/replens-recordings/`.
+*distance-based* threshold by the user's own proportions** (torso size / femur
+length in pixels) so rules survive different body sizes and camera distances.
+Tune against `~/replens-recordings/`.
+
+Angles need no normalization — they are already invariant to scale and
+translation, which is why depth (a joint angle) is the cheapest signal to get
+right and valgus (a distance) is not.
+
+**Normalization is translate + scale, NOT rotate** — see the ML Kit note below.
 
 ML Kit's own [pose classification guide](https://developers.google.com/ml-kit/vision/pose-detection/classifying-poses)
 (k-NN over pairwise-joint-distance embeddings, a few hundred labelled images per
@@ -419,8 +443,14 @@ exercise) was evaluated and **not adopted as the primary approach**: it tells yo
 *which pose* you're in, not *what's wrong with it*, so form cues would need
 labelled bad-form classes per fault per exercise, and its output isn't
 explainable enough to speak. Two things taken from it anyway: **normalize poses
-to constant torso size and vertical torso orientation** before computing
-anything (that's the body-proportion normalization above, made concrete), and its
+to constant torso size** before computing anything (that's the body-proportion
+normalization above, made concrete) — but **not** the guide's rotation to
+vertical torso orientation: that is right for classification, where you want
+tilt-invariant embeddings, and wrong for us, because forward lean *is* torso
+angle against vertical, so rotating would erase the exact signal we measure, and
+would erase real lean and camera tilt indiscriminately. Camera tilt is handled by
+the setup check (upright phone at hip height), not by silently rotating it away.
+Also taken from the guide: its
 rep counting via separate entry/exit probability thresholds is the same
 hysteresis our state machine needs. Reconsider classification only if hand-tuned
 thresholds prove brittle around exercise #3 — collecting samples scales better
@@ -481,6 +511,56 @@ Completeness is **not** more exercises (scope guard: 2–3, done well). It's the
 history worth browsing, stats worth opening, sensible empty/error states, and cues
 that feel like a coach rather than a nagging timer.
 
+## Milestone 2 plan (the squat)
+
+Order, decided 2026-08-06. Each step is finishable and verifiable on its own.
+
+1. **`:core:posemath`** (`replens.jvm.library`, depends only on `:core:model`) —
+   `angleDegrees(a, b, c)`, `distance`, `midpoint`, `torsoSize(pose)`,
+   `deviationFromLine(p, start, end)` (signed — valgus and varus are opposite
+   faults), plus torso-normalized variants of the distance functions. Domain-free:
+   no thresholds, no exercise names, no state.
+2. **One Euro filter** — smoothing over the landmark stream, keyed on
+   `PoseFrame.timestampMillis` (the filter adapts its cutoff to real frame
+   intervals; assuming 30 fps defeats it). Also pure Kotlin.
+3. **Rep state machine** — `STANDING → DESCENDING → BOTTOM → ASCENDING`, with
+   separate entry/exit thresholds on the knee angle (the same hysteresis idea as
+   ML Kit's classification rep counting).
+4. **Wire into `WorkoutViewModel`** — a live rep counter on device. First real
+   use of the Hilt graph.
+5. **Form rules + TTS** — this is where `UiText`, `:core:ui`, and the
+   `Action`/`Event` files finally earn their place, because it is the first time
+   the screen has something to say.
+
+Non-obvious implementation notes for step 1:
+
+- **Compute angles with `atan2(cross, dot)`, not `acos(dot / (|v1|·|v2|))`.**
+  `acos` needs its argument clamped — floating-point error yields `1.0000001` on a
+  straight leg and `acos` returns `NaN` — and it is numerically worst near 0° and
+  180°, exactly where a standing leg sits, so landmark jitter becomes large angle
+  swings. `atan2` has neither problem.
+- **2D only (`x`, `y`).** ML Kit's `z` is relative depth with much lower
+  reliability; mixing it in adds noise to a measurement that works without it.
+- **Return `null`, not `NaN`, for degenerate input** (coincident landmarks, which
+  ML Kit does occasionally emit). `NaN` propagates silently through everything
+  downstream; `null` forces the caller to decide.
+- Low `inFrameLikelihood` is **not** filtered here — that is the caller's call and
+  varies per rule (side-view rules use near-side joints only).
+
+**The depth threshold is a product decision, not a constant.** Standing is
+~170–180° of knee angle, "parallel" (hip crease below the top of the knee) is
+roughly 90–100°. Set it at competition depth and most users' reps will not count
+and the app feels broken; set it too shallow and it counts junk. Research this
+specifically before step 3.
+
+Form-fault thresholds need more care and **later** research: much of the common
+advice is folklore that sports science has walked back ("knees must not pass the
+toes" is normal and unavoidable for many people; forward lean is heavily
+proportion-dependent — long femurs lean more without doing anything wrong).
+Encoding folklore as rules means confidently nagging people about non-faults,
+which is worse than staying quiet. Also remember every threshold will be tuned
+against **one body** (the author's).
+
 ## Testing & CI (planned)
 
 Good test coverage is an explicit goal of this project, not an afterthought —
@@ -489,14 +569,52 @@ there is no delivery deadline, so experimenting here is worth the time.
 **Unit tests carry the weight, and the architecture is built for it.** The
 interesting logic — angle math, One Euro smoothing, the rep state machine, form
 rules — lives in `replens.jvm.library` modules with no Android dependencies, so
-it runs on plain JUnit in milliseconds. Rep detection should be tested against
-known-good sequences derived from `~/replens-recordings/` (e.g. "this frame
-sequence contains exactly 5 reps").
+it runs on plain JUnit in milliseconds.
+
+### Testing the pose pipeline (settled 2026-08-06)
+
+**Test the derived signal, not the landmarks.** A fixture of 900 frames × 33
+landmarks is unreadable, so nobody can tell whether a failure is real. The state
+machine consumes a handful of scalars per frame, so a fixture is a time series of
+`timestamp, kneeAngle, hipAngle, torsoAngle` — a few hundred rows, diffable,
+plottable, and you can see five valleys in it by eye.
+
+Three layers, each answering a different question:
+
+1. **Synthetic sequences — "is the logic correct?"** Hand-written curves: a clean
+   rep, a half rep that must not count, a pause at the bottom, jitter oscillating
+   on the threshold, a very slow rep. Deterministic, and each encodes one decided
+   rule. These catch regressions.
+2. **Real recordings — "does it survive real noise?"** One assertion per file:
+   *this recording contains exactly 5 reps.* Ground truth is free and unambiguous
+   because the author filmed it.
+3. **A way to see it — "why is it wrong?"** No assertion explains a bad count.
+   Dump the angle curve with state transitions marked (CSV, or a live debug
+   overlay showing knee angle + current state).
+
+**Fixtures come from an `androidTest` that runs the real ML Kit pipeline** over
+`~/replens-recordings/` and writes CSV; the CSV is committed and the fast JVM
+tests read it. Run once, offline afterwards.
+
+**Python MediaPipe was evaluated and rejected** for generating those fixtures.
+It runs on the Mac and reads video directly, which ML Kit can't — but the fixtures
+exist mostly to *tune thresholds*, and thresholds tuned against a different model's
+numbers do not transfer to ML Kit. (Model drift would be harmless if fixtures were
+only used for logic regression.)
+
+**Why fixtures matter at all: you cannot do the same squat twice.** Tuning by
+rebuild → deploy → perform five squats → squint is minutes per iteration, physically
+tiring, and the input changes every time. Against a fixture it's a 50 ms test run
+on identical input.
+
+**Rep counting is objectively testable; form quality is not.** You know you did 5
+reps; whether rep 3 was "too shallow" depends on whose standard. Unit-test counting
+hard, and treat form rules as tuned-by-eye against footage rather than asserted.
 
 **Compose Preview Screenshot Testing** (`com.android.compose.screenshot`) — to
 try once there is UI worth pinning; best fit is `:core:designsystem` components
-and `WorkoutContent` rendered against fixed `WorkoutUiState` values (it takes
-plain state, which is exactly why it's previewable).
+and the workout feature's pure-render composable driven by fixed state values (it
+takes plain state, which is exactly why it's previewable).
 
 - Status: **alpha** (`0.0.1-alpha15`+), APIs may change. Our toolchain already
   meets the requirements (AGP 9.3.1, Kotlin 2.4.10, JDK 21).
@@ -544,17 +662,25 @@ distribution and build cache; the daemon JVM is pinned to 21.
   MainActivity only. Builds green (debug + release), and **re-verified on a
   physical device after the extraction** (2026-08-06): skeleton still tracks.
 - **Feature architecture settled** (see that section) — the conventions are
-  written down but **not yet implemented anywhere**; `:feature:workout` still has
-  `WorkoutUiState` and a `viewModelFactory` companion.
-- **Next: Hilt** (`replens.hilt` convention plugin + KSP; `WorkoutViewModel`'s
-  constructor already has the right shape — its `viewModelFactory` companion goes
-  away, and `:app` gains a `@HiltAndroidApp` application class it does not have
-  yet). Fold the `UiState` -> `State` rename and the `Action`/`Event` files into
-  the same pass so `:feature:workout` is touched once. **Then Navigation 3**
-  (`:core:ui` with `ObserveAsEvents`, `Navigator`, feature entry providers), then
-  Milestone 2 logic: smoothing (One Euro filter, needs `PoseFrame.timestampMillis`)
-  and the rep state machine as pure, unit-tested Kotlin in `replens.jvm.library`
-  modules.
+  written down but **not yet implemented**; `:feature:workout` still has
+  `WorkoutUiState` + `WorkoutScreen`/`WorkoutContent`, not `WorkoutState` +
+  `WorkoutRoot`/`WorkoutScreen`. Deliberate — see *Next* below.
+- **Hilt: DONE.** `replens.hilt` convention plugin (KSP 2.3.11 + Hilt 2.60.1),
+  `RepLensApplication` (`@HiltAndroidApp`), `@AndroidEntryPoint MainActivity`,
+  `@HiltViewModel WorkoutViewModel`, `PoseCameraDataSource` constructor-injected,
+  `viewModelFactory` companion gone. Debug + release both build.
+  `PoseCameraDataSource` is **unscoped, not `@Singleton`** — its only retained
+  state is `surfaceRequests`, which must not outlive the screen, and
+  `ProcessCameraProvider` is already a process singleton.
+- **Next: Milestone 2** (see *Milestone 2 plan*) — `:core:posemath` first.
+  Deliberately deferred until they have a job to do: the `UiState` -> `State`
+  rename and `Action`/`Event` files (the workout screen has no actions or events
+  yet), `:core:ui` (`UiText`/`ObserveAsEvents` — no chosen text, no events yet),
+  and Navigation 3 (one screen, nothing to navigate to; it lands with the
+  post-workout summary at the end of Milestone 2).
+- The camera is hardcoded to `DEFAULT_FRONT_CAMERA`, but the recommended setup is
+  45° with the phone propped 2–3 m away — a **back**-camera position. Pull the
+  camera-flip backlog item forward before testing step 4 on real squats.
 - KSP no longer tracks the Kotlin version: the `2.2.21-2.0.5` scheme ended at
   `2.3.0`, which is plain semver (latest `2.3.11` as of 2026-08-06). There is no
   "find the KSP build matching Kotlin 2.4.10" step.
