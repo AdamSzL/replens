@@ -881,6 +881,18 @@ distribution and build cache; the daemon JVM is pinned to 21.
   **What this does not prove:** the thresholds. Every rep in that clip was deep and
   clean, nowhere near the 115° boundary, and `minCutoff`/`beta` are still the
   paper's defaults. Shallow reps are what will expose them.
+- **The two-stream split is measured, not just reasoned** (Layout Inspector,
+  2026-08-07): over a session `WorkoutRoot`/`WorkoutScreen` recomposed **24 times**
+  — four phase transitions per rep, not thirty per second — and `PoseOverlay`
+  **skipped 24 of 24**, confirming its lambda parameter stays memoized.
+  `CameraXViewfinder` skipped too. Draw-phase invalidations are invisible in that
+  panel: the `Canvas` still redraws every frame, which is the point.
+- The `RepPhase` text on screen is a **debugging affordance, not final UI** — it is
+  how the state machine was verified from a screen recording. Removing the `Text`
+  alone would not reduce recompositions; `phase` living in `WorkoutState` is what
+  drives them. The eventual cleanup is to drop `phase` from `WorkoutState`
+  entirely (form cues will be events, not observed state), which takes the
+  recomposition count to one per rep.
 - Two setup problems seen in that footage, both already-known and both UX rather
   than code: **feet at/past the bottom edge** during deep reps (leg landmarks start
   being inferred — will corrupt heel-lift and shin rules), and **arms held forward
