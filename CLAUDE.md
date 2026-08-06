@@ -157,8 +157,8 @@ namespace + dependencies, nothing else:
                     UiText. Distinct from :core:designsystem on purpose.
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame. Pure Kotlin.
 :core:posemath      Point + joint angles, torso size, normalized distances and
-                    line deviation. Pure Kotlin, domain-free (no thresholds, no
-                    exercise names, no state).
+                    line deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
+                    domain-free (no thresholds, no exercise names).
 ```
 
 Layering inside the workout feature: the composable renders and hands over the
@@ -568,14 +568,26 @@ that feel like a coach rather than a nagging timer.
 
 Order, decided 2026-08-06. Each step is finishable and verifiable on its own.
 
-1. **`:core:posemath`** (`replens.jvm.library`, depends only on `:core:model`) —
-   `angleDegrees(a, b, c)`, `distance`, `midpoint`, `torsoSize(pose)`,
-   `deviationFromLine(p, start, end)` (signed — valgus and varus are opposite
-   faults), plus torso-normalized variants of the distance functions. Domain-free:
-   no thresholds, no exercise names, no state.
-2. **One Euro filter** — smoothing over the landmark stream, keyed on
-   `PoseFrame.timestampMillis` (the filter adapts its cutoff to real frame
-   intervals; assuming 30 fps defeats it). Also pure Kotlin.
+1. **`:core:posemath`** — **DONE.** `Geometry.kt` (`Point`, `angleDegrees`,
+   `distance`, `midpoint`, `angleFromVerticalDegrees`, `deviationFromLine` —
+   signed, because valgus and varus are opposite faults) and
+   `PoseMeasurements.kt` (`BodyPose` extensions taking `LandmarkType`s:
+   `torsoSize`, `torsoLeanDegrees`, `distanceNormalized`,
+   `deviationFromLineNormalized`). Domain-free: no thresholds, no exercise names,
+   no state. 33 tests.
+2. **One Euro filter** — **DONE.** `OneEuroFilter` (scalar, adaptive, keyed on
+   `PoseFrame.timestampMillis` so it adapts to real frame intervals rather than
+   assuming 30 fps) and `PoseSmoother` (one filter pair per landmark, wrapping a
+   whole `PoseFrame`). 22 tests. Two decisions worth keeping:
+   - `PoseSmoother` filters in **units of frame width, not pixels**, so `beta`
+     means the same thing whatever analysis resolution the device picks. Both
+     axes divide by width — dividing y by height instead would smooth vertical
+     jitter differently from horizontal.
+   - A gap longer than `resetAfterGapMillis` (500 ms) resets, so someone stepping
+     out of frame and back is not dragged across the screen from their old spot.
+   - `minCutoff = 1`, `beta = 0.5` are the **paper's starting values, untuned**.
+     Tune `minCutoff` first with `beta = 0` until rest is clean, then raise `beta`
+     until fast reps stop lagging.
 3. **Rep state machine** — `STANDING → DESCENDING → BOTTOM → ASCENDING`, with
    separate entry/exit thresholds on the knee angle (the same hysteresis idea as
    ML Kit's classification rep counting).
@@ -725,8 +737,14 @@ distribution and build cache; the daemon JVM is pinned to 21.
   `PoseCameraDataSource` is **unscoped, not `@Singleton`** — its only retained
   state is `surfaceRequests`, which must not outlive the screen, and
   `ProcessCameraProvider` is already a process singleton.
-- **Next: Milestone 2** (see *Milestone 2 plan*) — `:core:posemath` first.
-  Deliberately deferred until they have a job to do: the `UiState` -> `State`
+- **Milestone 2 steps 1–2 DONE** — `:core:posemath` holds the geometry and the
+  One Euro smoothing, 55 unit tests, all pure Kotlin. **Nothing consumes it yet:**
+  the camera path still runs raw, unsmoothed landmarks straight into
+  `WorkoutUiState`. Wiring happens at step 4.
+- **Next: Milestone 2 step 3** — the rep state machine. Settle the depth
+  threshold (see *Milestone 2 plan*) before writing it rather than inventing a
+  number.
+- Deliberately deferred until they have a job to do: the `UiState` -> `State`
   rename and `Action`/`Event` files (the workout screen has no actions or events
   yet), `:core:ui` (`UiText`/`ObserveAsEvents` — no chosen text, no events yet),
   and Navigation 3 (one screen, nothing to navigate to; it lands with the
