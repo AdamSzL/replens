@@ -31,5 +31,6 @@ include(":core:designsystem")
 include(":core:model")
 include(":core:pose")
 include(":core:posemath")
+include(":core:exercise")
 include(":feature:workout")
  

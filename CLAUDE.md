@@ -105,6 +105,20 @@ replens/
   compilation). Android-bound code (CameraX/ML Kit, Compose, Room, TTS) wraps
   around them. ML Kit types must not leak past `:core:pose` — it maps them into
   our own landmark/pose data classes at the boundary.
+- **One exercise module, one package per exercise — not a module per exercise.**
+  `:core:posemath` stays domain-free (it would be identical in an app about
+  physiotherapy, and compilation enforces that); `:core:exercise` owns thresholds
+  and exercise names. Within it, per-exercise packages (`…exercise.squat`) with a
+  small shared vocabulary (`Rep`, `RepPhase`, `RepUpdate`) at the root. A module
+  per exercise was considered and rejected 2026-08-06: with a 2–3 exercise scope
+  guard it is four Gradle projects doing one project's work, there is no build
+  time to save on tiny pure-Kotlin modules, and the only boundary it would enforce
+  (exercises not referencing each other) is already given by packages. Nested
+  projects (`:core:exercise:squat`) are also an unusual Gradle shape when the
+  parent has sources of its own. **Whether `Rep`/`RepPhase` genuinely generalise
+  is unproven** — one exercise is not evidence. Exercise #2 decides both that and
+  whether `SquatRepCounter` becomes a parameterized counter; splitting into modules
+  later is a directory move, because the packages already match.
 - **Feature-owned navigation (no api/impl split).** Features never navigate to
   each other and never depend on each other. Each feature owns its `NavKey` route
   types and exposes one `EntryProviderScope<NavKey>.<feature>Entries(...)`
@@ -159,6 +173,9 @@ namespace + dependencies, nothing else:
 :core:posemath      Point + joint angles, torso size, normalized distances and
                     line deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
                     domain-free (no thresholds, no exercise names).
+:core:exercise      Exercise knowledge and thresholds. Pure Kotlin.
+                      …exercise/       Rep, RepPhase, RepUpdate — shared vocabulary
+                      …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
 ```
 
 Layering inside the workout feature: the composable renders and hands over the
@@ -846,13 +863,15 @@ distribution and build cache; the daemon JVM is pinned to 21.
   `PoseCameraDataSource` is **unscoped, not `@Singleton`** — its only retained
   state is `surfaceRequests`, which must not outlive the screen, and
   `ProcessCameraProvider` is already a process singleton.
-- **Milestone 2 steps 1–2 DONE** — `:core:posemath` holds the geometry and the
-  One Euro smoothing, 55 unit tests, all pure Kotlin. **Nothing consumes it yet:**
+- **Milestone 2 steps 1–3 DONE** — `:core:posemath` (geometry + One Euro
+  smoothing, 55 tests) and `:core:exercise` (`SquatSignals`, `SquatRepCounter`,
+  30 tests). All pure Kotlin, 85 tests total. **Nothing consumes any of it yet:**
   the camera path still runs raw, unsmoothed landmarks straight into
-  `WorkoutUiState`. Wiring happens at step 4.
-- **Next: Milestone 2 step 3** — the rep state machine. Settle the depth
-  threshold (see *Milestone 2 plan*) before writing it rather than inventing a
-  number.
+  `WorkoutUiState` and counts nothing. Wiring happens at step 4.
+- **Next: Milestone 2 step 4** — wire `PoseSmoother` -> `squatSignals()` ->
+  `SquatRepCounter` into `WorkoutViewModel` and show a live rep counter. Also the
+  moment to do the two things already flagged: move `ImageAnalysis` off the main
+  executor, and defer the `PoseOverlay` state read into the `Canvas` draw lambda.
 - Deliberately deferred until they have a job to do: the `UiState` -> `State`
   rename and `Action`/`Event` files (the workout screen has no actions or events
   yet), `:core:ui` (`UiText`/`ObserveAsEvents` — no chosen text, no events yet),
