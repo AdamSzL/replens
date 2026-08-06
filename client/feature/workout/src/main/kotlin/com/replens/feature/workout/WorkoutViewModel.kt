@@ -12,7 +12,6 @@ import com.replens.core.pose.PoseCameraDataSource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -26,8 +25,8 @@ class WorkoutViewModel(
 
     val surfaceRequest: StateFlow<SurfaceRequest?> = poseCamera.surfaceRequests
 
-    private val _uiState = MutableStateFlow(WorkoutUiState())
-    val uiState: StateFlow<WorkoutUiState> = _uiState.asStateFlow()
+    val uiState: StateFlow<WorkoutUiState>
+        field = MutableStateFlow(WorkoutUiState())
 
     private var session: Job? = null
 
@@ -40,7 +39,7 @@ class WorkoutViewModel(
         if (session?.isActive == true) return
         session = viewModelScope.launch {
             poseCamera.poseFrames(lifecycleOwner).collect { frame ->
-                _uiState.update { it.copy(poseFrame = frame) }
+                uiState.update { it.copy(poseFrame = frame) }
             }
         }
     }

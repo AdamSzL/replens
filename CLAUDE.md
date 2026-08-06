@@ -367,13 +367,26 @@ fun EntryProviderScope<NavKey>.workoutEntries(
 - Wrap navigation clicks in `dropUnlessResumed { }` — prevents double-navigation
   when a fast double-tap lands while the screen is already leaving.
 
-### To verify before adopting
+### Explicit backing fields
 
-**Explicit backing fields** (`val state: StateFlow<S>` + `field =
-MutableStateFlow(…)`) would remove the `_state` convention entirely. Confirm by
-compiling whether Kotlin 2.4.10 has them stable or still behind
-`-Xexplicit-backing-fields` before building the ViewModel convention on them —
-if it needs the flag, decide deliberately (experimentation is in scope here).
+ViewModels use Kotlin's explicit backing fields instead of the `_state` /
+`asStateFlow()` pair:
+
+```kotlin
+val state: StateFlow<WorkoutState>
+    field = MutableStateFlow(WorkoutState())
+```
+
+**Verified 2026-08-06 on Kotlin 2.4.10:** compiles with no `-Xexplicit-backing-fields`
+flag and emits no experimental warning on a `--rerun-tasks` build. Encapsulation
+was confirmed empirically, not assumed — a probe doing `vm.state.value = …` from
+outside the class fails with `'val' cannot be reassigned`, so callers really do
+see `StateFlow`.
+
+The cost to be aware of: the same name has different types depending on scope —
+`MutableStateFlow` inside the class body, `StateFlow` outside. `state.update { }`
+inside a ViewModel only type-checks because of the feature, and the old `_state`
+naming made that mutability visible for free.
 
 ## Product decisions
 
