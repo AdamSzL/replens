@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.replens.android.library)
+    alias(libs.plugins.replens.hilt)
 }
 
 android {

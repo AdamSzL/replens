@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.replens.android.application)
     alias(libs.plugins.replens.android.compose)
+    alias(libs.plugins.replens.hilt)
 }
 
 android {

@@ -17,6 +17,7 @@ import com.google.mlkit.vision.pose.PoseDetection
 import com.google.mlkit.vision.pose.PoseDetector
 import com.google.mlkit.vision.pose.accurate.AccuratePoseDetectorOptions
 import com.replens.core.model.PoseFrame
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -25,14 +26,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import javax.inject.Inject
 
 /**
  * Streams live poses from the front camera. Collecting [poseFrames] starts the
  * camera and ML Kit detector; cancelling the collection releases both. The
  * camera preview surface is published via [surfaceRequests] for the UI to
  * render alongside.
+ *
+ * Deliberately unscoped: the only retained state is [surfaceRequests], which must
+ * not outlive the screen, and `ProcessCameraProvider` is already a process
+ * singleton, so there is nothing expensive to cache.
  */
-class PoseCameraDataSource(private val context: Context) {
+class PoseCameraDataSource @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
 
     private val _surfaceRequests = MutableStateFlow<SurfaceRequest?>(null)
     val surfaceRequests: StateFlow<SurfaceRequest?> = _surfaceRequests.asStateFlow()

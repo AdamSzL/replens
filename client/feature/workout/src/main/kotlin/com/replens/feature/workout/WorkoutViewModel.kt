@@ -3,23 +3,22 @@ package com.replens.feature.workout
 import androidx.camera.core.SurfaceRequest
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.replens.core.pose.PoseCameraDataSource
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Owns the camera/pose session for the duration of the screen, and turns the
  * frame stream into [WorkoutUiState].
  */
-class WorkoutViewModel(
+@HiltViewModel
+class WorkoutViewModel @Inject constructor(
     private val poseCamera: PoseCameraDataSource,
 ) : ViewModel() {
 
@@ -40,16 +39,6 @@ class WorkoutViewModel(
         session = viewModelScope.launch {
             poseCamera.poseFrames(lifecycleOwner).collect { frame ->
                 uiState.update { it.copy(poseFrame = frame) }
-            }
-        }
-    }
-
-    companion object {
-        // Replaced by Hilt injection; the constructor shape stays the same.
-        val Factory: ViewModelProvider.Factory = viewModelFactory {
-            initializer {
-                val application = checkNotNull(this[APPLICATION_KEY])
-                WorkoutViewModel(PoseCameraDataSource(application))
             }
         }
     }
