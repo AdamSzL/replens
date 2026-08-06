@@ -183,6 +183,56 @@ Dependency rules:
   enabled via `TYPESAFE_PROJECT_ACCESSORS`) are all type-safe — no string
   dependency notation.
 
+### Threading and the 30 fps path
+
+Assessed 2026-08-06. The instinct "move heavy math off the main thread" does not
+apply here, and acting on it would cost more than it saves.
+
+**The math is free.** One Euro over a full pose is 33 landmarks × 2 axes ≈ 1,000
+float operations; the rep machine adds a handful of `atan2` calls. That is ~1 µs
+against a 33 ms frame budget — about 0.01%. Dispatching it to
+`Dispatchers.Default` would add a context switch and thread-hop latency to save
+nothing measurable.
+
+**ML Kit inference is already off-main.** `detector.process()` returns a `Task`
+immediately and runs inference on ML Kit's own threads; only the success callback
+lands on main. `flowOn(Dispatchers.Main)` in `PoseCameraDataSource` is not a
+performance mistake either — `bindToLifecycle` must be called on main.
+
+What actually costs, in order:
+
+1. **Compose recomposition at 30 fps — the big one.** **Read pose state inside
+   the `Canvas` draw lambda, not in the composable body**, so a new frame skips
+   composition and layout and re-runs only the draw phase:
+   ```kotlin
+   Canvas(modifier) {
+       val frame = frameState.value   // deferred read: draw phase only
+       …
+   }
+   ```
+   This matters more than every other item here combined, and it is easy to lose
+   accidentally by hoisting the read "for readability".
+   **Not done yet:** `PoseOverlay` currently takes `PoseFrame` as a parameter, so
+   every frame recomposes it and its caller. Fix when wiring step 4.
+2. **Allocation churn.** 33 `Landmark`s + a map + a `PoseFrame` per frame, and
+   `PoseSmoother` allocates a second set — ~2,000 objects/second. Survivable, but
+   it is the profiler metric to watch, not CPU time. (Also why `PoseFrame` is not
+   mapped to a UiModel — see *Model layers*.)
+3. **Delayed `imageProxy.close()`.** A janky main thread closes late, and with
+   `STRATEGY_KEEP_ONLY_LATEST` that silently drops frames rather than failing
+   loudly.
+
+Planned, not yet done:
+
+- **Step 4:** give `ImageAnalysis` its own single-thread executor instead of
+  `getMainExecutor`, and pass the same executor to `addOnSuccessListener`. Not
+  because the work is heavy — to decouple the camera pipeline from Compose's
+  frame timing. `bindToLifecycle` stays on main.
+- **When Room/network arrive:** inject dispatchers via Hilt qualifiers rather
+  than hardcoding `Dispatchers.IO`. Mainly for testability — ViewModel tests want
+  a `TestDispatcher`, and that is painful to retrofit once `Dispatchers.IO` is
+  inlined in twenty call sites.
+
 ## Feature architecture
 
 Settled 2026-08-06, ported from a previous app of the author's and adapted. This
