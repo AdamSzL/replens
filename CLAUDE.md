@@ -52,7 +52,12 @@ replens/
 ## Client tech stack
 
 - Kotlin, Jetpack Compose (pure, no Views), Jetpack Navigation 3
-- Hilt (DI), Retrofit + kotlinx.serialization, Room (local history)
+- Hilt (DI), Room (local history), kotlinx.serialization
+- **HTTP client undecided — Retrofit vs Ktor client, settle when `:core:network`
+  is built (Milestone 4).** Retrofit was the original pick, but the
+  `safeApiCall`-style wrapper this project wants (see *Result and errors*) is
+  native in Ktor and needs a custom `CallAdapter` to match in Retrofit. The author
+  has shipped the Ktor version before.
 - CameraX (`ImageAnalysis` pipeline) + Google ML Kit Pose Detection
 - Multi-module Gradle architecture: `app/` (thin shell: DI graph, nav host),
   `core/*` (`:core:model`, `:core:data`, `:core:network`, `:core:database`,
@@ -84,22 +89,22 @@ replens/
   compilation). Android-bound code (CameraX/ML Kit, Compose, Room, TTS) wraps
   around them. ML Kit types must not leak past `:core:pose` — it maps them into
   our own landmark/pose data classes at the boundary.
-- **Feature navigation = callback hoisting (no api/impl split).** Features never
-  navigate to each other and never depend on each other. Each feature exposes its
-  screen with navigation lambdas (e.g. `WorkoutScreen(onWorkoutFinished: (Id) -> Unit)`)
-  and `:app`'s Navigation 3 host is the only place that maps callbacks to
-  destinations. Decided 2026-08-05: api/impl modules are deliberate overkill for a
-  solo ~4-feature app — revisit only if build times hurt or features need to embed
-  each other's UI.
-- **Every feature screen follows the same quartet: `Screen` + `ViewModel` +
-  `UiState` + `Action`/`Event`.** The ViewModel exposes `state: StateFlow<UiState>`
+- **Feature-owned navigation (no api/impl split).** Features never navigate to
+  each other and never depend on each other. Each feature owns its `NavKey` route
+  types and exposes one `EntryProviderScope<NavKey>.<feature>Entries(...)`
+  extension; `:app` calls those explicitly and owns the back stack. api/impl
+  modules are deliberate overkill for a solo ~4-feature app — revisit only if
+  build times hurt or features need to embed each other's UI. Full rules in
+  *Feature architecture* below.
+- **Every feature screen follows the same quintet: `Screen` + `ViewModel` +
+  `State` + `Action` + `Event`.** The ViewModel exposes `state: StateFlow<State>`
   and one-shot `events: Flow<Event>` (channel-backed), and takes user intent
   through `onAction(action)`. Events are for things that must fire exactly once —
   navigation, and TTS cues especially (a cue must not replay on recomposition or
   rotation). Implement it as a per-feature convention, **not** a generic
   `BaseViewModel<S, A, E>`; inheritance-based MVI frameworks are where this
   pattern goes to die. Adopt alongside Hilt + Navigation 3, while `:feature:workout`
-  is still the only feature.
+  is still the only feature. Full rules in *Feature architecture* below.
 - Convention plugins live in `client/build-logic/` (included build):
   `replens.android.application`, `replens.android.library`,
   `replens.android.compose` (additive: compose flag + BOM + tooling — modules
@@ -121,13 +126,17 @@ Module map (client) — each module's `build.gradle.kts` is convention plugins +
 namespace + dependencies, nothing else:
 
 ```
-:app                MainActivity: camera permission gate -> WorkoutScreen. Nothing else.
-:feature:workout    WorkoutScreen (public) / WorkoutContent (private, pure render),
-                    WorkoutViewModel (owns the session), WorkoutUiState, PoseOverlay.
+:app                MainActivity: camera permission gate -> NavDisplay. Owns the
+                    back stack + every cross-feature edge. Nothing else.
+:feature:workout    WorkoutRoot (internal) / WorkoutScreen (private, pure render),
+                    WorkoutViewModel (owns the session), WorkoutState, PoseOverlay,
+                    navigation/WorkoutEntries.kt (routes + entry provider).
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>,
                     plus surfaceRequests: StateFlow<SurfaceRequest?>. PoseMapper is
                     internal — the ML Kit boundary.
 :core:designsystem  RepLensTheme + the app's Compose gateway (see below).
+:core:ui            Compose utilities that carry no design opinion: ObserveAsEvents,
+                    UiText. Distinct from :core:designsystem on purpose.
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame. Pure Kotlin.
 ```
 
@@ -152,6 +161,219 @@ Dependency rules:
 - Version catalog, plugin aliases and project accessors (`projects.core.pose`,
   enabled via `TYPESAFE_PROJECT_ACCESSORS`) are all type-safe — no string
   dependency notation.
+
+## Feature architecture
+
+Settled 2026-08-06, ported from a previous app of the author's and adapted. This
+is the shape every feature module follows; deviate only with a recorded reason.
+
+### Package layout inside a feature module
+
+```
+data/         network calls, data sources, Room/DataStore, repository impls
+di/           <Feature>Module.kt — Hilt @Module/@InstallIn for this feature
+domain/       repository interfaces; UseCases only if they earn their keep
+model/        models used only inside this feature (rare — most live in :core:model)
+navigation/   route NavKeys + the EntryProviderScope extension (the entry point)
+ui/           the five files below
+ui/model/     UiModels
+ui/mapper/    domain -> UiModel mappers
+ui/components/  smaller composables, each with its own @Preview
+```
+
+`domain/` holds the repository *interface*, `data/` the implementation, bound in
+`di/`. That split is worth it for repositories specifically — they are the thing
+faked in every ViewModel test, and good coverage is an explicit project goal. Do
+**not** extend it to data sources or mappers; a one-caller interface is ceremony.
+Expect `domain/` to be mostly empty per feature: the real business logic (rep
+state machine, form rules, smoothing) already lives in pure-Kotlin core modules,
+which is the value UseCases would otherwise provide.
+
+The repository is the bridge to the ViewModel and speaks **only domain models**,
+wrapped in `Result`.
+
+### The five files
+
+`<Feature>Action.kt`, `<Feature>Event.kt`, `<Feature>State.kt`,
+`<Feature>Screen.kt`, `<Feature>ViewModel.kt` — all in `ui/`.
+
+- **Actions are past tense** — `StartClicked`, `PermissionGranted`. They are facts
+  that already happened. No `On` prefix (`StartClicked`, not `OnStartClick`), so
+  non-click actions read consistently.
+- **Events are imperative** — `NavigateToSummary`. They are requests for something
+  that has not happened yet.
+- `<Feature>Screen.kt` holds exactly two composables:
+  - `<Feature>Root` (**internal**) — collects state with
+    `collectAsStateWithLifecycle`, hosts `ObserveAsEvents`, and maps events onto
+    the navigation callbacks passed in from `navigation/`. Its `when (action)` may
+    handle an action directly instead of forwarding it, to skip a pointless
+    ViewModel round-trip for pure-navigation actions.
+  - `<Feature>Screen` (**private**) — takes `state` + `onAction`, renders, nothing
+    else. Always has a `@Preview` in the same file.
+- Soft cap ~300 lines on the Screen file; anything bigger moves to
+  `ui/components/`, each piece with its own preview. (Those previews are also the
+  future surface for Compose Preview Screenshot Testing.)
+
+### State modelling
+
+Default: `<Feature>State` is a **data class** holding screen-level flags
+(`isRefreshing`, …) plus one field `val content: <Feature>Content` — a sealed
+interface with `Loading` / `Error` / `Loaded` arms. Drop to a bare sealed-interface
+root only when the screen genuinely has nothing outside content; converting a
+sealed root into a data-class root later rewrites every `when` at every call site,
+and screens reliably grow flags.
+
+`Loaded`, not `Success` — these are states, not completed operations.
+
+Not every screen needs this. The workout screen has no loading phase.
+
+### Model layers
+
+DTO -> domain -> UI, with a fourth for Room entities and a fifth for navigation
+arguments. Domain models stay free of `@Serializable`; routes are separate
+`NavKey` types with round-trip mappers. Mappers to UiModels live in `ui/mapper/`.
+
+**Documented exception: `PoseFrame` stays a domain model all the way into
+`WorkoutState`.** The camera path is 30 fps × 33 landmarks; mapping it to a
+UiModel would allocate ~1000 objects/second alongside ML inference, for a
+`Canvas` that needs exactly the domain numbers. The general rule is: introduce a
+UiModel when the UI needs *formatted or derived* data, or when the domain model
+carries fields the UI must not see. A raw geometry stream is neither.
+
+### UiText
+
+All user-facing text that the ViewModel or a mapper **chooses between** is a
+`UiText` (in `:core:ui`), resolved at render time — never a `String` resolved in
+the ViewModel, or a locale change won't re-render. Text that is always the same
+resource does not belong in state at all; the composable calls `stringResource`
+directly. Plain `String` only for server-provided or user-entered content.
+
+```kotlin
+@Immutable
+sealed interface UiText {
+    data class Raw(val value: String) : UiText
+    data class Resource(@StringRes val id: Int, val args: List<Any> = emptyList()) : UiText
+    data class Plural(
+        @PluralsRes val id: Int,
+        val quantity: Int,
+        val args: List<Any> = listOf(quantity),
+    ) : UiText
+
+    companion object {
+        fun resource(@StringRes id: Int, vararg args: Any) = Resource(id, args.asList())
+        fun plural(@PluralsRes id: Int, quantity: Int, vararg args: Any) =
+            Plural(id, quantity, if (args.isEmpty()) listOf(quantity) else args.asList())
+    }
+}
+```
+
+Two `asString()` extensions: a `@Composable @ReadOnlyComposable` one, and one
+taking a `Context`.
+
+Non-obvious, and the reason this differs from the common `vararg val args: Any`
+version: **args must be a `List`, not an `Array`, and the arms must be data
+classes.** `Array` equality is identity-based and `emptyArray()` allocates a fresh
+instance per construction, so two structurally identical cues never compare equal
+— which breaks `MutableStateFlow` conflation (the workout screen would emit 30×/s
+for an unchanged cue) and makes whole-state `assertEquals` in ViewModel tests
+fail. `@Immutable` does not fix this; it governs Compose stability, not equality —
+both are needed, since `List<Any>` is itself unstable to the compiler. The
+`vararg` lives on the companion factories so call sites stay ergonomic.
+
+`Plural.quantity` selects the plural form and does **not** fill `%d` — hence the
+`listOf(quantity)` default, otherwise `getQuantityString` throws at runtime.
+Polish (one/few/many/other) is why this matters here and English-only testing
+won't catch it.
+
+The `Context` overload is what the TTS engine calls, so a single `UiText` value
+drives both the on-screen cue and the spoken line, and the form-rule engine stays
+unit-testable by emitting `UiText` rather than resolved strings.
+
+### Result and errors
+
+```kotlin
+sealed interface Result<out D, out E : AppError> {
+    data class Success<out D>(val data: D) : Result<D, Nothing>
+    data class Failure<out E : AppError>(val error: E) : Result<Nothing, E>
+}
+typealias EmptyResult<E> = Result<Unit, E>
+```
+
+Arms are `Success`/`Failure` and the marker is `AppError` — naming the failure arm
+`Error` shadows the marker interface (forcing fully-qualified references) and
+collides with `kotlin.Error`, which is a `Throwable`.
+
+**Error strategy: shared + specific.** One `NetworkError` enum every call can
+produce (`NoInternet`, `Serialization`, `Timeout`, `Unauthorized`,
+`TooManyRequests`, `Server`, `Unknown`), plus a per-endpoint sealed type **only
+where the UI branches differently** — login (`InvalidCredentials`,
+`EmailAlreadyTaken`) yes, workout sync no. Rule: add a specific error only when
+the UI does something different because of it. Modelling per-call errors as a
+sealed interface with a `Network(NetworkError)` arm also removes the
+`wrapCommon: (CommonError) -> E` parameter that the previous app's `safeApiCall`
+needed.
+
+### Events
+
+Channel-backed, **`Channel.BUFFERED`, not RENDEZVOUS**. With RENDEZVOUS `send`
+suspends until the screen collects, so a backgrounded screen parks the sending
+coroutine and stalls whatever follows the send. Always `send` from
+`viewModelScope`; never `trySend` (silently drops).
+
+Collected via `ObserveAsEvents` in `:core:ui` — `repeatOnLifecycle(STARTED)` +
+`withContext(Dispatchers.Main.immediate)`. The `immediate` matters: without it the
+collector resumes via a dispatch and an event can land after cancellation has
+begun, i.e. dropped exactly when the user backgrounds the app mid-navigation.
+Wrap the callback in `rememberUpdatedState` — `LaunchedEffect` keys on the flow,
+so a lambda capturing changing state goes stale otherwise.
+
+### Navigation (Navigation 3)
+
+Each feature owns its routes and its entry provider:
+
+```kotlin
+// :feature:workout — navigation/WorkoutEntries.kt
+@Serializable data object WorkoutRoute : NavKey
+@Serializable data class WorkoutSummaryRoute(val workoutId: String) : NavKey
+
+fun EntryProviderScope<NavKey>.workoutEntries(
+    navigator: Navigator,
+    navigateToHistory: () -> Unit,       // cross-feature: :app decides
+) {
+    entry<WorkoutRoute> {
+        WorkoutRoot(navigateToSummary = { navigator.goTo(WorkoutSummaryRoute(it)) })
+    }
+    // …
+}
+```
+
+- **No shared routes module.** A feature can only name its own routes, so handing
+  it a `Navigator` is safe — the compiler, not discipline, enforces that internal
+  edges stay internal and cross-feature edges are hoisted lambdas wired in `:app`.
+- `:app` calls each `<feature>Entries(...)` explicitly inside `entryProvider { }`.
+- **Google's multibinding recipe (`@IntoSet EntryProviderInstaller`) was evaluated
+  and rejected.** Hilt must construct the installer, so cross-feature lambdas
+  can't be passed — which pushes you to a shared routes module or the api/impl
+  split the recipe uses. Its payoff (`:app` not knowing its features) is mostly
+  unavailable anyway: a bottom bar means `:app` names all four top-level routes
+  regardless. Reversible either way — wrapping each `<feature>Entries` call in an
+  `@IntoSet @Provides` is ~10 lines per feature — so revisit if dynamic feature
+  modules ever appear.
+- **Back stack persistence gotcha:** the recipe's `@ActivityRetainedScoped
+  Navigator` holds a plain `mutableStateListOf`, which survives rotation but
+  **not process death** — the user returns to the start destination. `NavKey`s are
+  `@Serializable` from day one so this is fixable (`SavedStateHandle` in the
+  `Navigator`, or a `rememberNavBackStack`-backed list); do it before release.
+- Wrap navigation clicks in `dropUnlessResumed { }` — prevents double-navigation
+  when a fast double-tap lands while the screen is already leaving.
+
+### To verify before adopting
+
+**Explicit backing fields** (`val state: StateFlow<S>` + `field =
+MutableStateFlow(…)`) would remove the `_state` convention entirely. Confirm by
+compiling whether Kotlin 2.4.10 has them stable or still behind
+`-Xexplicit-backing-fields` before building the ViewModel convention on them —
+if it needs the flag, decide deliberately (experimentation is in scope here).
 
 ## Product decisions
 
@@ -306,14 +528,23 @@ distribution and build cache; the daemon JVM is pinned to 21.
   git; delete once the rep counter is tuned against it.
 - **Structural pass: modules done** (see Architecture above). `build-logic`
   convention plugins in place and the spike is fully extracted — `:app` is
-  MainActivity only. Builds green (debug + release); **not yet re-verified on a
-  device after the extraction** — do that before building on top of it.
+  MainActivity only. Builds green (debug + release), and **re-verified on a
+  physical device after the extraction** (2026-08-06): skeleton still tracks.
+- **Feature architecture settled** (see that section) — the conventions are
+  written down but **not yet implemented anywhere**; `:feature:workout` still has
+  `WorkoutUiState` and a `viewModelFactory` companion.
 - **Next: Hilt** (`replens.hilt` convention plugin + KSP; `WorkoutViewModel`'s
   constructor already has the right shape — its `viewModelFactory` companion goes
-  away), **then Navigation 3** (the nav host is where `WorkoutScreen`'s hoisted
-  callbacks get wired), then Milestone 2 logic: smoothing (One Euro filter, needs
-  `PoseFrame.timestampMillis`) and the rep state machine as pure, unit-tested
-  Kotlin in `replens.jvm.library` modules.
+  away, and `:app` gains a `@HiltAndroidApp` application class it does not have
+  yet). Fold the `UiState` -> `State` rename and the `Action`/`Event` files into
+  the same pass so `:feature:workout` is touched once. **Then Navigation 3**
+  (`:core:ui` with `ObserveAsEvents`, `Navigator`, feature entry providers), then
+  Milestone 2 logic: smoothing (One Euro filter, needs `PoseFrame.timestampMillis`)
+  and the rep state machine as pure, unit-tested Kotlin in `replens.jvm.library`
+  modules.
+- KSP no longer tracks the Kotlin version: the `2.2.21-2.0.5` scheme ended at
+  `2.3.0`, which is plain semver (latest `2.3.11` as of 2026-08-06). There is no
+  "find the KSP build matching Kotlin 2.4.10" step.
 - Parked, to port into the library convention plugin when they earn their keep
   (NIA has them): module-path `resourcePrefix`, default
   `testInstrumentationRunner`, `animationsDisabled`,
