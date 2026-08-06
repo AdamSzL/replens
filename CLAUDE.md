@@ -156,6 +156,9 @@ namespace + dependencies, nothing else:
 :core:ui            Compose utilities that carry no design opinion: ObserveAsEvents,
                     UiText. Distinct from :core:designsystem on purpose.
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame. Pure Kotlin.
+:core:posemath      Point + joint angles, torso size, normalized distances and
+                    line deviation. Pure Kotlin, domain-free (no thresholds, no
+                    exercise names, no state).
 ```
 
 Layering inside the workout feature: the composable renders and hands over the
