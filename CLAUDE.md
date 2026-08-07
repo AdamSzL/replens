@@ -299,8 +299,25 @@ Default: a **data class** with screen-level flags plus one
 `Loaded`. Drop to a bare sealed root only when there is genuinely nothing outside
 content; converting back later rewrites every `when` at every call site, and
 screens reliably grow flags. `Loaded`, not `Success` — these are states, not
-completed operations. Not every screen needs it: the workout screen has no
-loading phase.
+completed operations. Not every screen needs it — the workout screen has no
+loading *phase*, though it does have not-yet-known *values* (below).
+
+**Nullable when it's an observation we haven't made; a plain default when it's a
+choice we made.** A default that stands in for an unasked question is a lie, and
+it hides the difference between "haven't heard back" and "heard back, nothing
+there". The workout screen has one of each:
+
+- `zoomRatio = 1f` — a choice, and valid on every camera (`min ≤ 1 ≤ max` always
+  holds). Never unknown, so never nullable.
+- `cameraFacing: CameraFacing? = null` — also a choice, but **constrained by
+  hardware**. Until the constraint is known no valid choice exists, so it waits.
+- `repCount = 0` — a real value, not a placeholder.
+
+The trap this avoids: `zoomStops = emptyList()` meant both "the camera hasn't
+reported" and "this camera has nothing to offer". It worked only because the
+`size > 1` render check happened to collapse them — a coincidence, not a design.
+Group discovered values into one nullable object rather than giving each its own
+sentinel convention.
 
 ### Model layers
 
@@ -701,6 +718,58 @@ distribution and build cache.
 - Parked for the library convention plugin when they earn their keep:
   `resourcePrefix`, default `testInstrumentationRunner`, `animationsDisabled`,
   `disableUnnecessaryAndroidTests`.
+
+### Next up: camera selection vs capabilities
+
+Two groups, two natures. **Selection** is what the camera is doing, chosen by the
+user. **Capabilities** are what it could do, discovered from the device. Conflating
+them is why `cameraFacing` currently defaults to `FRONT` without knowing a front
+lens exists — on a device without one, `requireLensFacing` throws and the app
+**crashes at startup**, not on the flip. The manifest already declares
+`android.hardware.camera.any` (deliberately not `camera.front`, since the
+recommended setup is a back-camera position), so the manifest and the code
+disagree today.
+
+`:core:pose` publishes one nullable object instead of a growing row of flows:
+
+```kotlin
+val surfaceRequests: StateFlow<SurfaceRequest?>
+val options: StateFlow<CameraOptions?>          // null: nothing bound yet
+
+/** What the user can choose right now. */
+data class CameraOptions(
+    val facings: Set<CameraFacing>,   // device-level, from provider.availableCameraInfos
+    val zoomRange: ZoomRange,         // lens-level, changes on every flip
+)
+```
+
+`WorkoutState` holds only the selection — `cameraFacing: CameraFacing?`,
+`zoomRatio: Float = 1f` — plus the options it renders from. The "prefer front"
+rule is a **product constant, so it lives in code**, not in state:
+`if (FRONT in options.facings) FRONT else BACK`.
+
+The ordering is a handshake, not a bootstrap problem: `poseFrames` resolves the
+provider and publishes `options.facings` **before** it waits on a facing, so the
+ViewModel can resolve and reply. Nothing binds until the lens is known to exist,
+which removes the crash by construction rather than by catching.
+
+Rejected on the way, worth not re-deriving:
+
+- **A `preferredFacing` / `activeFacing` split.** Only needed if we bind before
+  knowing what exists — then the request can name an absent lens and `mirrored`
+  reads the wrong one. Resolving first collapses both into one always-valid value.
+- **A `CameraFilter` expressing "prefer front".** It works — `CameraFilter`'s
+  contract is explicit that *"the CameraInfo that has lower index in the list has
+  higher priority"* and `bindToLifecycle` returns a `Camera` whose
+  `cameraInfo.lensFacing` reports what was chosen. But with a resolved facing
+  `requireLensFacing` can't throw, so it carries nothing. Keep it in mind as
+  belt-and-braces only.
+- **`activeZoomRatio` vs requested.** Same shape as facing, two orders of
+  magnitude lower stakes: `1f` is valid everywhere and every other value comes
+  from the device's own reported range, so divergence is a pill highlighted for
+  ~200 ms after a flip. `zoomState` already carries the current ratio, so it is
+  one field whenever we want it. **Trigger to add it: continuous or pinch zoom**,
+  where the camera ramps toward a target and the UI must follow the real value.
 
 ### Open: camera configuration — settle before fixtures
 
