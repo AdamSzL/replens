@@ -355,10 +355,19 @@ val state: StateFlow<WorkoutState>
 ```
 
 Verified on Kotlin 2.4.10: no flag, no experimental warning, and encapsulation
-confirmed empirically (an external `vm.state.value = …` fails to compile). Cost:
-the same name is `MutableStateFlow` inside the class and `StateFlow` outside, so
-`state.update { }` type-checking is feature-dependent in a way `_state` made
-visible for free.
+confirmed empirically (an external `vm.state.value = …` fails to compile).
+`state.update { }` resolves fine inside the class — the name is
+`MutableStateFlow` there and `StateFlow` only to the outside. The one real
+difference from `_state`: `asStateFlow()` returned a distinct read-only wrapper,
+whereas this is the same object seen through a narrower declared type, so an
+external `as MutableStateFlow<…>` would succeed at runtime. Encapsulation is
+compile-time, not runtime.
+
+**Prefer `update { }` over `value = value.copy(…)`.** Read-modify-write is not
+atomic; it only survives today because `viewModelScope` is main-confined, and
+CLAUDE.md plans to inject dispatchers later. The exception is a single-writer hot
+path, where the point of reading first is to skip the copy — `onFrame` allocating
+a `WorkoutState` 30×/s would cost more than the race it avoids.
 
 ## Product decisions
 
