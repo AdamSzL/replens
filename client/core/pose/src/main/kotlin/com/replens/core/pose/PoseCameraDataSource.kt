@@ -22,7 +22,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import java.util.concurrent.Executor
@@ -43,8 +42,8 @@ class PoseCameraDataSource @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
-    private val _surfaceRequests = MutableStateFlow<SurfaceRequest?>(null)
-    val surfaceRequests: StateFlow<SurfaceRequest?> = _surfaceRequests.asStateFlow()
+    val surfaceRequests: StateFlow<SurfaceRequest?>
+        field = MutableStateFlow<SurfaceRequest?>(null)
 
     fun poseFrames(lifecycleOwner: LifecycleOwner): Flow<PoseFrame> = callbackFlow {
         val provider = ProcessCameraProvider.awaitInstance(context)
@@ -57,7 +56,7 @@ class PoseCameraDataSource @Inject constructor(
         // imageProxy.close() silently drops frames under KEEP_ONLY_LATEST.
         val analysisExecutor = Executors.newSingleThreadExecutor()
         val preview = Preview.Builder().build().apply {
-            setSurfaceProvider { request -> _surfaceRequests.value = request }
+            setSurfaceProvider { request -> surfaceRequests.value = request }
         }
         val analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -78,7 +77,7 @@ class PoseCameraDataSource @Inject constructor(
             provider.unbind(preview, analysis)
             detector.close()
             analysisExecutor.shutdown()
-            _surfaceRequests.value = null
+            surfaceRequests.value = null
         }
     }.flowOn(Dispatchers.Main)
 
