@@ -597,15 +597,36 @@ distribution and build cache.
 - **What that does not prove: the thresholds.** Every rep in that clip was deep
   and clean, nowhere near the 115° boundary, and the smoothing constants are still
   the paper's defaults. Shallow reps are what will expose them.
-- **Next:** camera flip, then fixtures + threshold tuning, then step 5 (form rules
-  + TTS — the first time `UiText`, `:core:ui` and `Action`/`Event` earn their
-  place). Rationale for that order: the camera is hardcoded to
-  `DEFAULT_FRONT_CAMERA` but the recommended setup is 45° at 2–3 m, a **back**
-  camera position, and tuning form rules against badly framed footage bakes in bad
-  numbers.
-- **Deferred until they have a job to do:** `Action`/`Event` files (no user
-  actions on the workout screen yet), `:core:ui`, and Navigation 3 (one screen,
-  nothing to navigate to — it lands with the post-workout summary).
+- **Next:** camera flip, then camera configuration (below), then fixtures +
+  threshold tuning, then step 5 (form rules + TTS — the first time `UiText`,
+  `:core:ui` and `Event` earn their place). Rationale for that order: the camera
+  is hardcoded to `DEFAULT_FRONT_CAMERA` but the recommended setup is 45° at
+  2–3 m, a **back** camera position, and tuning form rules against badly framed
+  footage bakes in bad numbers.
+- **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
+  `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
+  the post-workout summary).
+
+### Open: camera configuration — settle before fixtures
+
+We have never chosen an `ImageAnalysis` resolution or aspect ratio; CameraX
+defaults are in force. That single decision moves field of view (framing),
+pixels-on-body (landmark accuracy), buffer size (inference cost and heat), and
+`sourceWidth`/`sourceHeight` (the overlay mapping). **It must land before
+fixtures** — thresholds tuned against footage at one resolution don't transfer if
+the resolution later changes.
+
+Measured on the Pixel front camera (2026-08-07): `minZoomRatio = 0.8958334`,
+`maxZoomRatio = 10.0`, while Google Camera offers 0.7–2.9 on the same lens. Two
+readings follow. A max of 10 against their 2.9 shows **the OEM app curates its
+range**, so their 0.7 is not evidence of what a third-party app can reach. And
+0.8958 is not a lens ratio — a real ultra-wide reads ~0.5–0.6 — so it is crop
+geometry, which is exactly what a different `ResolutionSelector` would move.
+
+Also unresolved: **zoom above 1x on a single-lens camera is digital**, so it costs
+landmark quality on the one screen where quality is the product. The `2x` stop may
+deserve to go — decide once the flip lets us log both lenses, since a back
+telephoto would be optical rather than a crop.
 - **Known issues from the validation footage**, both UX rather than code: feet at
   or past the bottom edge during deep reps (leg landmarks start being inferred —
   will corrupt heel-lift and shin rules), and arms held forward occluding the legs
@@ -646,3 +667,8 @@ degrade with bad lighting, clothing and angles, so UX must guide phone placement
 - Conventional commits, matching existing history: `chore:`, `docs:`,
   `fix(client):`, …
 - The author makes all commits; propose the message, never run `git commit`.
+- **Comments are for what the code can't say.** A comment that restates the
+  signature (`/** What the user did. */`, `/** Zoom stops. */`) is noise —
+  delete it. Worth writing: why a number is that number, why an ordering or a
+  thread matters, and what silently breaks if someone "tidies" the code. If the
+  answer is in the names, say nothing.
