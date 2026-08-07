@@ -33,6 +33,9 @@ import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.exercise.RepPhase
 import com.replens.core.model.PoseFrame
 import com.replens.core.pose.CameraFacing
+import com.replens.core.pose.CameraOptions
+import com.replens.core.pose.ZoomRange
+import com.replens.core.pose.stops
 
 /** Public only until Navigation 3 lands and `navigation/` calls it instead. */
 @Composable
@@ -88,19 +91,21 @@ private fun WorkoutScreen(
                 .fillMaxSize()
                 .safeDrawingPadding(),
         ) {
-            IconButton(
-                onClick = { onAction(WorkoutAction.CameraFlipClicked) },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(24.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f)),
-            ) {
-                Icon(
-                    painter = painterResource(RepLensIcons.CameraSwitch),
-                    contentDescription = stringResource(R.string.workout_flip_camera),
-                    tint = Color.White,
-                )
+            if (state.cameraOptions?.facings.orEmpty().size > 1) {
+                IconButton(
+                    onClick = { onAction(WorkoutAction.CameraFlipClicked) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(24.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                ) {
+                    Icon(
+                        painter = painterResource(RepLensIcons.CameraSwitch),
+                        contentDescription = stringResource(R.string.workout_flip_camera),
+                        tint = Color.White,
+                    )
+                }
             }
             RepCounter(
                 repCount = state.repCount,
@@ -110,9 +115,10 @@ private fun WorkoutScreen(
                     .padding(24.dp),
             )
             // One stop is nothing to choose between.
-            if (state.zoomStops.size > 1) {
+            val zoomStops = state.cameraOptions?.zoomRange?.stops.orEmpty()
+            if (zoomStops.size > 1) {
                 ZoomControl(
-                    stops = state.zoomStops,
+                    stops = zoomStops,
                     selected = state.zoomRatio,
                     onSelect = { onAction(WorkoutAction.ZoomSelected(it)) },
                     modifier = Modifier
@@ -157,7 +163,11 @@ private fun WorkoutScreenPreview() {
             state = WorkoutState(
                 repCount = 12,
                 phase = RepPhase.BOTTOM,
-                zoomStops = listOf(0.7f, 1f, 2f),
+                cameraFacing = CameraFacing.FRONT,
+                cameraOptions = CameraOptions(
+                    facings = setOf(CameraFacing.FRONT, CameraFacing.BACK),
+                    zoomRange = ZoomRange(min = 0.5f, max = 10f),
+                ),
             ),
             surfaceRequest = null,
             poseFrame = { null },

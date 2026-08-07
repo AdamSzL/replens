@@ -39,7 +39,7 @@ import javax.inject.Inject
  * render alongside.
  *
  * Deliberately unscoped: the only retained state is [surfaceRequests] and
- * [zoomRange], neither of which must outlive the screen, and
+ * [options], neither of which must outlive the screen, and
  * `ProcessCameraProvider` is already a process singleton, so there is nothing
  * expensive to cache.
  */
@@ -50,9 +50,9 @@ class PoseCameraDataSource @Inject constructor(
     val surfaceRequests: StateFlow<SurfaceRequest?>
         field = MutableStateFlow<SurfaceRequest?>(null)
 
-    /** Null until a camera is bound; only then does the device report its range. */
-    val zoomRange: StateFlow<ZoomRange?>
-        field = MutableStateFlow<ZoomRange?>(null)
+    /** Null until the camera provider resolves. */
+    val options: StateFlow<CameraOptions?>
+        field = MutableStateFlow<CameraOptions?>(null)
 
     fun poseFrames(
         lifecycleOwner: LifecycleOwner,
@@ -60,6 +60,13 @@ class PoseCameraDataSource @Inject constructor(
         zoomRatios: Flow<Float>,
     ): Flow<PoseFrame> = callbackFlow {
         val provider = ProcessCameraProvider.awaitInstance(context)
+        // Published before anything is bound, so the caller can resolve a facing
+        // that exists. Nothing below waits on it, so this is a handshake, not a
+        // deadlock: we answer "what is here?" before asking "which one?".
+        val availableFacings = provider.availableCameraInfos
+            .mapNotNullTo(mutableSetOf()) { it.lensFacing.toCameraFacing() }
+        options.value = CameraOptions(availableFacings)
+
         val detector = PoseDetection.getClient(
             AccuratePoseDetectorOptions.Builder()
                 .setDetectorMode(AccuratePoseDetectorOptions.STREAM_MODE)
@@ -86,6 +93,9 @@ class PoseCameraDataSource @Inject constructor(
         // down for nothing, silently.
         launch {
             facings.distinctUntilChanged().collectLatest { facing ->
+                // Back to "unknown", not the previous lens's range: the new one has
+                // its own, and offering a stop it can't reach fails silently.
+                options.value = CameraOptions(availableFacings)
                 provider.unbind(preview, analysis)
                 val camera = provider.bindToLifecycle(
                     lifecycleOwner,
@@ -98,7 +108,10 @@ class PoseCameraDataSource @Inject constructor(
                     // the camera has opened, so the range can arrive late.
                     launch {
                         camera.cameraInfo.zoomState.asFlow().collect { state ->
-                            zoomRange.value = ZoomRange(state.minZoomRatio, state.maxZoomRatio)
+                            options.value = CameraOptions(
+                                facings = availableFacings,
+                                zoomRange = ZoomRange(state.minZoomRatio, state.maxZoomRatio),
+                            )
                         }
                     }
                     // Re-collected per binding because a rebind resets zoom to 1x.
@@ -114,7 +127,7 @@ class PoseCameraDataSource @Inject constructor(
             detector.close()
             analysisExecutor.shutdown()
             surfaceRequests.value = null
-            zoomRange.value = null
+            options.value = null
         }
     }.flowOn(Dispatchers.Main)
 

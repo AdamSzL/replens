@@ -739,9 +739,14 @@ val options: StateFlow<CameraOptions?>          // null: nothing bound yet
 /** What the user can choose right now. */
 data class CameraOptions(
     val facings: Set<CameraFacing>,   // device-level, from provider.availableCameraInfos
-    val zoomRange: ZoomRange,         // lens-level, changes on every flip
+    val zoomRange: ZoomRange? = null, // lens-level: null until bound, changes on flip
 )
 ```
+
+The inner null is load-bearing, not sloppiness: facings must be published *before*
+the first bind for the handshake to work, and the zoom range only exists *after*
+it. The nesting states the real discovery order — device capabilities first, lens
+capabilities second — and a non-null `zoomRange` would deadlock.
 
 `WorkoutState` holds only the selection — `cameraFacing: CameraFacing?`,
 `zoomRatio: Float = 1f` — plus the options it renders from. The "prefer front"

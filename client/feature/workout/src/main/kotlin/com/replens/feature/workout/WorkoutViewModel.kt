@@ -7,13 +7,14 @@ import androidx.lifecycle.viewModelScope
 import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.squatSignals
 import com.replens.core.model.PoseFrame
+import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.PoseCameraDataSource
-import com.replens.core.pose.stops
 import com.replens.core.posemath.PoseSmoother
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -46,8 +47,14 @@ internal class WorkoutViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            poseCamera.zoomRange.collect { range ->
-                state.update { it.copy(zoomStops = range?.stops.orEmpty()) }
+            poseCamera.options.collect { options ->
+                state.update {
+                    it.copy(
+                        cameraOptions = options,
+                        // Resolved once — a later options update must not undo a flip.
+                        cameraFacing = it.cameraFacing ?: options?.facings?.preferred(),
+                    )
+                }
             }
         }
     }
@@ -63,7 +70,7 @@ internal class WorkoutViewModel @Inject constructor(
             // does can't drift from what the screen shows.
             poseCamera.poseFrames(
                 lifecycleOwner = lifecycleOwner,
-                facings = state.map { it.cameraFacing },
+                facings = state.map { it.cameraFacing }.filterNotNull(),
                 zoomRatios = state.map { it.zoomRatio },
             ).collect(::onFrame)
         }
@@ -74,17 +81,27 @@ internal class WorkoutViewModel @Inject constructor(
             is WorkoutAction.ZoomSelected ->
                 state.update { it.copy(zoomRatio = action.ratio) }
 
-            WorkoutAction.CameraFlipClicked -> {
-                // Landmarks from the new lens are mirrored and differently framed;
-                // smoothing them against the old ones would drag the skeleton across
-                // the screen. The rep count deliberately survives.
-                smoother.reset()
-                state.update {
-                    it.copy(cameraFacing = it.cameraFacing.opposite, zoomRatio = 1f)
-                }
-            }
+            WorkoutAction.CameraFlipClicked -> flipCamera()
         }
     }
+
+    private fun flipCamera() {
+        val current = state.value
+        // Guarded rather than left to the hidden button: binding a lens the device
+        // doesn't have throws.
+        val next = current.cameraFacing?.opposite ?: return
+        if (next !in current.cameraOptions?.facings.orEmpty()) return
+        // Landmarks from the new lens are mirrored and differently framed; smoothing
+        // them against the old ones would drag the skeleton across the screen. The
+        // rep count deliberately survives.
+        smoother.reset()
+        // The new lens reports its own range, so a ratio from the old one is meaningless.
+        state.update { it.copy(cameraFacing = next, zoomRatio = 1f) }
+    }
+
+    /** Front first: the only lens where you can see your own framing. */
+    private fun Set<CameraFacing>.preferred(): CameraFacing? =
+        if (CameraFacing.FRONT in this) CameraFacing.FRONT else firstOrNull()
 
     private fun onFrame(frame: PoseFrame) {
         // Publishing the smoothed pose keeps the overlay showing what the rep
