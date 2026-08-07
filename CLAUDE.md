@@ -137,6 +137,35 @@ Planned, not built: `:core:ui` (`UiText`, `ObserveAsEvents`), `:core:data`,
 - Version catalog, plugin aliases, and project accessors are all type-safe — no
   string dependency notation.
 
+### Icons
+
+**No `material-icons-*` dependency.** Compose no longer bundles `Icons`, and the
+extended artifact is bloat for the handful we need. Icons are vector XML
+downloaded from [Material Symbols](https://fonts.google.com/icons) into
+`:core:designsystem` — filled variants, exported as SVG. The export colour is
+irrelevant (pick black): `Icon()` tints with `LocalContentColor` and replaces it.
+What matters is that icons stay **single-colour**, or the tint flattens them.
+
+Feature modules must not import a foreign `R`, so the design system exposes them
+by name:
+
+```kotlin
+object RepLensIcons {
+    @DrawableRes val CameraSwitch = R.drawable.ic_camera_switch
+}
+```
+
+`@DrawableRes Int` rather than `ImageVector`: every icon has the same source, so
+there is nothing to normalize, and an id also works where a `@Composable` getter
+cannot — notification small icons, shortcuts, `RemoteViews`. Call sites use
+`painterResource`, which covers bitmaps too if one ever appears.
+
+**No `resourcePrefix` yet, deliberately.** Resource merging is flat across
+modules, so same-named resources silently override — but `RepLensIcons` means
+every id has exactly one reference, making a later rename trivial. Turn the
+parked `resourcePrefix` on when a collision-prone generic name appears
+(`ic_close`, `ic_settings`), not before.
+
 ### The 30 fps path
 
 **The math is free** — One Euro over a pose is ~1,000 float ops, ~1 µs against a
