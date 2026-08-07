@@ -14,7 +14,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -22,7 +21,7 @@ import javax.inject.Inject
 
 /** Runs each frame through smoothing -> signal extraction -> rep counting. */
 @HiltViewModel
-class WorkoutViewModel @Inject constructor(
+internal class WorkoutViewModel @Inject constructor(
     private val poseCamera: PoseCameraDataSource,
 ) : ViewModel() {
 
@@ -60,11 +59,13 @@ class WorkoutViewModel @Inject constructor(
     fun startSession(lifecycleOwner: LifecycleOwner) {
         if (session?.isActive == true) return
         session = viewModelScope.launch {
-            // Driven from state, not a second source of truth, so the ratio the
-            // camera uses can't drift from the one the screen shows.
-            poseCamera
-                .poseFrames(lifecycleOwner, state.map { it.zoomRatio }.distinctUntilChanged())
-                .collect(::onFrame)
+            // Driven from state, not a second source of truth, so what the camera
+            // does can't drift from what the screen shows.
+            poseCamera.poseFrames(
+                lifecycleOwner = lifecycleOwner,
+                facings = state.map { it.cameraFacing },
+                zoomRatios = state.map { it.zoomRatio },
+            ).collect(::onFrame)
         }
     }
 
@@ -72,6 +73,16 @@ class WorkoutViewModel @Inject constructor(
         when (action) {
             is WorkoutAction.ZoomSelected ->
                 state.update { it.copy(zoomRatio = action.ratio) }
+
+            WorkoutAction.CameraFlipClicked -> {
+                // Landmarks from the new lens are mirrored and differently framed;
+                // smoothing them against the old ones would drag the skeleton across
+                // the screen. The rep count deliberately survives.
+                smoother.reset()
+                state.update {
+                    it.copy(cameraFacing = it.cameraFacing.opposite, zoomRatio = 1f)
+                }
+            }
         }
     }
 

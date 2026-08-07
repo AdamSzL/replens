@@ -10,9 +10,8 @@ android {
 
 dependencies {
     implementation(projects.core.designsystem)
+    implementation(projects.core.exercise)
     implementation(projects.core.pose)
-    // RepPhase appears in WorkoutState's public signature.
-    api(projects.core.exercise)
     implementation(projects.core.posemath)
 
     implementation(libs.androidx.camera.compose)

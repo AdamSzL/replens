@@ -2,7 +2,6 @@ package com.replens.core.pose
 
 import android.content.Context
 import androidx.annotation.OptIn
-import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -20,10 +19,13 @@ import com.replens.core.model.PoseFrame
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
@@ -31,7 +33,7 @@ import java.util.concurrent.Executors
 import javax.inject.Inject
 
 /**
- * Streams live poses from the front camera. Collecting [poseFrames] starts the
+ * Streams live poses from the camera. Collecting [poseFrames] starts the
  * camera and ML Kit detector; cancelling the collection releases both. The
  * camera preview surface is published via [surfaceRequests] for the UI to
  * render alongside.
@@ -54,6 +56,7 @@ class PoseCameraDataSource @Inject constructor(
 
     fun poseFrames(
         lifecycleOwner: LifecycleOwner,
+        facings: Flow<CameraFacing>,
         zoomRatios: Flow<Float>,
     ): Flow<PoseFrame> = callbackFlow {
         val provider = ProcessCameraProvider.awaitInstance(context)
@@ -74,22 +77,35 @@ class PoseCameraDataSource @Inject constructor(
         analysis.setAnalyzer(analysisExecutor) { imageProxy ->
             analyzeFrame(imageProxy, detector, analysisExecutor) { frame -> trySend(frame) }
         }
+        // A lens change rebinds the same use cases rather than restarting the flow:
+        // the detector and its loaded model are none of CameraX's business.
+        // collectLatest cancels the previous camera's observers on the next facing.
         // Must run on the main thread — that is what the flowOn below is for.
-        val camera = provider.bindToLifecycle(
-            lifecycleOwner,
-            CameraSelector.DEFAULT_FRONT_CAMERA,
-            preview,
-            analysis,
-        )
-        // Observed rather than read once: bindToLifecycle returns before the camera
-        // has finished opening, so the range can arrive late.
+        // Deduplicated here, not by the caller: rebinding is this function's cost,
+        // so what counts as a change is its call. A repeat would tear the camera
+        // down for nothing, silently.
         launch {
-            camera.cameraInfo.zoomState.asFlow().collect { state ->
-                zoomRange.value = ZoomRange(state.minZoomRatio, state.maxZoomRatio)
+            facings.distinctUntilChanged().collectLatest { facing ->
+                provider.unbind(preview, analysis)
+                val camera = provider.bindToLifecycle(
+                    lifecycleOwner,
+                    facing.selector,
+                    preview,
+                    analysis,
+                )
+                coroutineScope {
+                    // Observed rather than read once: bindToLifecycle returns before
+                    // the camera has opened, so the range can arrive late.
+                    launch {
+                        camera.cameraInfo.zoomState.asFlow().collect { state ->
+                            zoomRange.value = ZoomRange(state.minZoomRatio, state.maxZoomRatio)
+                        }
+                    }
+                    // Re-collected per binding because a rebind resets zoom to 1x.
+                    zoomRatios.distinctUntilChanged()
+                        .collect { camera.cameraControl.setZoomRatio(it) }
+                }
             }
-        }
-        launch {
-            zoomRatios.collect { camera.cameraControl.setZoomRatio(it) }
         }
         awaitClose {
             // Not unbindAll(): the provider is a process singleton, so that would
