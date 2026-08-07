@@ -15,4 +15,8 @@ dependencies {
     api(libs.androidx.compose.runtime)
     api(libs.androidx.compose.ui)
     api(libs.androidx.compose.ui.graphics)
+
+    // @DrawableRes on RepLensIcons. Not `api`: the annotation is CLASS-retention,
+    // so consumers don't need it to compile.
+    implementation(libs.androidx.annotation)
 }
