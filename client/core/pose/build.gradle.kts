@@ -17,4 +17,8 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.mlkit.pose.detection.accurate)
+    // CameraInfo.zoomState is LiveData; asFlow() keeps it out of the callback world.
+    implementation(libs.androidx.lifecycle.livedata.ktx)
+
+    testImplementation(libs.junit)
 }

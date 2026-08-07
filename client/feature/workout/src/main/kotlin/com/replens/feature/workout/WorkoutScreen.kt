@@ -34,7 +34,7 @@ fun WorkoutRoot(
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val surfaceRequest by viewModel.surfaceRequest.collectAsStateWithLifecycle()
+    val surfaceRequest by viewModel.surfaceRequests.collectAsStateWithLifecycle()
 
     // No `by` on purpose: keeping the State box lets the overlay read the frame at
     // draw time. Unwrapping it here would recompose this screen 30 times a second.
@@ -48,6 +48,7 @@ fun WorkoutRoot(
         state = state,
         surfaceRequest = surfaceRequest,
         poseFrame = { poseFrame.value },
+        onAction = viewModel::onAction,
         modifier = modifier,
     )
 }
@@ -57,6 +58,7 @@ private fun WorkoutScreen(
     state: WorkoutState,
     surfaceRequest: SurfaceRequest?,
     poseFrame: () -> PoseFrame?,
+    onAction: (WorkoutAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -80,6 +82,17 @@ private fun WorkoutScreen(
                 .align(Alignment.TopStart)
                 .padding(24.dp),
         )
+        // One stop is nothing to choose between.
+        if (state.zoomStops.size > 1) {
+            ZoomControl(
+                stops = state.zoomStops,
+                selected = state.zoomRatio,
+                onSelect = { onAction(WorkoutAction.ZoomSelected(it)) },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 40.dp),
+            )
+        }
     }
 }
 
@@ -113,9 +126,14 @@ private fun RepCounter(
 private fun WorkoutScreenPreview() {
     RepLensTheme {
         WorkoutScreen(
-            state = WorkoutState(repCount = 12, phase = RepPhase.BOTTOM),
+            state = WorkoutState(
+                repCount = 12,
+                phase = RepPhase.BOTTOM,
+                zoomStops = listOf(0.7f, 1f, 2f),
+            ),
             surfaceRequest = null,
             poseFrame = { null },
+            onAction = {},
         )
     }
 }

@@ -11,6 +11,7 @@ import androidx.camera.core.SurfaceRequest
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.asFlow
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.pose.PoseDetection
 import com.google.mlkit.vision.pose.PoseDetector
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import javax.inject.Inject
@@ -34,9 +36,10 @@ import javax.inject.Inject
  * camera preview surface is published via [surfaceRequests] for the UI to
  * render alongside.
  *
- * Deliberately unscoped: the only retained state is [surfaceRequests], which must
- * not outlive the screen, and `ProcessCameraProvider` is already a process
- * singleton, so there is nothing expensive to cache.
+ * Deliberately unscoped: the only retained state is [surfaceRequests] and
+ * [zoomRange], neither of which must outlive the screen, and
+ * `ProcessCameraProvider` is already a process singleton, so there is nothing
+ * expensive to cache.
  */
 class PoseCameraDataSource @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -45,7 +48,14 @@ class PoseCameraDataSource @Inject constructor(
     val surfaceRequests: StateFlow<SurfaceRequest?>
         field = MutableStateFlow<SurfaceRequest?>(null)
 
-    fun poseFrames(lifecycleOwner: LifecycleOwner): Flow<PoseFrame> = callbackFlow {
+    /** Null until a camera is bound; only then does the device report its range. */
+    val zoomRange: StateFlow<ZoomRange?>
+        field = MutableStateFlow<ZoomRange?>(null)
+
+    fun poseFrames(
+        lifecycleOwner: LifecycleOwner,
+        zoomRatios: Flow<Float>,
+    ): Flow<PoseFrame> = callbackFlow {
         val provider = ProcessCameraProvider.awaitInstance(context)
         val detector = PoseDetection.getClient(
             AccuratePoseDetectorOptions.Builder()
@@ -65,12 +75,22 @@ class PoseCameraDataSource @Inject constructor(
             analyzeFrame(imageProxy, detector, analysisExecutor) { frame -> trySend(frame) }
         }
         // Must run on the main thread — that is what the flowOn below is for.
-        provider.bindToLifecycle(
+        val camera = provider.bindToLifecycle(
             lifecycleOwner,
             CameraSelector.DEFAULT_FRONT_CAMERA,
             preview,
             analysis,
         )
+        // Observed rather than read once: bindToLifecycle returns before the camera
+        // has finished opening, so the range can arrive late.
+        launch {
+            camera.cameraInfo.zoomState.asFlow().collect { state ->
+                zoomRange.value = ZoomRange(state.minZoomRatio, state.maxZoomRatio)
+            }
+        }
+        launch {
+            zoomRatios.collect { camera.cameraControl.setZoomRatio(it) }
+        }
         awaitClose {
             // Not unbindAll(): the provider is a process singleton, so that would
             // also tear down any other camera use case bound elsewhere.
@@ -78,6 +98,7 @@ class PoseCameraDataSource @Inject constructor(
             detector.close()
             analysisExecutor.shutdown()
             surfaceRequests.value = null
+            zoomRange.value = null
         }
     }.flowOn(Dispatchers.Main)
 
