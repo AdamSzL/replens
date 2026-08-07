@@ -137,6 +137,61 @@ Planned, not built: `:core:ui` (`UiText`, `ObserveAsEvents`), `:core:data`,
 - Version catalog, plugin aliases, and project accessors are all type-safe — no
   string dependency notation.
 
+### Design system — custom vocabulary, not Material's
+
+**Decided 2026-08-07, not yet built.** Colour and typography get RepLens names and
+RepLens values; M3 stays as a *component library* whose theming we replace. Note
+what was **not** rejected: Now in Android is itself fully custom — its palette and
+all 15 type slots are its own. The only axis was whose semantic vocabulary to
+adopt, so this is not "Material bad."
+
+Two arguments decided it:
+
+- **The component → role mapping is library-internal and versioned.** `Card` reads
+  `surfaceContainerLow`; it used to read `surfaceVariant`. Under Material's
+  vocabulary a `compose-material3` bump can restyle the app with no code change.
+  Colours stated at our own wrappers can't be touched by an upgrade.
+- **M3's five button variants encode Material's emphasis hierarchy, not ours.**
+  Every choice between `FilledTonalButton` and `ElevatedButton` is a developer
+  answering a Material question, and inconsistent answers are how a solo-built app
+  drifts. `PrimaryButton` makes the right choice the only choice.
+
+Structure:
+
+- **Two tiers.** `internal` primitives (raw palette, never referenced by UI) →
+  semantic tokens resolved per theme. Light/dark works because semantics remap,
+  not because there are two palettes. Also the insurance policy: a palette that
+  looks wrong is ~12 token edits, not a rewrite.
+- **Keep the `on` pairing in our own names** (`accent`/`onAccent`). It is the one
+  genuinely valuable thing in M3's colour system — a container never exists
+  without a contrasting content colour. Giving it up means **contrast is our job**;
+  check the pairs once at definition time.
+- **Typography: our names, one grammar.** `labelLarge` vs `titleSmall` vs
+  `displayMedium` is unmemorable and the 15-slot scale is 3× what we use. Don't mix
+  schemes (`Title20` is role+size, `Text14SemiBold` is type+size+weight — pick
+  one). Sizes in names are *base* sizes; accessibility settings scale `sp`.
+- **`staticCompositionLocalOf`** for colours and typography, provided by
+  `RepLensTheme` (static: themes change rarely, and it skips read tracking).
+- **A thin, unloved `MaterialTheme` stays underneath**, referenced by no UI code,
+  so anything un-wrapped doesn't render Material purple. Fill unassigned roles with
+  magenta in debug to make leaks obvious on screen instead of arguable.
+- **Dynamic color must go** — `RepLensTheme` still has `dynamicColor = true`, and
+  wallpaper-derived colour is incompatible with a brand palette.
+- **Wrap every M3 component before first use.** Nia's `DesignSystemDetector` lint
+  rule is the eventual enforcement, once there are enough wrappers to police.
+- Fonts live in `core/designsystem/src/main/res/font/`. Each weight is a file
+  unless the family ships a variable font; four weights is ~0.5 MB of APK.
+
+**Build the structure, populate on demand.** Tokens and wrappers designed against
+imaginary screens are guesses; one screen exists today.
+
+Written by a solo dev with no designer, which shapes the tactics: **borrow a
+palette** (Radix Colors is built for this — numbered steps with defined meanings
+and matched dark variants), keep a strict 4/8/12/16/24/32 spacing scale, and hold
+to 4–5 type sizes and 2 weights. Amateur UI comes from too many values, not the
+wrong ones. The visual load here is unusually low anyway — the workout screen is
+invisible during a set, and history/stats/summary are lists and numbers.
+
 ### Icons
 
 **No `material-icons-*` dependency.** Compose no longer bundles `Icons`, and the
