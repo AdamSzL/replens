@@ -73,9 +73,12 @@ class PoseCameraDataSource @Inject constructor(
             analysis,
         )
         awaitClose {
-            provider.unbindAll()
+            // Not unbindAll(): the provider is a process singleton, so that would
+            // also tear down any other camera use case bound elsewhere.
+            provider.unbind(preview, analysis)
             detector.close()
             analysisExecutor.shutdown()
+            _surfaceRequests.value = null
         }
     }.flowOn(Dispatchers.Main)
 
