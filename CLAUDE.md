@@ -652,53 +652,46 @@ are committed. If it works out, enable it in a convention plugin.
 unit tests, and screenshot validation once it exists. Cache the Gradle
 distribution and build cache.
 
-## Current status (2026-08-07)
+## Current status (2026-08-08)
 
 - **Milestone 1 (camera + overlay): done**, validated on device.
 - **Milestone 2 steps 1–4: done**, validated on device — 8 reps performed, 8
   counted, clean phase transitions, no phantom reps from walking to/from the
-  phone. 85 unit tests. Hilt is wired throughout.
-- **What that does not prove: the thresholds.** Every rep in that clip was deep
+  phone. Hilt is wired throughout.
+- **Zoom stops and front/back flip: done**, validated on device 2026-08-08
+  (`squats_camera_flip.mp4`): 7 performed, 7 counted — 4 on the back camera, 3 on
+  the front. Across the flip the zoom range updated 0.5 → 0.9 and the selection
+  reset to 1x, the rep count survived, mirroring was correct on both lenses, and
+  carrying the phone produced no phantom reps. 89 unit tests.
+- The flip **rebinds the same use cases in place** rather than restarting the
+  flow, so the ML Kit detector is never rebuilt and its model never reloads. A
+  lens change is CameraX's business alone.
+- **What that does not prove: the thresholds.** Every rep in both clips was deep
   and clean, nowhere near the 115° boundary, and the smoothing constants are still
   the paper's defaults. Shallow reps are what will expose them.
-- **Next:** camera flip, then camera configuration (below), then fixtures +
-  threshold tuning, then step 5 (form rules + TTS — the first time `UiText`,
-  `:core:ui` and `Event` earn their place). Rationale for that order: the camera
-  is hardcoded to `DEFAULT_FRONT_CAMERA` but the recommended setup is 45° at
-  2–3 m, a **back** camera position, and tuning form rules against badly framed
-  footage bakes in bad numbers.
+- **Next:** camera configuration (below), then fixtures + threshold tuning, then
+  step 5 (form rules + TTS — the first time `UiText`, `:core:ui` and `Event` earn
+  their place).
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
   `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary).
-
-### Open: camera configuration — settle before fixtures
-
-We have never chosen an `ImageAnalysis` resolution or aspect ratio; CameraX
-defaults are in force. That single decision moves field of view (framing),
-pixels-on-body (landmark accuracy), buffer size (inference cost and heat), and
-`sourceWidth`/`sourceHeight` (the overlay mapping). **It must land before
-fixtures** — thresholds tuned against footage at one resolution don't transfer if
-the resolution later changes.
-
-Measured on the Pixel front camera (2026-08-07): `minZoomRatio = 0.8958334`,
-`maxZoomRatio = 10.0`, while Google Camera offers 0.7–2.9 on the same lens. Two
-readings follow. A max of 10 against their 2.9 shows **the OEM app curates its
-range**, so their 0.7 is not evidence of what a third-party app can reach. And
-0.8958 is not a lens ratio — a real ultra-wide reads ~0.5–0.6 — so it is crop
-geometry, which is exactly what a different `ResolutionSelector` would move.
-
-Also unresolved: **zoom above 1x on a single-lens camera is digital**, so it costs
-landmark quality on the one screen where quality is the product. The `2x` stop may
-deserve to go — decide once the flip lets us log both lenses, since a back
-telephoto would be optical rather than a crop.
+- **The rep counter runs on whatever the camera sees.** In the flip clip, carrying
+  the phone drove the phase into `BOTTOM` off close-up torso landmarks. No rep was
+  counted — completing one still needs `standingEnter` at 168° — but counting
+  should be gated on an explicit session start/stop rather than on the camera
+  being open. Fix it when the workout screen gains start/stop.
 - **Known issues from the validation footage**, both UX rather than code: feet at
   or past the bottom edge during deep reps (leg landmarks start being inferred —
   will corrupt heel-lift and shin rules), and arms held forward occluding the legs
-  at the bottom, which front-on framing makes worst.
-- **`WorkoutRoot` is public and the `RepPhase` text is a debug affordance.** Root
-  becomes internal when `navigation/` exists. Removing the phase `Text` alone
-  won't cut recompositions — `phase` living in `WorkoutState` is what drives them;
-  the real cleanup is dropping it from state once cues are events.
+  at the bottom, which front-on framing makes worst. The back camera at 0.5x fixes
+  the framing half.
+- **`:feature:workout` exposes exactly `WorkoutRoot(modifier)`**; the ViewModel,
+  state and actions are `internal`, so `:core:pose` and `:core:exercise` are
+  `implementation`. Root itself becomes internal when `navigation/` exists — a
+  one-keyword change. The `RepPhase` text is a debug affordance; removing the
+  `Text` alone won't cut recompositions, since `phase` living in `WorkoutState` is
+  what drives them. The real cleanup is dropping it from state once cues are
+  events.
 - Findings from Milestone 1 footage still worth honouring: 45° is the best angle
   (depth + both knees resolved); pure side view infers far-side limbs, so use
   near-side joints only; bad framing makes leg landmarks hallucinate. Sustained
@@ -709,6 +702,37 @@ telephoto would be optical rather than a crop.
   `resourcePrefix`, default `testInstrumentationRunner`, `animationsDisabled`,
   `disableUnnecessaryAndroidTests`.
 
+### Open: camera configuration — settle before fixtures
+
+We have never chosen an `ImageAnalysis` resolution or aspect ratio; CameraX
+defaults are in force. That single decision moves field of view (framing),
+pixels-on-body (landmark accuracy), buffer size (inference cost and heat), and
+`sourceWidth`/`sourceHeight` (the overlay mapping). **It must land before
+fixtures** — thresholds tuned against footage at one resolution don't transfer if
+the resolution later changes.
+
+Measured on the Pixel (2026-08-08):
+
+| lens | min zoom | reading |
+|---|---|---|
+| front | 0.8958334 (max 10.0) | crop geometry — an unclean fraction with no lens behind it |
+| back | **0.5** | a clean lens ratio: a real optical ultra-wide |
+
+So the two lenses are qualitatively different, and **the `ResolutionSelector`
+experiment is only worth running on the front** — on the back, 0.5 *is* the
+hardware and there is nothing to recover. Google Camera offers 0.7–2.9 on the
+front while the HAL reports a max of 10.0, which shows the OEM app curates its
+displayed range; their 0.7 is not evidence of what a third-party app can reach.
+
+Same split decides the `2x` stop: on the back it is probably a real telephoto and
+earns its place, while on the front it is a digital crop that costs landmark
+quality on the one screen where quality is the product.
+
+The trade-off to settle is now measurable rather than theoretical: at 0.5x the
+body fills about a third of the frame height — best for "do my feet fit", worst
+for pixels on the joints that matter. Same setup, same distance, 0.5x against 1x,
+compare landmark jitter.
+
 ## Roadmap
 
 1. **Camera + skeleton overlay** — done.
@@ -718,9 +742,8 @@ telephoto would be optical rather than a crop.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
 
-Backlog: camera flip (front/back — the overlay's `mirrored` flag must flip with
-it) and zoom control including 0.5x ultra-wide via `cameraControl.setZoomRatio`
-(usually back-camera only; helps in small rooms).
+Backlog: remembering the camera choice and zoom across launches (needs DataStore,
+which the setup/settings work will bring anyway).
 
 Scope guard: **2–3 exercises max, done well.** Form heuristics are the hard part,
 not ML Kit — landmarks jitter (smoothing + hysteresis are non-negotiable) and
