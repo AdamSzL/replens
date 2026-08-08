@@ -1,12 +1,16 @@
 package com.replens.core.pose
 
 import android.content.Context
+import android.util.Size
 import androidx.annotation.OptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
 import androidx.lifecycle.LifecycleOwner
@@ -31,6 +35,23 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import javax.inject.Inject
+
+/**
+ * Pinned, even though CameraX's default happens to match it today: fixtures and
+ * every threshold tuned against them assume this exact frame, so a future default
+ * must not move it silently. 4:3 because the preview is 4:3 and the overlay maps
+ * analysis coordinates onto it — a different aspect would frame a different scene
+ * and misplace the skeleton.
+ */
+private val AnalysisResolution = ResolutionSelector.Builder()
+    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+    .setResolutionStrategy(
+        ResolutionStrategy(
+            Size(640, 480),
+            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+        )
+    )
+    .build()
 
 /**
  * Streams live poses from the camera. Collecting [poseFrames] starts the
@@ -80,6 +101,7 @@ class PoseCameraDataSource @Inject constructor(
         }
         val analysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setResolutionSelector(AnalysisResolution)
             .build()
         analysis.setAnalyzer(analysisExecutor) { imageProxy ->
             analyzeFrame(imageProxy, detector, analysisExecutor) { frame -> trySend(frame) }
