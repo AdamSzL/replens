@@ -764,18 +764,20 @@ distribution and build cache.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
   `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary).
-- **The rep counter runs on whatever the camera sees, and it counts garbage.**
+- **The rep counter counted garbage; the framing gate fixes half of it.**
   Observed 2026-08-08: picking the phone up counted **a rep off a face**. An
   earlier note claimed the `standingEnter` requirement prevented this; it does not.
   At 20 cm ML Kit does not report "no body" — it **hallucinates a full skeleton**
   with `inFrameLikelihood` above our 0.5 gate, and as the phone moves those
   invented joints sweep the angle through 168 → 115 → 168. One sweep is one rep.
-  The state machine is behaving correctly on fictional input.
-  Two fixes, and both are wanted: **session start/stop** handles before and after,
-  but not the walk back to press Finish; a **plausibility gate** handles the middle
-  — `:core:posemath` already computes `torsoSize`, and a torso filling most of the
-  frame is not a person standing 2–3 m away, so those frames should read as "no
-  reading" rather than being trusted.
+  The state machine is behaving correctly on fictional input, so **no confidence
+  threshold can catch this** — the model is confident.
+  Apparent size can. `Framing` (`:core:exercise`) rejects a frame whose torso
+  spans too much of the frame height, and a rejected frame yields a **null depth
+  angle** rather than a special case — which is the "no reading" path
+  `maxMissingFrames` already handles, so it needed no new state machine.
+  Still open: **session start/stop**, for the reps you don't want counted while
+  standing at a perfectly normal distance.
 - **Known issues from the validation footage**, both UX rather than code: feet at
   or past the bottom edge during deep reps (leg landmarks start being inferred —
   will corrupt heel-lift and shin rules), and arms held forward occluding the legs
@@ -914,6 +916,30 @@ comparison a live camera can never provide.
 the accurate model. Feeding ML Kit full-resolution video frames would produce CSVs
 describing a pipeline we don't ship, and every threshold tuned against them would
 be optimistic.
+
+### Framing — measured 2026-08-08
+
+`torsoFraction` = hip-to-shoulder over frame height. One continuous take on the
+Pixel 10 Pro XL — phone in hand, walk out, squat, walk back:
+
+| | torso fraction |
+|---|---|
+| phone in hand at ~20 cm | 0.75–0.81 |
+| walking, either direction | 0.25–0.55, sparse |
+| **standing and squatting at 2–3 m** (231 frames) | **0.177–0.239, mean 0.193** |
+
+Strongly bimodal, which is what makes a single threshold viable at all.
+
+`MAX_TORSO_FRACTION = 0.40` sits in the corridor rather than just above the
+measured maximum, because **the measured maximum is one room**. The torso is
+~29% of a person's height, so a body filling the frame head to toe — legitimate
+tight framing in a small room — reads ~0.29. Rejecting that user means zero reps
+and an app that looks broken; accepting a few frames of someone walking costs
+nothing, because the counter needs a full 168 → 115 → 168 sweep.
+
+**The fraction falls during a rep**, never rises: the spine is rigid, so leaning
+forward only foreshortens its projection (0.177 against a 0.193 mean). The gate
+cannot misfire mid-squat.
 
 ## Roadmap
 
