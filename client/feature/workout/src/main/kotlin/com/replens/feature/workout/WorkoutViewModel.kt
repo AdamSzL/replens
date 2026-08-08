@@ -4,6 +4,8 @@ import androidx.camera.core.SurfaceRequest
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.replens.core.exercise.Framing
+import com.replens.core.exercise.framing
 import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.squatSignals
 import com.replens.core.model.PoseFrame
@@ -109,8 +111,14 @@ internal class WorkoutViewModel @Inject constructor(
         val smoothed = smoother.smooth(frame)
         poseFrame.value = smoothed
 
-        val signals = smoothed.pose.squatSignals(smoothed.timestampMillis)
-        val phase = repCounter.update(signals.depthAngle, smoothed.timestampMillis).phase
+        // A frame that fails the framing check reads as "no angle", not as a bad
+        // one — which is the state the counter already knows how to abandon a rep
+        // from. The overlay still draws it, so the user can see why nothing counts.
+        val depthAngle = smoothed.pose
+            .squatSignals(smoothed.timestampMillis)
+            .depthAngle
+            .takeIf { smoothed.framing() == Framing.OK }
+        val phase = repCounter.update(depthAngle, smoothed.timestampMillis).phase
 
         val current = state.value
         if (current.repCount != repCounter.repCount || current.phase != phase) {
