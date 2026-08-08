@@ -737,11 +737,18 @@ distribution and build cache.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
   `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary).
-- **The rep counter runs on whatever the camera sees.** In the flip clip, carrying
-  the phone drove the phase into `BOTTOM` off close-up torso landmarks. No rep was
-  counted — completing one still needs `standingEnter` at 168° — but counting
-  should be gated on an explicit session start/stop rather than on the camera
-  being open. Fix it when the workout screen gains start/stop.
+- **The rep counter runs on whatever the camera sees, and it counts garbage.**
+  Observed 2026-08-08: picking the phone up counted **a rep off a face**. An
+  earlier note claimed the `standingEnter` requirement prevented this; it does not.
+  At 20 cm ML Kit does not report "no body" — it **hallucinates a full skeleton**
+  with `inFrameLikelihood` above our 0.5 gate, and as the phone moves those
+  invented joints sweep the angle through 168 → 115 → 168. One sweep is one rep.
+  The state machine is behaving correctly on fictional input.
+  Two fixes, and both are wanted: **session start/stop** handles before and after,
+  but not the walk back to press Finish; a **plausibility gate** handles the middle
+  — `:core:posemath` already computes `torsoSize`, and a torso filling most of the
+  frame is not a person standing 2–3 m away, so those frames should read as "no
+  reading" rather than being trusted.
 - **Known issues from the validation footage**, both UX rather than code: feet at
   or past the bottom edge during deep reps (leg landmarks start being inferred —
   will corrupt heel-lift and shin rules), and arms held forward occluding the legs
