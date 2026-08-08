@@ -19,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -97,12 +96,12 @@ private fun WorkoutScreen(
                         .align(Alignment.TopEnd)
                         .padding(24.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f)),
+                        .background(RepLensTheme.colors.overlayScrim),
                 ) {
                     Icon(
                         painter = painterResource(RepLensIcons.CameraSwitch),
                         contentDescription = stringResource(R.string.workout_flip_camera),
-                        tint = Color.White,
+                        tint = RepLensTheme.colors.onOverlay,
                     )
                 }
             }
@@ -138,18 +137,18 @@ private fun RepCounter(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.Black.copy(alpha = 0.5f))
+            .background(RepLensTheme.colors.overlayScrim)
             .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
         Text(
             text = repCount.toString(),
             style = RepLensTheme.typography.display,
-            color = Color.White,
+            color = RepLensTheme.colors.onOverlay,
         )
         Text(
             text = phase.name,
             style = RepLensTheme.typography.label,
-            color = Color.White.copy(alpha = 0.7f),
+            color = RepLensTheme.colors.onOverlayMuted,
         )
     }
 }

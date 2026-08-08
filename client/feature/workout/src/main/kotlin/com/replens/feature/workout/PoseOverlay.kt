@@ -4,8 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.unit.dp
+import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.model.Landmark
 import com.replens.core.model.LandmarkType
 import com.replens.core.model.PoseFrame
@@ -34,7 +35,15 @@ private val CONNECTIONS = listOf(
     LandmarkType.RIGHT_HEEL to LandmarkType.RIGHT_FOOT_INDEX,
 )
 
+/** Only these are drawn: a landmark with no bone attached reads as noise. */
+private val CONNECTED_TYPES = CONNECTIONS.flatMapTo(mutableSetOf()) { (a, b) -> listOf(a, b) }
+
 private const val MIN_IN_FRAME_LIKELIHOOD = 0.5f
+
+// dp, because a DrawScope works in raw pixels.
+private val BoneWidth = 3.dp
+private val JointRadius = 5.dp
+private val OutlineWidth = 2.dp
 
 /**
  * @param frame invoked inside the draw scope, so a new frame invalidates only the
@@ -47,6 +56,9 @@ internal fun PoseOverlay(
     mirrored: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val boneColor = RepLensTheme.colors.onOverlay
+    val jointColor = RepLensTheme.colors.overlayAccent
+    val outlineColor = RepLensTheme.colors.overlayOutline
     Canvas(modifier = modifier) {
         val currentFrame = frame() ?: return@Canvas
         // Same FILL_CENTER mapping the viewfinder applies to the preview.
@@ -66,19 +78,30 @@ internal fun PoseOverlay(
             .filter { it.inFrameLikelihood >= MIN_IN_FRAME_LIKELIHOOD }
             .associateBy { it.type }
 
-        for ((startType, endType) in CONNECTIONS) {
-            val start = visible[startType] ?: continue
-            val end = visible[endType] ?: continue
-            drawLine(
-                color = Color.White,
-                start = toCanvas(start),
-                end = toCanvas(end),
-                strokeWidth = 6f,
-                cap = StrokeCap.Round,
-            )
+        val bones = CONNECTIONS.mapNotNull { (startType, endType) ->
+            val start = visible[startType] ?: return@mapNotNull null
+            val end = visible[endType] ?: return@mapNotNull null
+            toCanvas(start) to toCanvas(end)
         }
-        for (landmark in visible.values) {
-            drawCircle(color = Color.Cyan, radius = 8f, center = toCanvas(landmark))
+        val joints = visible.filterKeys { it in CONNECTED_TYPES }.values.map(::toCanvas)
+
+        val boneWidth = BoneWidth.toPx()
+        val jointRadius = JointRadius.toPx()
+        val outline = OutlineWidth.toPx()
+
+        // All outlines, then all fills: interleaved, one bone's outline would cut
+        // into the bone before it.
+        for ((start, end) in bones) {
+            drawLine(outlineColor, start, end, boneWidth + outline * 2f, StrokeCap.Round)
+        }
+        for ((start, end) in bones) {
+            drawLine(boneColor, start, end, boneWidth, StrokeCap.Round)
+        }
+        for (joint in joints) {
+            drawCircle(outlineColor, jointRadius + outline, joint)
+        }
+        for (joint in joints) {
+            drawCircle(jointColor, jointRadius, joint)
         }
     }
 }

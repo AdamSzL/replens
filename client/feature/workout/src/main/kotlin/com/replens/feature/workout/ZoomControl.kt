@@ -26,7 +26,7 @@ internal fun ZoomControl(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
-            .background(Color.Black.copy(alpha = 0.5f))
+            .background(RepLensTheme.colors.overlayScrim)
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -49,16 +49,22 @@ private fun ZoomStop(
     Text(
         text = formatRatio(ratio),
         style = RepLensTheme.typography.label,
-        color = if (selected) Color.Black else Color.White,
+        color = if (selected) {
+            RepLensTheme.colors.onOverlayAccent
+        } else {
+            RepLensTheme.colors.onOverlay
+        },
         modifier = Modifier
             .clip(CircleShape)
-            .background(if (selected) Color.White else Color.Transparent)
+            .background(
+                if (selected) RepLensTheme.colors.overlayAccent else Color.Transparent
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }
 
-/** Locale-aware on purpose: Polish writes `0,7`. */
+/** Locale-aware: Polish writes `0,7`. */
 private fun formatRatio(ratio: Float): String =
     if (ratio == ratio.toInt().toFloat()) "${ratio.toInt()}×" else "%.1f×".format(ratio)
 
