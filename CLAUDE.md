@@ -139,11 +139,10 @@ Planned, not built: `:core:ui` (`UiText`, `ObserveAsEvents`), `:core:data`,
 
 ### Design system — custom vocabulary, not Material's
 
-**Decided 2026-08-07, not yet built.** Colour and typography get RepLens names and
-RepLens values; M3 stays as a *component library* whose theming we replace. Note
-what was **not** rejected: Now in Android is itself fully custom — its palette and
-all 15 type slots are its own. The only axis was whose semantic vocabulary to
-adopt, so this is not "Material bad."
+**Built 2026-08-08.** Colour and typography have RepLens names and RepLens values;
+M3 remains a component library we wrap. Note what was **not** rejected: Now in
+Android is itself fully custom — its palette and all 15 type slots are its own.
+The only axis was whose semantic vocabulary to adopt, so this is not "Material bad."
 
 Two arguments decided it:
 
@@ -156,41 +155,68 @@ Two arguments decided it:
   answering a Material question, and inconsistent answers are how a solo-built app
   drifts. `PrimaryButton` makes the right choice the only choice.
 
-Structure:
+What exists:
 
-- **Two tiers.** `internal` primitives (raw palette, never referenced by UI) →
-  semantic tokens resolved per theme. Light/dark works because semantics remap,
-  not because there are two palettes. Also the insurance policy: a palette that
-  looks wrong is ~12 token edits, not a rewrite.
-- **Keep the `on` pairing in our own names** (`accent`/`onAccent`). It is the one
-  genuinely valuable thing in M3's colour system — a container never exists
-  without a contrasting content colour. Giving it up means **contrast is our job**;
-  check the pairs once at definition time.
-- **Typography: our names, one grammar.** `labelLarge` vs `titleSmall` vs
-  `displayMedium` is unmemorable and the 15-slot scale is 3× what we use. Don't mix
-  schemes (`Title20` is role+size, `Text14SemiBold` is type+size+weight — pick
-  one). Sizes in names are *base* sizes; accessibility settings scale `sp`.
-- **`staticCompositionLocalOf`** for colours and typography, provided by
-  `RepLensTheme` (static: themes change rarely, and it skips read tracking).
-- **A thin, unloved `MaterialTheme` stays underneath**, referenced by no UI code,
-  so anything un-wrapped doesn't render Material purple. Fill unassigned roles with
-  magenta in debug to make leaks obvious on screen instead of arguable.
-- **Dynamic color must go** — `RepLensTheme` still has `dynamicColor = true`, and
-  wallpaper-derived colour is incompatible with a brand palette.
+- **Two tiers.** `Palette` is `internal`, holds only raw values (`Slate6`,
+  `Cyan11`), and is never referenced by UI. `RepLensColors` maps those onto names
+  that mean something. Light/dark works because the semantics remap, not because
+  there are two palettes.
+- **Radix Colors** — `slate` + `cyan`, values copied from the repo. Its numbered
+  steps have defined jobs (9 = solid brand, 11 = low-contrast text, 12 =
+  high-contrast), so contrast is inherited rather than eyeballed. **Keep Radix's
+  numbering**: the number is a foreign key into their docs, and gaps just mean we
+  have not needed those steps yet.
+- **`accent` is cyan, deliberately not green/amber/red** — those three are spoken
+  for by form feedback, and a brand colour that collides with "your knees are
+  caving" makes the one moment colour carries meaning meaningless.
+- **Overlay colours are theme-independent.** Anything drawn on the camera feed is
+  competing with an unknown room, not with our background. And no fixed colour is
+  legible over arbitrary video — cyan on a mid-grey wall measures 2.09:1 — so the
+  skeleton is drawn with a dark outline behind it and carries its own contrast.
+- **`on` pairing kept in our names** (`accent`/`onAccent`). The one genuinely
+  valuable part of M3's colour system. Giving it up makes **contrast our job**:
+  every pair was measured once, and the worst is 4.65:1.
+- **No `MaterialTheme` at all.** `RepLensTheme` provides two `CompositionLocal`s
+  and nothing else. Un-wrapped M3 components fall back to Material's own defaults
+  and render visibly wrong, which is how we find them — the absence *is* the leak
+  detector, so don't add a floor "to be safe". `IconButton` still pulls its ripple
+  from `IconButtonDefaults`; a wrapper will fix that.
+- **Typography named for the job, not the size** — `display`, `title`, `body`,
+  `label`. `Title28` becomes a lie the moment the size changes or an accessibility
+  setting scales it. Four sizes, two weights. `display` sets `tnum` so the rep
+  counter doesn't reflow as it passes 9.
+- **Montserrat, subset by `tools/subset-fonts.sh`** — Google Fonts ships 325 KB per
+  weight for a character set we don't render; Latin + Polish is 101 KB. The
+  variable font is 672 KB against 649 KB for two statics, so it only pays from
+  three weights up.
 - **Wrap every M3 component before first use.** Nia's `DesignSystemDetector` lint
   rule is the eventual enforcement, once there are enough wrappers to police.
-- Fonts live in `core/designsystem/src/main/res/font/`. Each weight is a file
-  unless the family ships a variable font; four weights is ~0.5 MB of APK.
 
-**Build the structure, populate on demand.** Tokens and wrappers designed against
-imaginary screens are guesses; one screen exists today.
+**No spacing, sizing or radius tokens — plain `.dp` at call sites.** Colour varies
+by theme and type size varies by the user's font scale, so both earn a token layer;
+spacing varies by nothing, so a token is just a second name for a number. Two
+failure modes seen first-hand and rejected:
+
+- **Semantic scales** (`Spacing.md`, `IconSize.large`) give no guidance — is a
+  card's inner padding `md` or `lg`? Two people answer differently and the same gap
+  ends up under two names, which is worse than raw numbers because the
+  inconsistency is no longer visible.
+- **Rescaling wrappers** (`.figmaDp`) are worse than a naming problem: `dp` is a
+  platform guarantee that 48dp is a 48dp touch target, and a wrapper that rescales
+  it makes accessibility minimums silently approximate.
+
+Keep the **rule** instead — only 4/8/12/16/24/32 — enforceable by a detekt rule if
+it ever drifts. A `private val` for a value repeated within one file is fine; that
+is naming a local constant, not building a token layer.
+
+**Build the structure, populate on demand.** Tokens designed against imaginary
+screens are guesses.
 
 Written by a solo dev with no designer, which shapes the tactics: **borrow a
-palette** (Radix Colors is built for this — numbered steps with defined meanings
-and matched dark variants), keep a strict 4/8/12/16/24/32 spacing scale, and hold
-to 4–5 type sizes and 2 weights. Amateur UI comes from too many values, not the
-wrong ones. The visual load here is unusually low anyway — the workout screen is
-invisible during a set, and history/stats/summary are lists and numbers.
+palette** rather than invent one, and hold to few values. Amateur UI comes from too
+many values, not the wrong ones. The visual load here is unusually low anyway — the
+workout screen is invisible during a set, and history/stats/summary are lists and
+numbers.
 
 ### Icons
 
@@ -198,8 +224,9 @@ invisible during a set, and history/stats/summary are lists and numbers.
 extended artifact is bloat for the handful we need. Icons are vector XML
 downloaded from [Material Symbols](https://fonts.google.com/icons) into
 `:core:designsystem` — filled variants, exported as SVG. The export colour is
-irrelevant (pick black): `Icon()` tints with `LocalContentColor` and replaces it.
-What matters is that icons stay **single-colour**, or the tint flattens them.
+irrelevant (pick black): `Icon(tint = …)` replaces it, and we always pass one
+since nothing provides `LocalContentColor`. What matters is that icons stay
+**single-colour**, or the tint flattens them.
 
 Feature modules must not import a foreign `R`, so the design system exposes them
 by name:
