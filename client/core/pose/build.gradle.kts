@@ -5,6 +5,12 @@ plugins {
 
 android {
     namespace = "com.replens.core.pose"
+
+    defaultConfig {
+        // Only this module has instrumented tests, so it stays out of the
+        // convention plugin until a second one needs it.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 }
 
 dependencies {
@@ -21,4 +27,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.livedata.ktx)
 
     testImplementation(libs.junit)
+
+    // The fixture generator: real pipeline, real device, recorded clips in, CSV out.
+    androidTestImplementation(projects.core.exercise)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
