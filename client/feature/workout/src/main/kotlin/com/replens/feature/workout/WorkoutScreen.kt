@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -144,12 +143,12 @@ private fun RepCounter(
     ) {
         Text(
             text = repCount.toString(),
-            style = MaterialTheme.typography.displayMedium,
+            style = RepLensTheme.typography.display,
             color = Color.White,
         )
         Text(
             text = phase.name,
-            style = MaterialTheme.typography.labelMedium,
+            style = RepLensTheme.typography.label,
             color = Color.White.copy(alpha = 0.7f),
         )
     }
