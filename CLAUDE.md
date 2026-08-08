@@ -686,7 +686,8 @@ distribution and build cache.
 - **What that does not prove: the thresholds.** Every rep in both clips was deep
   and clean, nowhere near the 115° boundary, and the smoothing constants are still
   the paper's defaults. Shallow reps are what will expose them.
-- **Next:** camera configuration (below), then fixtures + threshold tuning, then
+- **Camera configuration: settled** (below) — 640x480, 4:3, accurate model.
+- **Next:** fixtures + threshold tuning, then
   step 5 (form rules + TTS — the first time `UiText`, `:core:ui` and `Event` earn
   their place).
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
@@ -711,9 +712,10 @@ distribution and build cache.
   events.
 - Findings from Milestone 1 footage still worth honouring: 45° is the best angle
   (depth + both knees resolved); pure side view infers far-side limbs, so use
-  near-side joints only; bad framing makes leg landmarks hallucinate. Sustained
-  accurate-model inference warms the phone — acceptable; levers are the base
-  model or throttling to ~15 fps.
+  near-side joints only; bad framing makes leg landmarks hallucinate. **The
+  "inference warms the phone" note is withdrawn** — it came from one early session
+  where the phone was also charging, and four measurement runs on 2026-08-08 did
+  not reproduce it.
 - Test footage lives outside the repo in `~/replens-recordings/`.
 - Parked for the library convention plugin when they earn their keep:
   `resourcePrefix`, default `testInstrumentationRunner`, `animationsDisabled`,
@@ -776,36 +778,64 @@ Rejected on the way, worth not re-deriving:
   one field whenever we want it. **Trigger to add it: continuous or pinch zoom**,
   where the camera ramps toward a target and the UI must follow the real value.
 
-### Open: camera configuration — settle before fixtures
+### Camera configuration — settled 2026-08-08
 
-We have never chosen an `ImageAnalysis` resolution or aspect ratio; CameraX
-defaults are in force. That single decision moves field of view (framing),
-pixels-on-body (landmark accuracy), buffer size (inference cost and heat), and
-`sourceWidth`/`sourceHeight` (the overlay mapping). **It must land before
-fixtures** — thresholds tuned against footage at one resolution don't transfer if
-the resolution later changes.
+**`ImageAnalysis` is pinned to 640x480, 4:3, accurate model, `STREAM_MODE`.** The
+resolution is set explicitly even though CameraX's default matches it: fixtures
+and every threshold tuned against them assume this exact frame, so a future
+default must not move it silently. 4:3 is not negotiable — the preview is 4:3 and
+`PoseOverlay` maps analysis coordinates onto it, so a different aspect would frame
+a different scene and misplace the skeleton.
 
-Measured on the Pixel (2026-08-08):
+Measured on the Pixel 10 Pro XL, back camera, standing still:
 
-| lens | min zoom | reading |
-|---|---|---|
-| front | 0.8958334 (max 10.0) | crop geometry — an unclean fraction with no lens behind it |
-| back | **0.5** | a clean lens ratio: a real optical ultra-wide |
+| | fps | inference | raw angle noise |
+|---|---|---|---|
+| **640x480** | 26–29 | 33–40 ms | **0.2–1.0°** |
+| 1280x960 | 12–22 | 45–85 ms | not measured — moot |
 
-So the two lenses are qualitatively different, and **the `ResolutionSelector`
-experiment is only worth running on the front** — on the back, 0.5 *is* the
-hardware and there is nothing to recover. Google Camera offers 0.7–2.9 on the
-front while the HAL reports a max of 10.0, which shows the OEM app curates its
-displayed range; their 0.7 is not evidence of what a third-party app can reach.
+1280x960 costs ~10 fps to fix jitter that isn't there: 0.2–1.0° against hysteresis
+bands of 8° and 10°. Rejected. Going *lower* than 640x480 would buy almost nothing
+either — the landmark model's input is a fixed ~256px crop, so source resolution
+only moves the detector pass and buffer transfer, which is why quadrupling the
+pixels cost 20 ms rather than 4x.
 
-Same split decides the `2x` stop: on the back it is probably a real telephoto and
-earns its place, while on the front it is a digital crop that costs landmark
-quality on the one screen where quality is the product.
+**We are inference-bound, not resolution-bound**, and `fps ≈ 1000/inference` holds
+in every sample. `KEEP_ONLY_LATEST` won't deliver the next frame until we
+`close()`, and we can't close until detection finishes because ML Kit still holds
+the `mediaImage`. So there is no pipelining and the frame rate *is* the inference
+rate. Every future "can we afford X" question here is a question about the model.
 
-The trade-off to settle is now measurable rather than theoretical: at 0.5x the
-body fills about a third of the frame height — best for "do my feet fit", worst
-for pixels on the joints that matter. Same setup, same distance, 0.5x against 1x,
-compare landmark jitter.
+`~27 fps is fine` — `PoseSmoother` and `SquatRepCounter` are timestamp-driven, not
+frame-count-driven. The lever if a weaker device can't sustain ~15 fps is the
+**base model**, per device, not a resolution drop for everyone.
+
+**0.5x costs nothing measurable.** 0.5x read sd 0.2–0.5, 1x read 0.4–1.3 — the
+difference is within stance variation. So the wide framing is free, and the
+feet-in-frame problem can be solved with it. Note this contradicts ML Kit's
+guidance that the subject should be ≥256px (at 0.5x the body is ~210px tall) —
+the measurement wins, but that line is the first place to look if depth proves
+noisy.
+
+Zoom ranges: front `0.8958334`–10.0, back `0.5`–10.0. The front minimum is crop
+geometry, not a lens; the back's 0.5 is a real optical ultra-wide, so `2x` is
+probably a genuine telephoto there and a quality-costing digital crop on the front.
+
+Dead ends, so they are not re-run: `setPreferredHardwareConfigs(CPU_GPU, CPU)`
+changed nothing (22–25 fps against 26–29 — within variance), and the Pixel 3XL
+figures in Google's table are not comparable, because our number is an end-to-end
+round trip converted to a rate while a benchmark can pipeline.
+
+**Deferred to the fixtures:** noise at squat depth. Standing straight is the easy
+case, and a human cannot hold 115° still for long enough to measure it well. The
+fixture CSVs give the angle time series for real reps, so noise at any angle falls
+out for free — and the same footage through both models is the controlled
+comparison a live camera can never provide.
+
+**The fixture generator must replicate this config** — downscale to 640x480, use
+the accurate model. Feeding ML Kit full-resolution video frames would produce CSVs
+describing a pipeline we don't ship, and every threshold tuned against them would
+be optimistic.
 
 ## Roadmap
 
