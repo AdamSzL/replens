@@ -80,17 +80,21 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 ```
 :app                MainActivity: camera permission gate -> WorkoutRoot. Later:
                     NavDisplay, back stack, every cross-feature edge.
-:feature:workout    WorkoutRoot / WorkoutScreen (private, pure render),
-                    WorkoutViewModel, WorkoutState, PoseOverlay, RepCounter.
+:feature:workout    …workout.ui/            the five files (no Event yet)
+                    …workout.ui.components/ PoseOverlay, RepCounter,
+                                            SessionControls, ZoomControl
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
+                      …component.button/ Primary, OverlayPrimary,
+                                         OverlaySecondary, OverlayIcon
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame. Pure Kotlin.
 :core:posemath      Point, joint angles, torso size, normalized distances, line
                     deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
                     domain-free (no thresholds, no exercise names). 55 tests.
-:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 30 tests.
-                      …exercise/       Rep, RepPhase, RepUpdate (shared vocabulary)
+:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 69 tests.
+                      …exercise/       Rep, RepPhase, RepUpdate, Framing,
+                                       SetupCheck, SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
 ```
 
@@ -106,7 +110,7 @@ Planned, not built: `:core:ui` (`UiText`, `ObserveAsEvents`), `:core:data`,
   small shared vocabulary at the root. A module per exercise was rejected: with a
   2–3 exercise scope guard it's four Gradle projects doing one project's work, and
   packages already enforce the only boundary that matters. **Whether
-  `Rep`/`RepPhase` generalise is unproven** — exercise #2 decides that, and
+  `Rep`/`RepPhase` generalize is unproven** — exercise #2 decides that, and
   whether `SquatRepCounter` becomes a parameterized counter. Splitting later is a
   directory move.
 - **Feature-owned navigation, no api/impl split.** Features never depend on each
@@ -200,8 +204,8 @@ What exists:
 - **No `MaterialTheme` at all.** `RepLensTheme` provides two `CompositionLocal`s
   and nothing else. Un-wrapped M3 components fall back to Material's own defaults
   and render visibly wrong, which is how we find them — the absence *is* the leak
-  detector, so don't add a floor "to be safe". `IconButton` still pulls its ripple
-  from `IconButtonDefaults`; a wrapper will fix that.
+  detector, so don't add a floor "to be safe". `IconButton` was the last leak —
+  it took its colors from `IconButtonDefaults`, hence `OverlayIconButton`.
 - **Typography named for the job, not the size** — `display`, `title`, `body`,
   `label`. `Title28` becomes a lie the moment the size changes or an accessibility
   setting scales it. Four sizes, two weights. `display` sets `tnum` so the rep
@@ -433,6 +437,19 @@ domain model carries fields the UI must not see.** A raw geometry stream is
 neither — `PoseFrame` reaches the `Canvas` as a domain model, because mapping
 30 fps × 33 landmarks would allocate ~1,000 objects/second for numbers the
 overlay needs verbatim.
+
+**A 1:1 mapping is the model telling you it is already at the right altitude**,
+not an invitation to add a layer. `SessionState` is the case: its arms *are* the
+screen's modes, so a UiModel would be a rename. **Stability is the weakest reason
+to wrap** — it produces a type whose only job is to carry `@Immutable`, and here
+it would not even remove the mechanism, since `CameraOptions` and `ZoomRange`
+still need the stability configuration file.
+The trigger that *would* earn one is TTS: `SetupCheck → stringResource` currently
+happens in the composable, which is fine while each arm maps to one fixed
+resource, but the moment the same line must be both drawn and spoken the choice
+has to resolve outside composition. Then it is `UiText`, a mapper, and
+`Waiting(message: UiText)` — a UiModel carrying formatted data rather than an
+annotation.
 
 ### UiText
 
@@ -854,14 +871,27 @@ distribution and build cache.
   thresholds unchanged** — deep 5, parallel 5, tiny 0, paused 3, double-dip 1,
   walk-in-out 4, borderline 0, and a descending sweep counting 5 at 51/73/87/97/113°.
   What that establishes is narrow: one body, one room, one camera. It says the
-  numbers are not obviously wrong, not that they generalise.
+  numbers are not obviously wrong, not that they generalize.
 - **Session start/stop: done** (2026-08-09). `Idle → Waiting → CountingIn →
   Active → Finished`, and only `Active` feeds the counter. **`Waiting` has no
   duration** — it ends when the setup check sees you in position, so the walk out
   to your spot can never eat a countdown that was only ever a guess at how long
   the walk takes. Leaving position mid-count returns to waiting.
-- **Next:** extract the session machine, then step 5 (form rules + TTS — the first
-  time `UiText`, `:core:ui` and `Event` earn their place).
+- **Session machine extracted** (2026-08-09). `SetSession` in `:core:exercise` is
+  frame-driven off the timestamps frames already carry, the way `SquatRepCounter`
+  is — so it needs no coroutines, no Hilt and no fake, and the ViewModel is left
+  pumping frames in and copying state out. 17 tests.
+  Two bugs it made visible, both fixed and pinned: readiness was counted in
+  *frames* (`READY_FRAMES = 14`, "~0.5 s at ~27 fps"), which is a full second at
+  15 fps — it is a `Duration` now, asserted at three frame rates; and nothing
+  noticed a gap in the stream, so a stall between two `READY` frames read as
+  sustained readiness.
+  **Frame-driven beats clock-driven for a reason worth keeping:** `viewModelScope`
+  is not tied to UI visibility but the camera is, so a `delay` countdown kept
+  running while the app was backgrounded and CameraX had unbound — reaching zero
+  and starting a set on a stream delivering nothing.
+- **Next:** step 5 (form rules + TTS — the first time `UiText`, `:core:ui` and
+  `Event` earn their place). 129 unit tests.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
   `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is
@@ -904,26 +934,13 @@ distribution and build cache.
   will corrupt heel-lift and shin rules), and arms held forward occluding the legs
   at the bottom, which front-on framing makes worst. The back camera at 0.5x fixes
   the framing half.
-- **`WorkoutViewModel` has no tests, and two known bugs sit in the untested part.**
-  Readiness is counted in *frames* (`READY_FRAMES = 14`, "~0.5 s at ~27 fps") when
-  everything else in the pipeline is timestamp-driven precisely so a slower device
-  behaves the same — at 15 fps that becomes a full second. And readiness means
-  *continuously* ready, but nothing notices a gap in the stream, so a stall between
-  two `READY` frames reads as sustained readiness. `PoseSmoother` already solves
-  the same problem with a 500 ms reset.
-  **The fix is to extract the session machine as a pure class** in `:core:exercise`,
-  driven by `onFrame(check, timestampMillis)` rather than `delay` — the shape
-  `SquatRepCounter` already uses, and frames already carry timestamps. That is not
-  only more testable: it removes the second clock (readiness from frames, countdown
-  from wall time), it cannot count down on a stalled stream, and it deletes the
-  count-in `Job` and with it the three-way race on `state` that already produced one
-  stale-read bug. Plain `var state`, **not** a `StateFlow` — `:core:exercise` has no
-  coroutines dependency and should not grow one for a synchronous state machine.
-  **This is not blocked on faking `PoseCameraDataSource`.** Extracting an interface
-  is still worth doing — it is a data source in name but this feature's whole
-  outside world in role, which is what CLAUDE.md means by "what every ViewModel test
-  fakes" — but once the machine is pure, what remains needing a fake is only facing
-  resolution, the resolved-once rule and the flip guard.
+- **`WorkoutViewModel` still has no tests**, but far less now depends on that.
+  What remains in it is camera facing resolution, the resolved-once rule and the
+  flip guard — real, but small. Covering them needs a fake, and
+  `PoseCameraDataSource` is a concrete class: **extracting an interface is still
+  worth doing** (a data source in name, this feature's whole outside world in
+  role, which is what "what every ViewModel test fakes" means) but it is no longer
+  the prerequisite for testing the interesting logic.
 - **The completed `Rep`s are being thrown away.** `repCounter.update(...)` returns
   `RepUpdate(phase, completedRep)` and only `.phase` is read, so `deepestAngle` and
   the descent/ascent timings — everything a summary beyond a single number needs —
@@ -1090,14 +1107,17 @@ cannot misfire mid-squat.
 ## Roadmap
 
 1. **Camera + skeleton overlay** — done.
-2. **The squat** — angles, smoothing, rep state machine, form heuristics + TTS.
+2. **The squat** — angles, smoothing, rep state machine done; **form heuristics
+   + TTS is what remains**.
 3. **Local persistence & app shell** — Room history, Nav 3 flows, stats screen.
 4. **Backend & sync** — Spring Boot API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
 
 Backlog: remembering the camera choice and zoom across launches (needs DataStore,
-which the setup/settings work will bring anyway).
+which the setup/settings work will bring anyway); a `PoseCameraDataSource`
+interface so the ViewModel's camera logic can be faked; widening the fixture CSVs
+so framing is testable against real footage.
 
 Scope guard: **2–3 exercises max, done well.** Form heuristics are the hard part,
 not ML Kit — landmarks jitter (smoothing + hysteresis are non-negotiable) and
