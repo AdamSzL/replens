@@ -1,5 +1,6 @@
 package com.replens.core.exercise.squat
 
+import com.replens.core.exercise.DEFAULT_MIN_LIKELIHOOD
 import com.replens.core.model.BodyPose
 import com.replens.core.model.LandmarkType
 import com.replens.core.posemath.Point
@@ -32,11 +33,7 @@ data class SquatSignals(
     val depthAngle: Float?,
     val femurInclination: Float?,
     val torsoLeanDegrees: Float?,
-) {
-    companion object {
-        const val DEFAULT_MIN_LIKELIHOOD = 0.5f
-    }
-}
+)
 
 /**
  * Reduces a pose to [SquatSignals].
@@ -58,7 +55,7 @@ data class SquatSignals(
  */
 fun BodyPose.squatSignals(
     timestampMillis: Long,
-    minLikelihood: Float = SquatSignals.DEFAULT_MIN_LIKELIHOOD,
+    minLikelihood: Float = DEFAULT_MIN_LIKELIHOOD,
 ): SquatSignals {
     val left = kneeAngle(
         LandmarkType.LEFT_HIP, LandmarkType.LEFT_KNEE, LandmarkType.LEFT_ANKLE, minLikelihood,
