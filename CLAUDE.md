@@ -169,10 +169,31 @@ What exists:
 - **`accent` is cyan, deliberately not green/amber/red** — those three are spoken
   for by form feedback, and a brand colour that collides with "your knees are
   caving" makes the one moment colour carries meaning meaningless.
+- **`accent` inverts with the theme; overlay colours never do.** A fill has to
+  separate from what is behind it, so a *fixed* accent against a background that
+  flips can only be right in one mode — cyan 9 measured 2.93:1 on the light page,
+  under the 3:1 a component boundary needs. It is now **Radix step 11 in both
+  themes**: dark fill with a light label on white (4.65:1), light fill with a dark
+  label on dark (9.96:1). Step 9 left the palette entirely — it is Radix's "pure
+  brand" step, kept near-identical across modes on purpose, which is exactly wrong
+  for this job. `accentText` went with it, since step 11 already *is* the text step.
 - **Overlay colours are theme-independent.** Anything drawn on the camera feed is
   competing with an unknown room, not with our background. And no fixed colour is
   legible over arbitrary video — cyan on a mid-grey wall measures 2.09:1 — so the
   skeleton is drawn with a dark outline behind it and carries its own contrast.
+  The rule that makes this coherent: **a camera feed under a scrim is a dark
+  surface, permanently**, so overlay colours are the dark-theme values frozen —
+  which is why `LightColors` reaching into `Palette.Dark` is correct rather than a
+  slip. `Palette.Dark`/`Light` name the *surface* a colour sits on, Radix's own
+  meaning, not the app's theme.
+- **`overlayScrim` tints, `overlaySurface` covers — a scrim is not a fill.** Two
+  scrims stack (50% over 50% is 75%), so a scrim-filled button on a scrimmed card
+  rendered *darker* than the card, and only looked like a button because the room
+  behind it happened to be bright. Panels over the feed are opaque; nothing can
+  reliably contrast against a translucent surface, because its rendered colour is
+  partly the room. Buttons on the feed are opaque too, and primary and secondary
+  separate **by hue, not lightness** — every dark secondary measures 1.2–1.4:1
+  against that panel.
 - **`on` pairing kept in our names** (`accent`/`onAccent`). The one genuinely
   valuable part of M3's colour system. Giving it up makes **contrast our job**:
   every pair was measured once, and the worst is 4.65:1.
@@ -721,6 +742,26 @@ where `deepestAngle` is a single sample rather than a crossing.
 deploy → do five squats → squint is minutes per iteration and the input changes
 every time. Against a fixture it's a 50 ms test run.
 
+**Widen the CSV when they are next regenerated** — the current columns are
+`SquatSignals` only, so nothing about *framing* is testable against real footage:
+no torso fraction, no landmark confidence, no frame size. Add `torsoFraction`
+plus per-leg minimum likelihood and an in-bounds flag, and `squats_4_walk_in_out`
+becomes a `SetupCheck` regression fixture — it already contains the walk out and
+the walk back.
+
+Store **inputs, not the verdict**. A `setupCheck=TOO_CLOSE` column would assert
+the generator against itself; thresholds have to stay parameters the test
+supplies. That still leaves the bounds-and-confidence *extraction* untested
+against real data, exactly as `depthAngle` is trusted rather than re-derived
+today — the fixtures test decisions, not extraction.
+
+**Not worth a regeneration on its own.** The decision logic already has synthetic
+tests, and the thresholds were measured more cheaply by logging `torsoFraction`
+through one live session. What only footage can show is the **sequence** — where
+the verdict flips across a continuous take, and whether it chatters near
+`SetupCheck.MAX_TORSO_FRACTION`. The trigger is that threshold misfiring on
+somebody, or any other reason to regenerate.
+
 **Rep counting is objectively testable; form quality is not.** You know you did 5
 reps; whether rep 3 was "too shallow" depends on whose standard. Unit-test
 counting hard; treat form rules as tuned-by-eye.
@@ -735,7 +776,7 @@ are committed. If it works out, enable it in a convention plugin.
 unit tests, and screenshot validation once it exists. Cache the Gradle
 distribution and build cache.
 
-## Current status (2026-08-08)
+## Current status (2026-08-09)
 
 - **Milestone 1 (camera + overlay): done**, validated on device.
 - **Milestone 2 steps 1–4: done**, validated on device — 8 reps performed, 8
@@ -759,11 +800,19 @@ distribution and build cache.
   walk-in-out 4, borderline 0, and a descending sweep counting 5 at 51/73/87/97/113°.
   What that establishes is narrow: one body, one room, one camera. It says the
   numbers are not obviously wrong, not that they generalise.
-- **Next:** step 5 (form rules + TTS — the first time `UiText`, `:core:ui` and
-  `Event` earn their place).
+- **Session start/stop: done** (2026-08-09). `Idle → Waiting → CountingIn →
+  Active → Finished`, and only `Active` feeds the counter. **`Waiting` has no
+  duration** — it ends when the setup check sees you in position, so the walk out
+  to your spot can never eat a countdown that was only ever a guess at how long
+  the walk takes. Leaving position mid-count returns to waiting.
+- **Next:** extract the session machine, then step 5 (form rules + TTS — the first
+  time `UiText`, `:core:ui` and `Event` earn their place).
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
   `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
-  the post-workout summary).
+  the post-workout summary). The **set summary card is not that screen**: a card is
+  the *set* boundary, where you are still three metres away and want a number and
+  "go again"; the screen is the *workout* boundary, where you have picked the phone
+  up. Keep both.
 - **The rep counter counted garbage; the framing gate fixes half of it.**
   Observed 2026-08-08: picking the phone up counted **a rep off a face**. An
   earlier note claimed the `standingEnter` requirement prevented this; it does not.
@@ -776,13 +825,55 @@ distribution and build cache.
   spans too much of the frame height, and a rejected frame yields a **null depth
   angle** rather than a special case — which is the "no reading" path
   `maxMissingFrames` already handles, so it needed no new state machine.
-  Still open: **session start/stop**, for the reps you don't want counted while
-  standing at a perfectly normal distance.
+- **One threshold could not do both jobs, so there are two checks.** The framing
+  gate above stays lenient because rejecting a real frame mid-set silently drops a
+  rep. That leaves the opposite failure, observed 2026-08-09: leaning over the
+  phone at ~1–1.5 m reads a torso fraction of 0.29–0.34 — *under* the framing
+  threshold — so a set counted in while the skeleton below the knees was a tangle.
+  `SetupCheck` (`:core:exercise`) answers "may a set start?" and takes the
+  opposite bet: refusing costs a message, starting on invented legs costs a whole
+  set measured off nothing. It is tighter on size (0.32) and additionally demands
+  **one genuinely observed leg** — hip, knee and ankle above the confidence gate
+  *and inside the image bounds*, because ML Kit reports coordinates past the edge,
+  which is what feet cut off by the bottom of the frame look like numerically.
+  That bounds test is a fact rather than a tuned number, and it is the arm that
+  actually catches leaning in.
+  **No `TOO_FAR` arm**: a real failure mode, but no too-far case has been recorded
+  and a guessed lower bound would block real users — the exact mistake
+  `MAX_TORSO_FRACTION` was widened from 0.30 to 0.40 to avoid.
+  **`SetupCheck.MAX_TORSO_FRACTION = 0.32` has never run on a device.** It sits
+  inside the 0.29–0.34 band measured while leaning in, so it is the number most
+  likely to be wrong in the annoying direction. The leg check does the real work.
 - **Known issues from the validation footage**, both UX rather than code: feet at
   or past the bottom edge during deep reps (leg landmarks start being inferred —
   will corrupt heel-lift and shin rules), and arms held forward occluding the legs
   at the bottom, which front-on framing makes worst. The back camera at 0.5x fixes
   the framing half.
+- **`WorkoutViewModel` has no tests, and two known bugs sit in the untested part.**
+  Readiness is counted in *frames* (`READY_FRAMES = 14`, "~0.5 s at ~27 fps") when
+  everything else in the pipeline is timestamp-driven precisely so a slower device
+  behaves the same — at 15 fps that becomes a full second. And readiness means
+  *continuously* ready, but nothing notices a gap in the stream, so a stall between
+  two `READY` frames reads as sustained readiness. `PoseSmoother` already solves
+  the same problem with a 500 ms reset.
+  **The fix is to extract the session machine as a pure class** in `:core:exercise`,
+  driven by `onFrame(check, timestampMillis)` rather than `delay` — the shape
+  `SquatRepCounter` already uses, and frames already carry timestamps. That is not
+  only more testable: it removes the second clock (readiness from frames, countdown
+  from wall time), it cannot count down on a stalled stream, and it deletes the
+  count-in `Job` and with it the three-way race on `state` that already produced one
+  stale-read bug. Plain `var state`, **not** a `StateFlow` — `:core:exercise` has no
+  coroutines dependency and should not grow one for a synchronous state machine.
+  **This is not blocked on faking `PoseCameraDataSource`.** Extracting an interface
+  is still worth doing — it is a data source in name but this feature's whole
+  outside world in role, which is what CLAUDE.md means by "what every ViewModel test
+  fakes" — but once the machine is pure, what remains needing a fake is only facing
+  resolution, the resolved-once rule and the flip guard.
+- **The completed `Rep`s are being thrown away.** `repCounter.update(...)` returns
+  `RepUpdate(phase, completedRep)` and only `.phase` is read, so `deepestAngle` and
+  the descent/ascent timings — everything a summary beyond a single number needs —
+  are discarded every set. Collecting them is a two-line change and the prerequisite
+  for "depth 88%, up from 81%".
 - **`:feature:workout` exposes exactly `WorkoutRoot(modifier)`**; the ViewModel,
   state and actions are `internal`, so `:core:pose` and `:core:exercise` are
   `implementation`. Root itself becomes internal when `navigation/` exists — a
