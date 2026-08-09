@@ -122,12 +122,12 @@ class PoseMeasurementsTest {
 
     @Test
     fun `normalized distance is unchanged by moving the pose across the frame`() {
-        val centred = standingPose()
+        val centered = standingPose()
             .distanceNormalized(LandmarkType.LEFT_HIP, LandmarkType.LEFT_KNEE)!!
         val offset = standingPose(offsetX = 640f)
             .distanceNormalized(LandmarkType.LEFT_HIP, LandmarkType.LEFT_KNEE)!!
 
-        assertEquals(centred, offset, TOLERANCE)
+        assertEquals(centered, offset, TOLERANCE)
     }
 
     @Test

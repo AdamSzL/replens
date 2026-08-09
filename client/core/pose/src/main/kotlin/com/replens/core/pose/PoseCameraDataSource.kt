@@ -55,7 +55,7 @@ private val AnalysisResolution = ResolutionSelector.Builder()
 
 /**
  * Streams live poses from the camera. Collecting [poseFrames] starts the
- * camera and ML Kit detector; cancelling the collection releases both. The
+ * camera and ML Kit detector; canceling the collection releases both. The
  * camera preview surface is published via [surfaceRequests] for the UI to
  * render alongside.
  *

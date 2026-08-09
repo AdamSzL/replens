@@ -12,6 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.theme.RepLensTheme
@@ -23,6 +25,7 @@ internal fun ZoomControl(
     onSelect: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
@@ -31,10 +34,14 @@ internal fun ZoomControl(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         for (stop in stops) {
+            val isSelected = stop == selected
             ZoomStop(
                 ratio = stop,
-                selected = stop == selected,
-                onClick = { onSelect(stop) },
+                selected = isSelected,
+                onClick = {
+                    if (!isSelected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    onSelect(stop)
+                },
             )
         }
     }
@@ -72,6 +79,10 @@ private fun formatRatio(ratio: Float): String =
 @Composable
 private fun ZoomControlPreview() {
     RepLensTheme {
-        ZoomControl(stops = listOf(0.7f, 1f, 2f), selected = 1f, onSelect = {})
+        ZoomControl(
+            stops = listOf(0.7f, 1f, 2f),
+            selected = 1f,
+            onSelect = {},
+        )
     }
 }

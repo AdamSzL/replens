@@ -1,16 +1,11 @@
 package com.replens.core.designsystem.component.button
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.theme.RepLensTheme
 
 /**
@@ -48,16 +43,15 @@ fun OverlaySecondaryButton(
     }
 }
 
-@Preview
+// Mid-gray stands in for the camera feed: previewing overlay colors on a
+// flat white background says nothing about what they sit on.
+@Preview(showBackground = true, backgroundColor = 0xFF6E7378)
 @Composable
 private fun OverlaySecondaryButtonPreview() {
     RepLensTheme {
-        Box(
-            modifier = Modifier
-                .background(Color(0xFF6E7378))
-                .padding(24.dp),
-        ) {
-            OverlaySecondaryButton(text = "Cancel", onClick = {})
-        }
+        OverlaySecondaryButton(
+            text = "Cancel",
+            onClick = {},
+        )
     }
 }

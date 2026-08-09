@@ -2,29 +2,26 @@ package com.replens.feature.workout.ui
 
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.SurfaceRequest
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.replens.core.designsystem.component.button.OverlayIconButton
 import com.replens.core.designsystem.icon.RepLensIcons
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.exercise.RepPhase
@@ -73,6 +70,8 @@ private fun WorkoutScreen(
     onAction: (WorkoutAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalHapticFeedback.current
+
     Box(modifier = modifier.fillMaxSize()) {
         surfaceRequest?.let { request ->
             CameraXViewfinder(
@@ -95,20 +94,17 @@ private fun WorkoutScreen(
                 .safeDrawingPadding(),
         ) {
             if (state.cameraOptions?.facings.orEmpty().size > 1) {
-                IconButton(
-                    onClick = { onAction(WorkoutAction.CameraFlipClicked) },
+                OverlayIconButton(
+                    icon = RepLensIcons.CameraSwitch,
+                    contentDescription = stringResource(R.string.workout_flip_camera),
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                        onAction(WorkoutAction.CameraFlipClicked)
+                    },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(24.dp)
-                        .clip(CircleShape)
-                        .background(RepLensTheme.colors.overlayScrim),
-                ) {
-                    Icon(
-                        painter = painterResource(RepLensIcons.CameraSwitch),
-                        contentDescription = stringResource(R.string.workout_flip_camera),
-                        tint = RepLensTheme.colors.onOverlay,
-                    )
-                }
+                        .padding(24.dp),
+                )
             }
             if (state.session == SessionState.Active) {
                 RepCounter(

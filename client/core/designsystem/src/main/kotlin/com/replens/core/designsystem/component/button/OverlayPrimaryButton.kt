@@ -1,16 +1,11 @@
 package com.replens.core.designsystem.component.button
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.theme.RepLensTheme
 
 /**
@@ -18,7 +13,7 @@ import com.replens.core.designsystem.theme.RepLensTheme
  *
  * Identical to [PrimaryButton] in dark mode and lighter in light mode, which is
  * the whole difference between them: **a camera feed under a scrim is a dark
- * surface permanently**, so overlay colours are the dark-theme values frozen.
+ * surface permanently**, so overlay colors are the dark-theme values frozen.
  * [PrimaryButton] inverts with the theme because our own background does; the
  * room behind this one does not care what theme is set.
  *
@@ -47,18 +42,15 @@ fun OverlayPrimaryButton(
     }
 }
 
-@Preview
+// Mid-gray stands in for the camera feed: previewing overlay colors on a
+// flat white background says nothing about what they sit on.
+@Preview(showBackground = true, backgroundColor = 0xFF6E7378)
 @Composable
 private fun OverlayPrimaryButtonPreview() {
     RepLensTheme {
-        // Mid-grey stands in for the camera feed: previewing overlay colours on a
-        // flat white background says nothing about what they sit on.
-        Box(
-            modifier = Modifier
-                .background(Color(0xFF6E7378))
-                .padding(24.dp),
-        ) {
-            OverlayPrimaryButton(text = "Start set", onClick = {})
-        }
+        OverlayPrimaryButton(
+            text = "Start set",
+            onClick = {},
+        )
     }
 }

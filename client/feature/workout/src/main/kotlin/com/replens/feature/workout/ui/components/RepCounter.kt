@@ -43,6 +43,9 @@ internal fun RepCounter(
 @Composable
 private fun RepCounterPreview() {
     RepLensTheme {
-        RepCounter(repCount = 12, phase = RepPhase.BOTTOM)
+        RepCounter(
+            repCount = 12,
+            phase = RepPhase.BOTTOM,
+        )
     }
 }

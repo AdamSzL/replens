@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -35,6 +37,8 @@ internal fun SessionControls(
     onAction: (WorkoutAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalHapticFeedback.current
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -43,7 +47,10 @@ internal fun SessionControls(
         when (session) {
             SessionState.Idle -> OverlayPrimaryButton(
                 text = stringResource(R.string.workout_start_set),
-                onClick = { onAction(WorkoutAction.StartClicked) },
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                    onAction(WorkoutAction.StartClicked)
+                },
             )
             is SessionState.Waiting -> {
                 OverlayMessage(stringResource(session.reason.messageRes))
@@ -67,7 +74,10 @@ internal fun SessionControls(
                 text = stringResource(R.string.workout_finish),
                 onClick = { onAction(WorkoutAction.FinishClicked) },
             )
-            SessionState.Finished -> SetSummary(repCount = repCount, onAction = onAction)
+            SessionState.Finished -> SetSummary(
+                repCount = repCount,
+                onAction = onAction,
+            )
         }
     }
 }
@@ -105,6 +115,8 @@ private fun SetSummary(
     repCount: Int,
     onAction: (WorkoutAction) -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
+
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(24.dp))
@@ -130,7 +142,10 @@ private fun SetSummary(
             )
             OverlayPrimaryButton(
                 text = stringResource(R.string.workout_go_again),
-                onClick = { onAction(WorkoutAction.GoAgainClicked) },
+                onClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                    onAction(WorkoutAction.GoAgainClicked)
+                },
             )
         }
     }
@@ -139,7 +154,11 @@ private fun SetSummary(
 @Composable
 private fun SessionControlsIdlePreview() {
     RepLensTheme {
-        SessionControls(session = SessionState.Idle, repCount = 0, onAction = {})
+        SessionControls(
+            session = SessionState.Idle,
+            repCount = 0,
+            onAction = {},
+        )
     }
 }
 @Preview
@@ -164,6 +183,10 @@ private fun SessionControlsCountingInPreview() {
 @Composable
 private fun SessionControlsFinishedPreview() {
     RepLensTheme {
-        SessionControls(session = SessionState.Finished, repCount = 12, onAction = {})
+        SessionControls(
+            session = SessionState.Finished,
+            repCount = 12,
+            onAction = {},
+        )
     }
 }

@@ -5,7 +5,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
- * Every container carries its `on` colour, so contrast is decided here once
+ * Every container carries its `on` color, so contrast is decided here once
  * rather than at each call site.
  */
 @Immutable
@@ -29,7 +29,7 @@ data class RepLensColors(
     /**
      * Opaque, unlike [overlayScrim], and that is the point: a panel that *covers*
      * the feed rather than tinting it. Nothing can reliably contrast against a
-     * translucent surface, because its rendered colour is partly the room.
+     * translucent surface, because its rendered color is partly the room.
      */
     val overlaySurface: Color,
     val onOverlay: Color,

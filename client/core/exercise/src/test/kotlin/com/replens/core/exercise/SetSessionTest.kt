@@ -114,7 +114,7 @@ class SetSessionTest {
 
     /**
      * The bug this replaces counted 14 *frames*, so half a second at 27 fps became
-     * a full second at 15. Two rates, one behaviour.
+     * a full second at 15. Two rates, one behavior.
      */
     @Test
     fun `the settle time does not depend on the frame rate`() {

@@ -9,16 +9,16 @@ import androidx.compose.ui.graphics.Color
  *
  * Radix defines what each step is *for*, which is why it is worth borrowing
  * rather than inventing: 1–2 backgrounds, 3–5 component fills, 6–8 borders,
- * 9 the solid brand colour, 11 low-contrast text, 12 high-contrast text. Step 11
+ * 9 the solid brand color, 11 low-contrast text, 12 high-contrast text. Step 11
  * on step 2 is guaranteed to pass WCAG, so contrast is inherited rather than
  * checked by eye.
  *
  * Light and dark use the same step numbers for the same jobs, which is what makes
  * theming a remap instead of a redesign.
  *
- * [Dark] and [Light] name the **surface a colour sits on, not the app's theme** —
+ * [Dark] and [Light] name the **surface a color sits on, not the app's theme** —
  * that is Radix's own meaning. So [LightColors] reaching into [Dark] for overlay
- * colours is not a mix-up: the camera feed under a scrim is a dark surface in
+ * colors is not a mix-up: the camera feed under a scrim is a dark surface in
  * either theme, so it takes the dark-surface scale in both.
  */
 internal object Palette {
