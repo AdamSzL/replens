@@ -15,6 +15,11 @@ import androidx.compose.ui.graphics.Color
  *
  * Light and dark use the same step numbers for the same jobs, which is what makes
  * theming a remap instead of a redesign.
+ *
+ * [Dark] and [Light] name the **surface a colour sits on, not the app's theme** —
+ * that is Radix's own meaning. So [LightColors] reaching into [Dark] for overlay
+ * colours is not a mix-up: the camera feed under a scrim is a dark surface in
+ * either theme, so it takes the dark-surface scale in both.
  */
 internal object Palette {
 
@@ -25,7 +30,6 @@ internal object Palette {
         val Slate11 = Color(0xFFB0B4BA)
         val Slate12 = Color(0xFFEDEEF0)
 
-        val Cyan9 = Color(0xFF00A2C7)
         val Cyan11 = Color(0xFF4CCCE6)
     }
 
@@ -36,7 +40,6 @@ internal object Palette {
         val Slate11 = Color(0xFF60646C)
         val Slate12 = Color(0xFF1C2024)
 
-        val Cyan9 = Color(0xFF00A2C7)
         val Cyan11 = Color(0xFF107D98)
     }
 
