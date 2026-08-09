@@ -65,7 +65,7 @@ class SetSession(
         val gap = lastFrameMillis?.let { (timestampMillis - it).milliseconds }
         lastFrameMillis = timestampMillis
         lastCheck = check
-        if (gap != null && gap > maxFrameGap) clearProgress()
+        if (gap != null && (gap > maxFrameGap || gap < Duration.ZERO)) clearProgress()
 
         return when (state) {
             // Frames never start or end a set; only the user does.

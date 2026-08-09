@@ -179,6 +179,26 @@ class SetSessionTest {
         )
     }
 
+    /**
+     * A backwards jump would otherwise strand `readySinceMillis` in the future and
+     * the settle check could never pass again.
+     */
+    @Test
+    fun `a timestamp jumping backwards does not strand the wait`() {
+        val session = session()
+        session.start()
+        session.onFrame(SetupCheck.READY, 10_000)
+        session.onFrame(SetupCheck.READY, 10_100)
+
+        // The stream restarts on a lower time base, as a lens change could.
+        var at = 0L
+        repeat(20) {
+            session.onFrame(SetupCheck.READY, at)
+            at += 50
+        }
+        assertEquals(SessionState.CountingIn(3), session.state)
+    }
+
     @Test
     fun `frames do not disturb an active set`() {
         val driver = activeSession()
