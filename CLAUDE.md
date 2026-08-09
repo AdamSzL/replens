@@ -139,7 +139,7 @@ Planned, not built: `:core:ui` (`UiText`, `ObserveAsEvents`), `:core:data`,
 
 ### Design system — custom vocabulary, not Material's
 
-**Built 2026-08-08.** Colour and typography have RepLens names and RepLens values;
+**Built 2026-08-08.** Color and typography have RepLens names and RepLens values;
 M3 remains a component library we wrap. Note what was **not** rejected: Now in
 Android is itself fully custom — its palette and all 15 type slots are its own.
 The only axis was whose semantic vocabulary to adopt, so this is not "Material bad."
@@ -149,7 +149,7 @@ Two arguments decided it:
 - **The component → role mapping is library-internal and versioned.** `Card` reads
   `surfaceContainerLow`; it used to read `surfaceVariant`. Under Material's
   vocabulary a `compose-material3` bump can restyle the app with no code change.
-  Colours stated at our own wrappers can't be touched by an upgrade.
+  Colors stated at our own wrappers can't be touched by an upgrade.
 - **M3's five button variants encode Material's emphasis hierarchy, not ours.**
   Every choice between `FilledTonalButton` and `ElevatedButton` is a developer
   answering a Material question, and inconsistent answers are how a solo-built app
@@ -167,9 +167,9 @@ What exists:
   numbering**: the number is a foreign key into their docs, and gaps just mean we
   have not needed those steps yet.
 - **`accent` is cyan, deliberately not green/amber/red** — those three are spoken
-  for by form feedback, and a brand colour that collides with "your knees are
-  caving" makes the one moment colour carries meaning meaningless.
-- **`accent` inverts with the theme; overlay colours never do.** A fill has to
+  for by form feedback, and a brand color that collides with "your knees are
+  caving" makes the one moment color carries meaning meaningless.
+- **`accent` inverts with the theme; overlay colors never do.** A fill has to
   separate from what is behind it, so a *fixed* accent against a background that
   flips can only be right in one mode — cyan 9 measured 2.93:1 on the light page,
   under the 3:1 a component boundary needs. It is now **Radix step 11 in both
@@ -177,25 +177,25 @@ What exists:
   label on dark (9.96:1). Step 9 left the palette entirely — it is Radix's "pure
   brand" step, kept near-identical across modes on purpose, which is exactly wrong
   for this job. `accentText` went with it, since step 11 already *is* the text step.
-- **Overlay colours are theme-independent.** Anything drawn on the camera feed is
-  competing with an unknown room, not with our background. And no fixed colour is
-  legible over arbitrary video — cyan on a mid-grey wall measures 2.09:1 — so the
+- **Overlay colors are theme-independent.** Anything drawn on the camera feed is
+  competing with an unknown room, not with our background. And no fixed color is
+  legible over arbitrary video — cyan on a mid-gray wall measures 2.09:1 — so the
   skeleton is drawn with a dark outline behind it and carries its own contrast.
   The rule that makes this coherent: **a camera feed under a scrim is a dark
-  surface, permanently**, so overlay colours are the dark-theme values frozen —
+  surface, permanently**, so overlay colors are the dark-theme values frozen —
   which is why `LightColors` reaching into `Palette.Dark` is correct rather than a
-  slip. `Palette.Dark`/`Light` name the *surface* a colour sits on, Radix's own
+  slip. `Palette.Dark`/`Light` name the *surface* a color sits on, Radix's own
   meaning, not the app's theme.
 - **`overlayScrim` tints, `overlaySurface` covers — a scrim is not a fill.** Two
   scrims stack (50% over 50% is 75%), so a scrim-filled button on a scrimmed card
   rendered *darker* than the card, and only looked like a button because the room
   behind it happened to be bright. Panels over the feed are opaque; nothing can
-  reliably contrast against a translucent surface, because its rendered colour is
+  reliably contrast against a translucent surface, because its rendered color is
   partly the room. Buttons on the feed are opaque too, and primary and secondary
   separate **by hue, not lightness** — every dark secondary measures 1.2–1.4:1
   against that panel.
 - **`on` pairing kept in our names** (`accent`/`onAccent`). The one genuinely
-  valuable part of M3's colour system. Giving it up makes **contrast our job**:
+  valuable part of M3's color system. Giving it up makes **contrast our job**:
   every pair was measured once, and the worst is 4.65:1.
 - **No `MaterialTheme` at all.** `RepLensTheme` provides two `CompositionLocal`s
   and nothing else. Un-wrapped M3 components fall back to Material's own defaults
@@ -213,7 +213,7 @@ What exists:
 - **Wrap every M3 component before first use.** Nia's `DesignSystemDetector` lint
   rule is the eventual enforcement, once there are enough wrappers to police.
 
-**No spacing, sizing or radius tokens — plain `.dp` at call sites.** Colour varies
+**No spacing, sizing or radius tokens — plain `.dp` at call sites.** Color varies
 by theme and type size varies by the user's font scale, so both earn a token layer;
 spacing varies by nothing, so a token is just a second name for a number. Two
 failure modes seen first-hand and rejected:
@@ -244,10 +244,10 @@ numbers.
 **No `material-icons-*` dependency.** Compose no longer bundles `Icons`, and the
 extended artifact is bloat for the handful we need. Icons are vector XML
 downloaded from [Material Symbols](https://fonts.google.com/icons) into
-`:core:designsystem` — filled variants, exported as SVG. The export colour is
+`:core:designsystem` — filled variants, exported as SVG. The export color is
 irrelevant (pick black): `Icon(tint = …)` replaces it, and we always pass one
 since nothing provides `LocalContentColor`. What matters is that icons stay
-**single-colour**, or the tint flattens them.
+**single-color**, or the tint flattens them.
 
 Feature modules must not import a foreign `R`, so the design system exposes them
 by name:
@@ -268,6 +268,61 @@ modules, so same-named resources silently override — but `RepLensIcons` means
 every id has exactly one reference, making a later rename trivial. Turn the
 parked `resourcePrefix` on when a collision-prone generic name appears
 (`ic_close`, `ic_settings`), not before.
+
+### Haptics
+
+**The rule: only where the phone is in your hand *and* the buzz says something
+the screen does not.** That rules out every in-set event by construction — the
+phone is propped 2–3 m away, so a rep haptic is felt by the floor. Haptics here
+are a setup-phase polish, not a feedback channel; audio is the feedback channel.
+
+What fires today, all via `LocalHapticFeedback.current` at the call site rather
+than baked into the design system components — the same wrapper serves Start
+(should buzz) and a future settings button (should not), so the component cannot
+know:
+
+| where | type | why |
+|---|---|---|
+| zoom stop | `SegmentTick` | your finger covers the pill you tapped |
+| Start set / Go again | `Confirm` | the one press whose result you stop watching |
+| camera flip | `Confirm` | the stock camera does it; not matching reads as unfinished |
+
+Deliberately silent: **Cancel, Finish, Done.** Each changes the screen while you
+are looking at it. The asymmetry is itself the signal — a buzz means "you
+committed to something you are about to stop watching", and if everything buzzed
+it would only mean "you touched glass".
+
+**`Reject` is not for Cancel.** It signals *the app* refusing *the user* — invalid
+input, a disabled control, a swipe that snapped back. Cancel is the user rejecting
+and the app complying, so `Reject` would report failure at the moment of success.
+The near-miss worth knowing: pressing Start while too close genuinely is a refusal,
+but it is a "not yet" rather than a failure, and `Confirm` already fired on that
+same press.
+
+The catalogue, so the next choice is a lookup rather than a re-derivation:
+
+| type | for |
+|---|---|
+| `Confirm` | an action completed successfully |
+| `Reject` | the app refused or the action failed |
+| `SegmentTick` | moving between a few discrete choices — zoom stops, slider notches |
+| `SegmentFrequentTick` | moving between *many* — minutes on a dial, percentages |
+| `ToggleOn` / `ToggleOff` | a switch changing state (front/back is **not** a toggle) |
+| `LongPress` | a long press that fired its action |
+| `ContextClick` | a context click |
+| `GestureEnd` | a gesture finished |
+| `GestureThresholdActivate` | a drag crossed the point where releasing would act — pull-to-refresh |
+| `TextHandleMove` | a selection handle moved |
+| `KeyboardTap` / `VirtualKey` | soft-keyboard and on-screen key presses |
+
+Likely next candidates when the features land: **`ToggleOn`/`ToggleOff` for the
+settings switches** — voice cues, the skeleton overlay, whatever else earns a
+switch — which is the one place those two are literally correct rather than
+stretched; `GestureThresholdActivate` for a swipe-to-delete in history; and
+`SegmentTick` for scrubbing the replay of a rep.
+
+**M3's `Switch` does not fire them itself**, so the wrapper has to — there is no
+double-buzz to avoid.
 
 ### The 30 fps path
 
@@ -340,7 +395,7 @@ speaks only domain models, wrapped in `Result`.
 - Soft cap ~300 lines; overflow goes to `ui/components/`, each with a preview
   (also the future surface for screenshot testing).
 
-### State modelling
+### State modeling
 
 Default: a **data class** with screen-level flags plus one
 `val content: <Feature>Content` — a sealed interface with `Loading` / `Error` /
@@ -420,7 +475,7 @@ shadows the marker and collides with `kotlin.Error` (a `Throwable`).
 **Shared + specific errors.** One `NetworkError` enum every call can produce
 (`NoInternet`, `Serialization`, `Timeout`, `Unauthorized`, `TooManyRequests`,
 `Server`, `Unknown`), plus a per-endpoint sealed type **only where the UI branches
-differently** — login yes, workout sync no. Modelling per-call errors as a sealed
+differently** — login yes, workout sync no. Modeling per-call errors as a sealed
 interface with a `Network(NetworkError)` arm also removes the `wrapCommon`
 parameter the previous app's `safeApiCall` needed.
 
@@ -516,7 +571,7 @@ not. **Normalization is translate + scale, NOT rotate.**
 
 ML Kit's [pose classification guide](https://developers.google.com/ml-kit/vision/pose-detection/classifying-poses)
 was evaluated and **not adopted**: it tells you *which* pose you're in, not what's
-wrong with it, so cues would need labelled bad-form classes per fault, and its
+wrong with it, so cues would need labeled bad-form classes per fault, and its
 output isn't explainable enough to speak. Taken from it anyway: normalize to
 constant torso size, and its entry/exit threshold rep counting (the same
 hysteresis our state machine needs). **Not** taken: its rotation to vertical torso
@@ -678,11 +733,11 @@ proportion-dependent). Encoding folklore means confidently nagging people about
 non-faults, which is worse than silence. Every threshold will be tuned against
 **one body** (the author's).
 
-### Smoothing behaviours to remember
+### Smoothing behaviors to remember
 
 `minCutoff = 1`, `beta = 0.5` are the One Euro paper's defaults, **untuned**. Tune
 `minCutoff` first with `beta = 0` until rest is clean, then raise `beta` until
-fast reps stop lagging. Two behaviours seen in simulation: **noise inflates the
+fast reps stop lagging. Two behaviors seen in simulation: **noise inflates the
 resting cutoff** (jitter looks like movement and `beta` multiplies it), and **the
 cutoff decays slowly after motion stops** — for ~10 frames after a descent there
 is less smoothing than at rest, landing exactly at the bottom where depth is read.
@@ -810,7 +865,7 @@ distribution and build cache.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
   `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is
-  the *set* boundary, where you are still three metres away and want a number and
+  the *set* boundary, where you are still three meters away and want a number and
   "go again"; the screen is the *workout* boundary, where you have picked the phone
   up. Keep both.
 - **The rep counter counted garbage; the framing gate fixes half of it.**
@@ -881,7 +936,7 @@ distribution and build cache.
   `Text` alone won't cut recompositions, since `phase` living in `WorkoutState` is
   what drives them. The real cleanup is dropping it from state once cues are
   events.
-- Findings from Milestone 1 footage still worth honouring: 45° is the best angle
+- Findings from Milestone 1 footage still worth honoring: 45° is the best angle
   (depth + both knees resolved); pure side view infers far-side limbs, so use
   near-side joints only; bad framing makes leg landmarks hallucinate. **The
   "inference warms the phone" note is withdrawn** — it came from one early session
@@ -1053,6 +1108,13 @@ degrade with bad lighting, clothing and angles, so UX must guide phone placement
 - Conventional commits, matching existing history: `chore:`, `docs:`,
   `fix(client):`, …
 - The author makes all commits; propose the message, never run `git commit`.
+- **American spelling everywhere, comments included** — `color`, not `colour`;
+  `gray`, not `grey`. The APIs are spelled that way, so anything else means the
+  same word appears twice in one file.
+- **Two or more named arguments: one per line**, with a trailing comma —
+  `Foo(a = 1, b = 2)` becomes four lines. Applies to function and composable
+  calls; modifier arguments (`.padding(horizontal = …, vertical = …)`) and
+  annotations stay inline.
 - **Comments are for what the code can't say.** A comment that restates the
   signature (`/** What the user did. */`, `/** Zoom stops. */`) is noise —
   delete it. Worth writing: why a number is that number, why an ordering or a
