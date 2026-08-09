@@ -910,6 +910,27 @@ distribution and build cache.
   spans too much of the frame height, and a rejected frame yields a **null depth
   angle** rather than a special case — which is the "no reading" path
   `maxMissingFrames` already handles, so it needed no new state machine.
+- **The model fits a skeleton to anything human-shaped, so every gate is
+  geometric — because geometry is all there is to gate on.** Observed 2026-08-09
+  (`microphone_squat.mp4`): a mic stand on a desk — a vertical pole with a splayed
+  base — was detected as a person and, after repeated attempts, got as far as
+  `Active`. It counted nothing, because a stand cannot sweep 168 → 115 → 168.
+  **There is no confidence to tune.** `inFrameLikelihood` answers "is this landmark
+  inside the picture", not "is this a person" or even "is this a knee", and ML Kit
+  exposes nothing at the `Pose` level — no detection score at all. Raising the
+  threshold changes nothing; the model is already certain about the wrong question.
+  What did make it hard was **dropout**: the detector's grip on a non-human
+  flickers, so `Waiting` and the count-in kept restarting and it took hand-aimed
+  framing to hold `READY` for the 3.5 s that `settleFor` + `countIn` require. That
+  is an accident rather than a discriminator and should not be relied on — but it
+  is `SetSession`'s two guards earning their keep, since a single lucky frame would
+  otherwise have started a set.
+  **Deliberately not fixed.** Proportion checks (shoulder width against torso
+  height) would catch it and would also reject anyone filmed side-on, which is the
+  framing this app recommends. "Reject anything too still" punishes the patient
+  user waiting for a countdown. The realistic version — locking onto a chair while
+  you walk to your spot — self-corrects, because you then walk into frame and ML
+  Kit tracks the human.
 - **One threshold could not do both jobs, so there are two checks.** The framing
   gate above stays lenient because rejecting a real frame mid-set silently drops a
   rep. That leaves the opposite failure, observed 2026-08-09: leaning over the
