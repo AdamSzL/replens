@@ -27,6 +27,7 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 rootProject.name = "RepLens"
 include(":app")
+include(":core:audio")
 include(":core:designsystem")
 include(":core:model")
 include(":core:pose")
