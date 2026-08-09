@@ -1,4 +1,4 @@
-package com.replens.feature.workout
+package com.replens.feature.workout.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

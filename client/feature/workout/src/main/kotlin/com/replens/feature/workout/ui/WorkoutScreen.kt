@@ -1,18 +1,17 @@
-package com.replens.feature.workout
+package com.replens.feature.workout.ui
 
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.SurfaceRequest
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,6 +33,11 @@ import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.ZoomRange
 import com.replens.core.pose.stops
+import com.replens.feature.workout.R
+import com.replens.feature.workout.ui.components.PoseOverlay
+import com.replens.feature.workout.ui.components.RepCounter
+import com.replens.feature.workout.ui.components.SessionControls
+import com.replens.feature.workout.ui.components.ZoomControl
 
 /** Public only until Navigation 3 lands and `navigation/` calls it instead. */
 @Composable
@@ -105,51 +109,40 @@ private fun WorkoutScreen(
                     )
                 }
             }
-            RepCounter(
-                repCount = state.repCount,
-                phase = state.phase,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(24.dp),
-            )
-            // One stop is nothing to choose between.
-            val zoomStops = state.cameraOptions?.zoomRange?.stops.orEmpty()
-            if (zoomStops.size > 1) {
-                ZoomControl(
-                    stops = zoomStops,
-                    selected = state.zoomRatio,
-                    onSelect = { onAction(WorkoutAction.ZoomSelected(it)) },
+            if (state.session == SessionState.Active) {
+                RepCounter(
+                    repCount = state.repCount,
+                    phase = state.phase,
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 24.dp),
+                        .align(Alignment.TopStart)
+                        .padding(24.dp),
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // Framing yourself is the point of the pre-set states, so the camera
+                // controls stay until the set is over.
+                val zoomStops = state.cameraOptions?.zoomRange?.stops.orEmpty()
+                // One stop is nothing to choose between.
+                if (zoomStops.size > 1 && state.session != SessionState.Finished) {
+                    ZoomControl(
+                        stops = zoomStops,
+                        selected = state.zoomRatio,
+                        onSelect = { onAction(WorkoutAction.ZoomSelected(it)) },
+                    )
+                }
+                SessionControls(
+                    session = state.session,
+                    repCount = state.repCount,
+                    onAction = onAction,
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun RepCounter(
-    repCount: Int,
-    phase: RepPhase,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(RepLensTheme.colors.overlayScrim)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-    ) {
-        Text(
-            text = repCount.toString(),
-            style = RepLensTheme.typography.display,
-            color = RepLensTheme.colors.onOverlay,
-        )
-        Text(
-            text = phase.name,
-            style = RepLensTheme.typography.label,
-            color = RepLensTheme.colors.onOverlayMuted,
-        )
     }
 }
 
@@ -159,6 +152,7 @@ private fun WorkoutScreenPreview() {
     RepLensTheme {
         WorkoutScreen(
             state = WorkoutState(
+                session = SessionState.Active,
                 repCount = 12,
                 phase = RepPhase.BOTTOM,
                 cameraFacing = CameraFacing.FRONT,

@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="workout_flip_camera">Switch camera</string>
+    <string name="workout_start_set">Start set</string>
+    <string name="workout_setup_no_pose">Step into frame</string>
+    <string name="workout_setup_too_close">Step back from the phone</string>
+    <string name="workout_setup_legs_not_visible">Step back so your feet are in frame</string>
+    <string name="workout_setup_hold_still">Hold still</string>
+    <string name="workout_cancel">Cancel</string>
+    <string name="workout_finish">Finish</string>
+    <string name="workout_done">Done</string>
+    <string name="workout_go_again">Go again</string>
+    <string name="workout_reps_squat">reps · squat</string>
 </resources>

@@ -1,4 +1,4 @@
-package com.replens.feature.workout
+package com.replens.feature.workout.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
