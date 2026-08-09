@@ -34,6 +34,7 @@ import com.replens.feature.workout.ui.WorkoutAction
 internal fun SessionControls(
     session: SessionState,
     repCount: Int,
+    repsAtDepth: Int,
     onAction: (WorkoutAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -76,6 +77,7 @@ internal fun SessionControls(
             )
             SessionState.Finished -> SetSummary(
                 repCount = repCount,
+                repsAtDepth = repsAtDepth,
                 onAction = onAction,
             )
         }
@@ -113,6 +115,7 @@ private fun OverlayMessage(text: String) {
 @Composable
 private fun SetSummary(
     repCount: Int,
+    repsAtDepth: Int,
     onAction: (WorkoutAction) -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -135,6 +138,13 @@ private fun SetSummary(
             style = RepLensTheme.typography.label,
             color = RepLensTheme.colors.onOverlayMuted,
         )
+        // Counting is lenient on purpose, so the total alone says nothing about
+        // whether the reps were any good.
+        Text(
+            text = stringResource(R.string.workout_reps_at_depth, repsAtDepth, repCount),
+            style = RepLensTheme.typography.label,
+            color = RepLensTheme.colors.onOverlayMuted,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OverlaySecondaryButton(
                 text = stringResource(R.string.workout_done),
@@ -150,6 +160,7 @@ private fun SetSummary(
         }
     }
 }
+
 @Preview
 @Composable
 private fun SessionControlsIdlePreview() {
@@ -157,10 +168,12 @@ private fun SessionControlsIdlePreview() {
         SessionControls(
             session = SessionState.Idle,
             repCount = 0,
+            repsAtDepth = 0,
             onAction = {},
         )
     }
 }
+
 @Preview
 @Composable
 private fun SessionControlsWaitingPreview() {
@@ -168,17 +181,25 @@ private fun SessionControlsWaitingPreview() {
         SessionControls(
             session = SessionState.Waiting(SetupCheck.LEGS_NOT_VISIBLE),
             repCount = 0,
+            repsAtDepth = 0,
             onAction = {},
         )
     }
 }
+
 @Preview
 @Composable
 private fun SessionControlsCountingInPreview() {
     RepLensTheme {
-        SessionControls(session = SessionState.CountingIn(3), repCount = 0, onAction = {})
+        SessionControls(
+            session = SessionState.CountingIn(3),
+            repCount = 0,
+            repsAtDepth = 0,
+            onAction = {},
+        )
     }
 }
+
 @Preview
 @Composable
 private fun SessionControlsFinishedPreview() {
@@ -186,6 +207,7 @@ private fun SessionControlsFinishedPreview() {
         SessionControls(
             session = SessionState.Finished,
             repCount = 12,
+            repsAtDepth = 8,
             onAction = {},
         )
     }

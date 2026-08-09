@@ -11,4 +11,5 @@
     <string name="workout_done">Done</string>
     <string name="workout_go_again">Go again</string>
     <string name="workout_reps_squat">reps · squat</string>
+    <string name="workout_reps_at_depth">%1$d of %2$d at depth</string>
 </resources>

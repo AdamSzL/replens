@@ -18,6 +18,8 @@ import com.replens.core.pose.CameraOptions
 internal data class WorkoutState(
     val session: SessionState = SessionState.Idle,
     val repCount: Int = 0,
+    /** Of [repCount]; counting and grading depth are separate questions. */
+    val repsAtDepth: Int = 0,
     val phase: RepPhase = RepPhase.STANDING,
     val cameraFacing: CameraFacing? = null,
     val zoomRatio: Float = 1f,

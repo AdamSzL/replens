@@ -136,6 +136,7 @@ private fun WorkoutScreen(
                 SessionControls(
                     session = state.session,
                     repCount = state.repCount,
+                    repsAtDepth = state.repsAtDepth,
                     onAction = onAction,
                 )
             }

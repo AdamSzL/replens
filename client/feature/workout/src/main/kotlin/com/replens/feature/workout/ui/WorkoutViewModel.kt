@@ -5,12 +5,15 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.replens.core.exercise.Framing
+import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetSession
 import com.replens.core.exercise.framing
 import com.replens.core.exercise.setupCheck
+import com.replens.core.exercise.squat.SquatRepConfig
 import com.replens.core.exercise.squat.SquatRepCounter
+import com.replens.core.exercise.squat.isAtDepth
 import com.replens.core.exercise.squat.squatSignals
 import com.replens.core.model.PoseFrame
 import com.replens.core.pose.CameraFacing
@@ -47,8 +50,14 @@ internal class WorkoutViewModel @Inject constructor(
         field = MutableStateFlow(null)
 
     private val smoother = PoseSmoother()
-    private val repCounter = SquatRepCounter()
+    // Held rather than defaulted twice, so the counter and the depth grading can
+    // never disagree about where the bottom is.
+    private val repConfig = SquatRepConfig()
+    private val repCounter = SquatRepCounter(repConfig)
     private val setSession = SetSession()
+
+    /** Kept for the set summary; the counter itself only ever knows the total. */
+    private val reps = mutableListOf<Rep>()
 
     private var session: Job? = null
 
@@ -100,8 +109,14 @@ internal class WorkoutViewModel @Inject constructor(
 
     private fun startSet() {
         repCounter.reset()
+        reps.clear()
         state.update {
-            it.copy(session = setSession.start(), repCount = 0, phase = RepPhase.STANDING)
+            it.copy(
+                session = setSession.start(),
+                repCount = 0,
+                repsAtDepth = 0,
+                phase = RepPhase.STANDING,
+            )
         }
     }
 
@@ -155,7 +170,12 @@ internal class WorkoutViewModel @Inject constructor(
             current.phase != phase
         ) {
             state.update {
-                it.copy(session = session, repCount = repCounter.repCount, phase = phase)
+                it.copy(
+                    session = session,
+                    repCount = repCounter.repCount,
+                    repsAtDepth = reps.count { rep -> rep.isAtDepth(repConfig) },
+                    phase = phase,
+                )
             }
         }
     }
@@ -170,6 +190,8 @@ internal class WorkoutViewModel @Inject constructor(
             .squatSignals(frame.timestampMillis)
             .depthAngle
             .takeIf { frame.framing() == Framing.OK }
-        return repCounter.update(depthAngle, frame.timestampMillis).phase
+        val update = repCounter.update(depthAngle, frame.timestampMillis)
+        update.completedRep?.let(reps::add)
+        return update.phase
     }
 }

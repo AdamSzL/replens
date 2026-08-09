@@ -188,3 +188,19 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
         deepestAngle = Float.MAX_VALUE
     }
 }
+
+/**
+ * Whether a counted rep actually reached depth.
+ *
+ * A separate question from whether it counted, and a stricter one:
+ * [SquatRepConfig.bottomEnterAngle] is deliberately lenient so real reps are not
+ * silently dropped, while [SquatRepConfig.goodDepthAngle] is roughly parallel.
+ * Everything between counts and is shallow, which is the gap "8 of 12 at depth"
+ * reports.
+ *
+ * [config] is required rather than defaulted: once thresholds are calibrated per
+ * user, a defaulted call would grade against stock numbers reps that were counted
+ * against personal ones, and agree with nothing.
+ */
+fun Rep.isAtDepth(config: SquatRepConfig): Boolean =
+    deepestAngle <= config.goodDepthAngle
