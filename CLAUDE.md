@@ -65,6 +65,24 @@ replens/
   `hiltViewModel()` additionally needs `rememberViewModelStoreNavEntryDecorator()`
   in `NavDisplay(entryDecorators = …)`, or every destination shares the Activity's
   `ViewModelStore` — a silent scoping bug, not a compile error.
+- **Compose stays `implementation` in `:core:ui`, and the composable overload is a
+  landmine because of it.** Catalog Compose entries are version-less (the BOM
+  supplies versions), so `api`-ing one exports a dependency that non-UI consumers
+  cannot resolve — `:core:audio` has no BOM and failed with
+  `Could not find androidx.compose.runtime:runtime:`. `implementation` is correct
+  here because `UiText` has **no Compose types in any signature**; `@Immutable` and
+  `@Composable` are annotations, and unresolvable annotations are silently skipped
+  when reading a class file. The day a Compose *type* enters a signature, `api`
+  becomes mandatory and non-UI modules can no longer depend on it.
+  The cost, **verified 2026-08-09**: a module without the Compose plugin can call
+  `UiText.asString()` (the `@Composable` one) and it **compiles with no error or
+  warning**, then throws
+  `NoSuchMethodError: UiTextKt.asString(UiText)` at runtime. The Compose plugin
+  rewrites the JVM signature to `asString(UiText, Composer, int)`, but Kotlin
+  resolves calls from `@Metadata`, which still describes the *source* signature —
+  and the `@Composable` annotation that would give it away is exactly the thing
+  being skipped. A Java caller would be safe: `javac` reads the class file, not the
+  metadata. **From a non-Compose module, use the `Context` overload.**
 - The Compose BOM is declared twice on purpose (`implementation` +
   `androidTestImplementation`); the IDE's duplicate warning is a false positive.
 - Release runs R8 + resource shrinking; verify `assembleRelease` when adding
