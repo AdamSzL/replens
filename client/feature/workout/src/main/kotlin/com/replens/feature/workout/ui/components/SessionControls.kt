@@ -18,9 +18,9 @@ import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.button.OverlayPrimaryButton
 import com.replens.core.designsystem.component.button.OverlaySecondaryButton
 import com.replens.core.designsystem.theme.RepLensTheme
+import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetupCheck
 import com.replens.feature.workout.R
-import com.replens.feature.workout.ui.SessionState
 import com.replens.feature.workout.ui.WorkoutAction
 
 /**

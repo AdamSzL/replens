@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.replens.core.designsystem.icon.RepLensIcons
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.exercise.RepPhase
+import com.replens.core.exercise.SessionState
 import com.replens.core.model.PoseFrame
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions

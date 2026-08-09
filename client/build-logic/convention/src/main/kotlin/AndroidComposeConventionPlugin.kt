@@ -3,7 +3,9 @@ import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
+import org.jetbrains.kotlin.compose.compiler.gradle.ComposeCompilerGradlePluginExtension
 
 /**
  * Additive Compose support: apply on top of replens.android.application or
@@ -18,6 +20,15 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
                 extensions.findByType(ApplicationExtension::class.java)
                     ?: extensions.getByType(LibraryExtension::class.java)
             android.buildFeatures.compose = true
+
+            // Core modules stay Compose-free, so types they own cannot carry
+            // @Immutable. Declaring them here is the alternative to giving
+            // :core:model and :core:exercise a Compose dependency.
+            extensions.configure<ComposeCompilerGradlePluginExtension> {
+                stabilityConfigurationFiles.add(
+                    rootProject.layout.projectDirectory.file("compose-stability.conf")
+                )
+            }
 
             dependencies {
                 val bom = libs.findLibrary("androidx-compose-bom").get()

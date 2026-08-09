@@ -6,7 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.replens.core.exercise.Framing
 import com.replens.core.exercise.RepPhase
-import com.replens.core.exercise.SetupCheck
+import com.replens.core.exercise.SessionState
+import com.replens.core.exercise.SetSession
 import com.replens.core.exercise.framing
 import com.replens.core.exercise.setupCheck
 import com.replens.core.exercise.squat.SquatRepCounter
@@ -17,19 +18,13 @@ import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.math.ceil
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 /** Runs each frame through smoothing -> signal extraction -> rep counting. */
 @HiltViewModel
@@ -53,21 +48,9 @@ internal class WorkoutViewModel @Inject constructor(
 
     private val smoother = PoseSmoother()
     private val repCounter = SquatRepCounter()
-
-    /** The reason [SessionState.Waiting] shows, kept current by the frame stream. */
-    private var setup = SetupCheck.NO_POSE
-
-    /**
-     * Asymmetric on purpose: one bad frame drops it, but regaining it takes
-     * [READY_FRAMES] in a row. Slow to commit, quick to refuse — the cost of
-     * starting a set on a body whose legs are invented is a whole set measured
-     * off nothing, while refusing costs a message.
-     */
-    private val steadilyReady = MutableStateFlow(false)
-    private var readyStreak = 0
+    private val setSession = SetSession()
 
     private var session: Job? = null
-    private var countIn: Job? = null
 
     init {
         viewModelScope.launch {
@@ -115,63 +98,24 @@ internal class WorkoutViewModel @Inject constructor(
         state.update { it.copy(zoomRatio = ratio) }
     }
 
+    private fun startSet() {
+        repCounter.reset()
+        state.update {
+            it.copy(session = setSession.start(), repCount = 0, phase = RepPhase.STANDING)
+        }
+    }
+
     private fun cancelSet() {
-        countIn?.cancel()
-        steadilyReady.value = false
-        state.update { it.copy(session = SessionState.Idle) }
+        state.update { it.copy(session = setSession.cancel()) }
     }
 
     private fun finishSet() {
-        state.update { it.copy(session = SessionState.Finished) }
+        state.update { it.copy(session = setSession.finish()) }
     }
 
     private fun dismissSummary() {
-        state.update { it.copy(session = SessionState.Idle, repCount = 0) }
+        state.update { it.copy(session = setSession.dismiss(), repCount = 0) }
     }
-
-    /**
-     * Waits for the camera to actually see the user before counting in, so the
-     * walk out to the spot never eats the countdown — and stepping back out of
-     * frame mid-count returns to waiting rather than starting without you.
-     */
-    private fun startSet() {
-        countIn?.cancel()
-        repCounter.reset()
-        readyStreak = 0
-        steadilyReady.value = false
-        state.update {
-            it.copy(session = waiting(), repCount = 0, phase = RepPhase.STANDING)
-        }
-        countIn = viewModelScope.launch {
-            while (true) {
-                steadilyReady.first { it }
-                if (countInWhileReady()) break
-                state.update { it.copy(session = waiting()) }
-            }
-            state.update { it.copy(session = SessionState.Active) }
-        }
-    }
-
-    /**
-     * False if the user left position partway through, which restarts the wait.
-     *
-     * Equal [SessionState.CountingIn] values conflate, so polling ten times a
-     * second costs no emissions.
-     */
-    private suspend fun countInWhileReady(): Boolean {
-        var remaining = COUNT_IN
-        while (remaining > Duration.ZERO) {
-            state.update {
-                it.copy(session = SessionState.CountingIn(ceil(remaining / 1.seconds).toInt()))
-            }
-            delay(COUNT_IN_POLL)
-            if (!steadilyReady.value) return false
-            remaining -= COUNT_IN_POLL
-        }
-        return true
-    }
-
-    private fun waiting() = SessionState.Waiting(setup)
 
     private fun flipCamera() {
         val current = state.value
@@ -191,57 +135,41 @@ internal class WorkoutViewModel @Inject constructor(
     private fun Set<CameraFacing>.preferred(): CameraFacing? =
         if (CameraFacing.FRONT in this) CameraFacing.FRONT else firstOrNull()
 
-    private fun updateReadiness(frame: PoseFrame) {
-        val check = frame.setupCheck()
-        setup = check
-        readyStreak = if (check == SetupCheck.READY) readyStreak + 1 else 0
-        steadilyReady.value = readyStreak >= READY_FRAMES
-        // Keep the on-screen reason current while waiting, but never overwrite a
-        // later session state from the frame stream.
-        state.update {
-            if (it.session is SessionState.Waiting) it.copy(session = SessionState.Waiting(check))
-            else it
-        }
-    }
-
     private fun onFrame(frame: PoseFrame) {
         // Publishing the smoothed pose keeps the overlay showing what the rep
         // counter actually decided on.
         val smoothed = smoother.smooth(frame)
         poseFrame.value = smoothed
-        updateReadiness(smoothed)
 
-        val current = state.value
         // The camera runs in every session state — you have to see yourself to get
         // into position — but only a started set counts.
-        if (current.session != SessionState.Active) return
+        val session = setSession.onFrame(smoothed.setupCheck(), smoothed.timestampMillis)
+        val phase =
+            if (session == SessionState.Active) countRep(smoothed) else state.value.phase
 
-        // A frame that fails the framing check reads as "no angle", not as a bad
-        // one — which is the state the counter already knows how to abandon a rep
-        // from. The overlay still draws it, so the user can see why nothing counts.
-        val depthAngle = smoothed.pose
-            .squatSignals(smoothed.timestampMillis)
-            .depthAngle
-            .takeIf { smoothed.framing() == Framing.OK }
-        val phase = repCounter.update(depthAngle, smoothed.timestampMillis).phase
-
-        // Read first to skip the copy on the ~29 frames in 30 that change nothing,
-        // but write through `update`: the count-in job and the buttons now write
-        // this too, so a stale `current` would put a finished set back to Active.
-        if (current.repCount != repCounter.repCount || current.phase != phase) {
-            state.update { it.copy(repCount = repCounter.repCount, phase = phase) }
+        // Read first to skip the copy on the frames that change nothing, but write
+        // through `update`: the buttons write this too.
+        val current = state.value
+        if (current.session != session ||
+            current.repCount != repCounter.repCount ||
+            current.phase != phase
+        ) {
+            state.update {
+                it.copy(session = session, repCount = repCounter.repCount, phase = phase)
+            }
         }
     }
+
+    /**
+     * A frame that fails the framing check reads as "no angle", not as a bad one —
+     * which is the state the counter already knows how to abandon a rep from. The
+     * overlay still draws it, so the user can see why nothing counts.
+     */
+    private fun countRep(frame: PoseFrame): RepPhase {
+        val depthAngle = frame.pose
+            .squatSignals(frame.timestampMillis)
+            .depthAngle
+            .takeIf { frame.framing() == Framing.OK }
+        return repCounter.update(depthAngle, frame.timestampMillis).phase
+    }
 }
-
-private val COUNT_IN = 3.seconds
-
-/**
- * Far finer than the count-in ticks: checking only when the number changes reads
- * one instant per second and lets the other ~29 frames say nothing, so a set
- * could start off a single lucky frame.
- */
-private val COUNT_IN_POLL = 100.milliseconds
-
-/** ~0.5 s at the ~27 fps this pipeline sustains. */
-private const val READY_FRAMES = 14
