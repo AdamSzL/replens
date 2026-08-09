@@ -44,7 +44,7 @@ internal class WorkoutViewModel @Inject constructor(
      * reading the rep count at frame rate.
      */
     val poseFrame: StateFlow<PoseFrame?>
-        field = MutableStateFlow<PoseFrame?>(null)
+        field = MutableStateFlow(null)
 
     private val smoother = PoseSmoother()
     private val repCounter = SquatRepCounter()

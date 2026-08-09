@@ -69,11 +69,11 @@ class PoseCameraDataSource @Inject constructor(
 ) {
 
     val surfaceRequests: StateFlow<SurfaceRequest?>
-        field = MutableStateFlow<SurfaceRequest?>(null)
+        field = MutableStateFlow(null)
 
     /** Null until the camera provider resolves. */
     val options: StateFlow<CameraOptions?>
-        field = MutableStateFlow<CameraOptions?>(null)
+        field = MutableStateFlow(null)
 
     fun poseFrames(
         lifecycleOwner: LifecycleOwner,
