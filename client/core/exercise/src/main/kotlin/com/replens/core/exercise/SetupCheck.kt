@@ -1,6 +1,5 @@
 package com.replens.core.exercise
 
-import com.replens.core.model.BodyPose
 import com.replens.core.model.LandmarkType
 import com.replens.core.model.PoseFrame
 
@@ -63,7 +62,7 @@ fun PoseFrame.setupCheck(
 
 /**
  * One leg is enough — filming at 45 degrees occludes the far side by design, and
- * [squatSignals] already measures depth from whichever legs survive.
+ * `squatSignals` already measures depth from whichever legs survive.
  */
 private fun PoseFrame.hasUsableLeg(minLikelihood: Float): Boolean =
     isLegObserved(
@@ -77,7 +76,9 @@ private fun PoseFrame.isLegObserved(
     knee: LandmarkType,
     ankle: LandmarkType,
     minLikelihood: Float,
-): Boolean = listOf(hip, knee, ankle).all { isObserved(pose, it, minLikelihood) }
+): Boolean = isObserved(hip, minLikelihood) &&
+    isObserved(knee, minLikelihood) &&
+    isObserved(ankle, minLikelihood)
 
 /**
  * Confidence alone is not enough: ML Kit reports landmarks past the edge of the
@@ -85,7 +86,6 @@ private fun PoseFrame.isLegObserved(
  * numerically.
  */
 private fun PoseFrame.isObserved(
-    pose: BodyPose,
     type: LandmarkType,
     minLikelihood: Float,
 ): Boolean {
