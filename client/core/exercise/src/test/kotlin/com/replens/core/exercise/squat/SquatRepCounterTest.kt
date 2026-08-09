@@ -1,5 +1,6 @@
 package com.replens.core.exercise.squat
 
+import com.replens.core.exercise.AbandonedDescent
 import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
 import org.junit.Assert.assertEquals
@@ -36,12 +37,14 @@ private fun squat(
 private class Session(val counter: SquatRepCounter = SquatRepCounter()) {
     private var timestamp = 0L
     val completed = mutableListOf<Rep>()
+    val abandoned = mutableListOf<AbandonedDescent>()
     val phases = mutableListOf<RepPhase>()
 
     fun feed(angles: List<Float?>): Session {
         angles.forEach { angle ->
             val update = counter.update(angle, timestamp)
             update.completedRep?.let(completed::add)
+            update.abandonedDescent?.let(abandoned::add)
             phases += update.phase
             timestamp += FRAME_INTERVAL_MILLIS
         }
@@ -50,6 +53,46 @@ private class Session(val counter: SquatRepCounter = SquatRepCounter()) {
 }
 
 class SquatRepCounterTest {
+
+    @Test
+    fun `a descent that turns back is reported, not counted`() {
+        // 130 degrees is a real attempt: past standingExit, short of bottomEnter.
+        val session = Session().feed(standing() + squat(bottomAngle = 130f) + standing())
+
+        assertEquals(0, session.counter.repCount)
+        assertEquals(1, session.abandoned.size)
+        assertEquals(130f, session.abandoned.single().deepestAngle, 0.001f)
+    }
+
+    @Test
+    fun `the reported angle is the deepest reached, not the last seen`() {
+        val session = Session().feed(
+            standing() + squat(bottomAngle = 122f, bottomFrames = 10) + standing()
+        )
+
+        assertEquals(122f, session.abandoned.single().deepestAngle, 0.001f)
+    }
+
+    @Test
+    fun `a counted rep reports no abandoned descent`() {
+        val session = Session().feed(standing() + squat() + standing())
+
+        assertEquals(1, session.completed.size)
+        assertTrue(session.abandoned.isEmpty())
+    }
+
+    /**
+     * Losing tracking says nothing about where the lifter is — they may still be
+     * at the bottom — so "deeper" would be a guess rather than a correction.
+     */
+    @Test
+    fun `losing tracking mid-descent reports nothing`() {
+        val descent = squat(bottomAngle = 130f).take(10)
+        val session = Session().feed(standing() + descent + List(20) { null })
+
+        assertTrue(session.abandoned.isEmpty())
+        assertEquals(0, session.counter.repCount)
+    }
 
     @Test
     fun `a clean rep is counted once`() {

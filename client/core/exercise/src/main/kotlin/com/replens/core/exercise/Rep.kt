@@ -39,8 +39,26 @@ data class Rep(
     val totalMillis: Long get() = completedAtMillis - startedAtMillis
 }
 
+/**
+ * A descent that turned back before reaching the counting threshold, so nothing
+ * was counted.
+ *
+ * Reported rather than dropped, because silence is the wrong feedback here:
+ * someone doing quarter-squats gets no reps *and* no explanation, which is
+ * indistinguishable from the app being broken. [deepestAngle] is also the
+ * evidence per-user calibration needs — it is how far this body actually goes.
+ */
+data class AbandonedDescent(
+    val deepestAngle: Float,
+    val startedAtMillis: Long,
+    val abandonedAtMillis: Long,
+) {
+    val totalMillis: Long get() = abandonedAtMillis - startedAtMillis
+}
+
 /** Result of feeding one frame to a rep counter. */
 data class RepUpdate(
     val phase: RepPhase,
     val completedRep: Rep? = null,
+    val abandonedDescent: AbandonedDescent? = null,
 )

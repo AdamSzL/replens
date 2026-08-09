@@ -1,5 +1,6 @@
 package com.replens.core.exercise.squat
 
+import com.replens.core.exercise.AbandonedDescent
 import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
 import com.replens.core.exercise.RepUpdate
@@ -105,6 +106,7 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
         }
 
         var completed: Rep? = null
+        var abandoned: AbandonedDescent? = null
         when (phase) {
             RepPhase.STANDING -> {
                 if (depthAngle >= config.standingEnterAngle) standingConfirmed = true
@@ -120,10 +122,11 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
                     phase = RepPhase.BOTTOM
                     bottomAtMillis = timestampMillis
                 }
-                // Came back up without reaching depth: not a rep.
+                // Came back up without reaching depth: not a rep, but worth
+                // reporting — it is the only evidence the user is trying.
                 depthAngle >= config.standingEnterAngle -> {
+                    abandoned = abandonDescent(timestampMillis)
                     phase = RepPhase.STANDING
-                    clearRepInProgress()
                 }
             }
 
@@ -140,7 +143,7 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
                 }
             }
         }
-        return RepUpdate(phase, completed)
+        return RepUpdate(phase, completed, abandoned)
     }
 
     fun reset() {
@@ -149,6 +152,22 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
         standingConfirmed = false
         missingFrames = 0
         clearRepInProgress()
+    }
+
+    /**
+     * Only the deliberate turn-around reports one. Losing tracking does not: the
+     * lifter may still be at the bottom, and "deeper" would be a guess.
+     */
+    private fun abandonDescent(timestampMillis: Long): AbandonedDescent? {
+        val startedAt = repStartedAtMillis
+        val deepest = deepestAngle
+        clearRepInProgress()
+        if (startedAt == null) return null
+        return AbandonedDescent(
+            deepestAngle = deepest,
+            startedAtMillis = startedAt,
+            abandonedAtMillis = timestampMillis,
+        )
     }
 
     private fun completeRep(timestampMillis: Long): Rep? {
