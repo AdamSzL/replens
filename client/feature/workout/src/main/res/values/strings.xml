@@ -12,4 +12,19 @@
     <string name="workout_go_again">Go again</string>
     <string name="workout_reps_squat">reps · squat</string>
     <string name="workout_reps_at_depth">%1$d of %2$d at depth</string>
+
+    <!-- Spoken only. The screen shows the same countdown as a numeral; this exists
+         so the digit is formatted by the locale the voice is speaking. -->
+    <string name="workout_cue_count_in">%1$d</string>
+    <string name="workout_cue_go">Go</string>
+    <!-- Spoken at the end of a set. Redundant today, since the only way to finish
+         is to walk over and press the button, and the card is then right there.
+         It earns its place when a set can end without a press - a rep target, or
+         a long enough pause - and is here now because it costs nothing to say.
+         Both numbers, since the headline count alone is deliberately lenient and
+         says nothing about whether the reps were any good. -->
+    <plurals name="workout_cue_set_summary">
+        <item quantity="one">%1$d rep, %2$d at depth</item>
+        <item quantity="other">%1$d reps, %2$d at depth</item>
+    </plurals>
 </resources>

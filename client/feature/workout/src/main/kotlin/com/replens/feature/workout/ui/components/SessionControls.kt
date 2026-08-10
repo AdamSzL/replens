@@ -22,8 +22,10 @@ import com.replens.core.designsystem.component.button.OverlaySecondaryButton
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetupCheck
+import com.replens.core.ui.asString
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.WorkoutAction
+import com.replens.feature.workout.ui.mapper.message
 
 /**
  * The one control cluster the screen shows at a time, chosen by [SessionState].
@@ -54,7 +56,7 @@ internal fun SessionControls(
                 },
             )
             is SessionState.Waiting -> {
-                OverlayMessage(stringResource(session.reason.messageRes))
+                OverlayMessage(session.reason.message.asString())
                 OverlaySecondaryButton(
                     text = stringResource(R.string.workout_cancel),
                     onClick = { onAction(WorkoutAction.CancelClicked) },
@@ -83,20 +85,6 @@ internal fun SessionControls(
         }
     }
 }
-
-/**
- * The reason is chosen here rather than in the ViewModel: each arm maps to one
- * fixed resource, so nothing is being *selected between* at runtime and there is
- * no need for a resolved string in state. That changes when TTS speaks the same
- * line and it has to be resolvable without a composition.
- */
-private val SetupCheck.messageRes: Int
-    get() = when (this) {
-        SetupCheck.READY -> R.string.workout_setup_hold_still
-        SetupCheck.NO_POSE -> R.string.workout_setup_no_pose
-        SetupCheck.TOO_CLOSE -> R.string.workout_setup_too_close
-        SetupCheck.LEGS_NOT_VISIBLE -> R.string.workout_setup_legs_not_visible
-    }
 
 @Composable
 private fun OverlayMessage(text: String) {

@@ -4,6 +4,7 @@ import androidx.camera.core.SurfaceRequest
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.replens.core.audio.Speaker
 import com.replens.core.exercise.Framing
 import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
@@ -19,6 +20,7 @@ import com.replens.core.model.PoseFrame
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
+import com.replens.feature.workout.ui.mapper.spokenCue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +35,7 @@ import javax.inject.Inject
 @HiltViewModel
 internal class WorkoutViewModel @Inject constructor(
     private val poseCamera: PoseCameraDataSource,
+    private val speaker: Speaker,
 ) : ViewModel() {
 
     val surfaceRequests: StateFlow<SurfaceRequest?> = poseCamera.surfaceRequests
@@ -55,6 +58,7 @@ internal class WorkoutViewModel @Inject constructor(
     private val repConfig = SquatRepConfig()
     private val repCounter = SquatRepCounter(repConfig)
     private val setSession = SetSession()
+    private val announcer = CueAnnouncer()
 
     /** Kept for the set summary; the counter itself only ever knows the total. */
     private val reps = mutableListOf<Rep>()
@@ -109,6 +113,7 @@ internal class WorkoutViewModel @Inject constructor(
 
     private fun startSet() {
         repCounter.reset()
+        announcer.reset()
         reps.clear()
         state.update {
             it.copy(
@@ -129,7 +134,13 @@ internal class WorkoutViewModel @Inject constructor(
     }
 
     private fun dismissSummary() {
-        state.update { it.copy(session = setSession.dismiss(), repCount = 0) }
+        state.update {
+            it.copy(
+                session = setSession.dismiss(),
+                repCount = 0,
+                repsAtDepth = 0,
+            )
+        }
     }
 
     private fun flipCamera() {
@@ -173,11 +184,22 @@ internal class WorkoutViewModel @Inject constructor(
                 it.copy(
                     session = session,
                     repCount = repCounter.repCount,
+                    // Not in the guard above, and it does not need to be: `reps`
+                    // only grows on a frame that also moves `repCount`.
                     repsAtDepth = reps.count { rep -> rep.isAtDepth(repConfig) },
                     phase = phase,
                 )
             }
         }
+
+        // After the state is written, so the summary speaks the numbers the card is
+        // showing rather than the previous frame's. Every frame, not only the ones
+        // that changed something: a setup instruction has to be repeated on a timer,
+        // and the frame stream is that timer.
+        announcer.onFrame(
+            cue = session.spokenCue(repCounter.repCount, state.value.repsAtDepth),
+            timestampMillis = smoothed.timestampMillis,
+        )?.let(speaker::speak)
     }
 
     /**
