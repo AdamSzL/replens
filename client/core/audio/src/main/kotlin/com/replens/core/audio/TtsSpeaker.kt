@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import com.replens.core.ui.UiText
@@ -14,6 +16,7 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Locales this app has strings for. **Must match the `values-*` folders**, and the
@@ -23,6 +26,20 @@ import javax.inject.Singleton
  */
 private val SUPPORTED_LOCALES = arrayOf("en")
 
+/**
+ * How long ducking outlives an utterance.
+ *
+ * Cues arrive in bursts — the count-in speaks four in three seconds, and a set
+ * will speak one per rep — and the gap between them is shorter than the cue, so
+ * releasing focus as each one ends let the music ramp back up and duck again four
+ * times in three seconds. Heard on device 2026-08-10: that pump is more
+ * distracting than the ducking it undoes.
+ *
+ * The two seconds is a guess to be tuned by ear, like the setup repeat interval:
+ * long enough to bridge a count-in tick and a quick rep, short enough that a rest
+ * between sets gets the music back.
+ */
+private val FOCUS_GRACE = 2.seconds
 
 private fun TextToSpeech.canSpeak(locale: Locale): Boolean =
     when (isLanguageAvailable(locale)) {
@@ -70,6 +87,22 @@ internal class TtsSpeaker @Inject constructor(
     /** Atomic only because [Speaker] documents no threading contract. */
     private val utterances = AtomicInteger()
 
+    private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * Which utterance the pending release belongs to. The post is scheduled from
+     * the engine's thread and [speak] runs on the caller's, so a release can still
+     * be in flight when the next cue starts; comparing against [speakingId] when it
+     * finally runs is what stops that release from silencing the duck mid-sentence.
+     */
+    @Volatile
+    private var releaseFor: String? = null
+
+    private val releaseFocus = Runnable {
+        if (releaseFor != speakingId) return@Runnable
+        audioManager.abandonAudioFocusRequest(focusRequest)
+    }
+
     /**
      * Configured for the locale the engine accepted, which is not necessarily the
      * device's: an Italian phone running an app that ships only English resolves
@@ -111,8 +144,8 @@ internal class TtsSpeaker @Inject constructor(
 
         val id = utterances.incrementAndGet().toString()
         speakingId = id
-        // Ducking lasts only as long as the utterance: requested here, abandoned by
-        // the progress listener.
+        // Requested on every cue; the system grants the same request again without
+        // re-ducking, so a burst that already holds focus simply keeps it.
         audioManager.requestAudioFocus(focusRequest)
 
         // A synchronous failure queues nothing, so no completion callback will ever
@@ -124,7 +157,11 @@ internal class TtsSpeaker @Inject constructor(
 
     private fun onFinished(utteranceId: String?) {
         if (utteranceId != speakingId) return
-        audioManager.abandonAudioFocusRequest(focusRequest)
+        releaseFor = utteranceId
+        // Replaced rather than stacked: two pending releases would let the older one
+        // fire on the newer one's schedule and drop the duck early.
+        handler.removeCallbacks(releaseFocus)
+        handler.postDelayed(releaseFocus, FOCUS_GRACE.inWholeMilliseconds)
     }
 
     private fun onEngineReady(tts: TextToSpeech) {
