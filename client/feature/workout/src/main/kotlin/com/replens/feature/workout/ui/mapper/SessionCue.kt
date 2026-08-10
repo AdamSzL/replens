@@ -36,8 +36,9 @@ internal val SetupCheck.message: UiText
  * This is the whole point of the audio channel: from three meters away the screen
  * is unreadable, so a set has to be startable and finishable by ear alone.
  *
- * [repCount] and [repsAtDepth] are only read by [SessionState.Finished]; every
- * other arm ignores them.
+ * [repsAtDepth] is read only by [SessionState.Finished]. [repCount] is also what
+ * [SessionState.Active] counts out loud, which is the one cue the app repeats
+ * often enough for a listener to build a rhythm from.
  */
 internal fun SessionState.spokenCue(repCount: Int, repsAtDepth: Int): SpokenCue? = when (this) {
     SessionState.Idle -> null
@@ -54,7 +55,14 @@ internal fun SessionState.spokenCue(repCount: Int, repsAtDepth: Int): SpokenCue?
         UiText.Resource(R.string.workout_cue_count_in, secondsLeft),
     )
 
-    SessionState.Active -> SpokenCue(UiText.Resource(R.string.workout_cue_go))
+    // Active carries no fields, so a zero count is the only thing here that can
+    // mean "the set has just started" — and it works only because the count never
+    // goes down. "Go" is therefore one unchanging cue until the first rep, which
+    // is what gets it spoken exactly once rather than every frame.
+    SessionState.Active -> SpokenCue(
+        if (repCount == 0) UiText.Resource(R.string.workout_cue_go)
+        else UiText.Resource(R.string.workout_cue_rep, repCount),
+    )
 
     SessionState.Finished -> SpokenCue(
         UiText.Plural(

@@ -17,6 +17,13 @@
          so the digit is formatted by the locale the voice is speaking. -->
     <string name="workout_cue_count_in">%1$d</string>
     <string name="workout_cue_go">Go</string>
+    <!-- Spoken only, and deliberately its own resource rather than a reuse of the
+         count-in despite the identical text: UiText.Resource equality includes the
+         id, so one shared resource would make the countdown's "1" and the first rep
+         the same cue, which the announcer treats as already said. Bare numeral
+         because a coach counts "one, two, three", and because it has to fit in the
+         gap between two reps. -->
+    <string name="workout_cue_rep">%1$d</string>
     <!-- Spoken at the end of a set. Redundant today, since the only way to finish
          is to walk over and press the button, and the card is then right there.
          It earns its place when a set can end without a press - a rep target, or

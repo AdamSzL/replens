@@ -5,6 +5,7 @@ import com.replens.core.exercise.SetupCheck
 import com.replens.core.ui.UiText
 import com.replens.feature.workout.R
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -76,6 +77,49 @@ class SessionCueTest {
 
         assertEquals(UiText.Resource(R.string.workout_cue_go), cue?.text)
         assertNull(cue?.repeatAfter)
+    }
+
+    /**
+     * What the callout runs on. [CueAnnouncer] speaks only what differs from the
+     * last line, so a resource that lost its `%1$d` would say one number and leave
+     * the rest of the set silent — the same failure the count-in test guards, and
+     * invisible in a build that still compiles.
+     */
+    @Test
+    fun `each rep is a different line`() {
+        val cues = (1..12).map { SessionState.Active.spokenCue(repCount = it, repsAtDepth = 0) }
+
+        assertEquals(cues.size, cues.toSet().size)
+    }
+
+    @Test
+    fun `go gives way to the count once a rep lands`() {
+        val started = SessionState.Active.spokenCue(repCount = 0, repsAtDepth = 0)
+        val counted = SessionState.Active.spokenCue(repCount = 1, repsAtDepth = 0)
+
+        assertEquals(UiText.Resource(R.string.workout_cue_go), started?.text)
+        assertEquals(UiText.Resource(R.string.workout_cue_rep, 1), counted?.text)
+    }
+
+    /**
+     * The whole reason [R.string.workout_cue_rep] exists rather than the count-in
+     * resource being reused for both: the rendered text is identical, but equality
+     * is by id, and sharing one would make the last second of the countdown and
+     * the first rep the same cue — which the announcer would swallow as already
+     * said.
+     */
+    @Test
+    fun `the first rep is not the last second of the count-in`() {
+        val lastSecond = SessionState.CountingIn(1).spokenCue(0, 0)
+        val firstRep = SessionState.Active.spokenCue(repCount = 1, repsAtDepth = 0)
+
+        assertNotEquals(lastSecond?.text, firstRep?.text)
+    }
+
+    /** A count states a moment; only an unmet condition earns the right to nag. */
+    @Test
+    fun `the rep count is never repeated`() {
+        assertNull(SessionState.Active.spokenCue(repCount = 5, repsAtDepth = 0)?.repeatAfter)
     }
 
     @Test
