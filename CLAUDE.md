@@ -98,11 +98,21 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 ```
 :app                MainActivity: camera permission gate -> WorkoutRoot. Later:
                     NavDisplay, back stack, every cross-feature edge.
-:feature:workout    …workout.ui/            the five files (no Event yet)
+:feature:workout    …workout.ui/            the five files (no Event yet), plus
+                                            CueAnnouncer — the speech gate
+                    …workout.ui.mapper/     SessionCue: SetupCheck/SessionState
+                                            -> UiText, drawn and spoken from one
+                                            source
+                    …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
+                    22 tests.
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
+:core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
+                    focus. Silence is a legal outcome, never an error.
+:core:ui            UiText and its two resolvers. 8 tests. ObserveAsEvents lands
+                    when something is actually one-shot.
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
                       …component.button/ Primary, OverlayPrimary,
                                          OverlaySecondary, OverlayIcon
@@ -110,14 +120,14 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :core:posemath      Point, joint angles, torso size, normalized distances, line
                     deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
                     domain-free (no thresholds, no exercise names). 55 tests.
-:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 69 tests.
+:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 76 tests.
                       …exercise/       Rep, RepPhase, RepUpdate, Framing,
                                        SetupCheck, SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
 ```
 
-Planned, not built: `:core:ui` (`UiText`, `ObserveAsEvents`), `:core:data`,
-`:core:network`, `:core:database`, `:feature:{history,stats,leaderboard}`.
+Planned, not built: `:core:data`, `:core:network`, `:core:database`,
+`:feature:{history,stats,leaderboard}`.
 
 ### Key decisions
 
@@ -462,12 +472,21 @@ screen's modes, so a UiModel would be a rename. **Stability is the weakest reaso
 to wrap** — it produces a type whose only job is to carry `@Immutable`, and here
 it would not even remove the mechanism, since `CameraOptions` and `ZoomRange`
 still need the stability configuration file.
-The trigger that *would* earn one is TTS: `SetupCheck → stringResource` currently
-happens in the composable, which is fine while each arm maps to one fixed
-resource, but the moment the same line must be both drawn and spoken the choice
-has to resolve outside composition. Then it is `UiText`, a mapper, and
-`Waiting(message: UiText)` — a UiModel carrying formatted data rather than an
-annotation.
+TTS was predicted to be the trigger that earned one, and **half of that prediction
+was right** (2026-08-10). `SetupCheck → stringResource` did have to leave the
+composable the moment the same line was both drawn and spoken: `stringResource`
+needs a composition, and the speaker resolves against the locale its *voice*
+negotiated, which is not necessarily the app's. So `UiText` and a mapper, yes.
+
+But **not** `Waiting(message: UiText)`. `SessionState` lives in `:core:exercise`,
+which is pure Kotlin, and `UiText` is Android — so a UiModel there would mean
+mirroring five arms to change one, and it would still be a rename. The mapper is
+an extension on the domain type instead (`SetupCheck.message`,
+`SessionState.spokenCue`), which both the composable and the ViewModel call, so
+the drawn and spoken lines come from one source and cannot drift.
+**The lesson generalizes: needing formatted text is not the same as needing a
+UiModel.** A pure function to `UiText` is the smaller answer whenever the state
+type is already at the right altitude.
 
 ### UiText
 
@@ -493,6 +512,15 @@ is why this matters and English-only testing won't catch it.
 
 The `Context` overload is what TTS calls, so one `UiText` drives both the on-screen
 cue and the spoken line, and the form-rule engine stays unit-testable.
+
+**`UiText` equality became load-bearing once speech existed** (2026-08-10), which
+raises the stakes on the `List`-not-`Array` rule above. `CueAnnouncer` decides
+whether to speak by comparing a cue against the last one, so equality is not a
+rendering optimization there — it is the difference between a countdown you can
+hear and one spoken once. Two corollaries: an `Array` in `args` would make the app
+repeat every line at frame rate, and **two states that must both be heard need
+distinct `UiText`**, which is why the rep callout has its own string resource
+despite rendering the same text as the count-in.
 
 ### Result and errors
 
@@ -591,6 +619,48 @@ which make or break the feel:
 - Language availability isn't guaranteed: try device locale, fall back to English,
   keep every phrase in `strings.xml`.
 - Keep one engine instance alive (init costs a few hundred ms).
+
+**Built and validated on device 2026-08-10/11**; all four hold. What is spoken
+today: setup problems (repeating), the count-in, "Go", every rep, and the set
+summary. `SetupCheck.READY` is **drawn but never spoken** — it holds for
+`settleFor`, half a second, and the count-in flushes whatever is still being
+said, so it would only ever be heard cut off. The count-in starting is the
+confirmation that line would have given.
+
+- **Audio focus is per burst, not per utterance.** Abandoning it when each
+  utterance ended let the music ramp back up in the gaps and duck again — the
+  count-in pumped it four times in three seconds, which is more distracting than
+  the ducking it undoes. Focus now outlives an utterance by `FOCUS_GRACE` (2 s),
+  each completion replacing the previous release rather than stacking. Reps
+  slower than that still let the music breathe between them, which is fine;
+  a *stutter* is what grates, not a dip.
+- **The channel's budget is about one short phrase per rep**, set by how fast
+  people squat, not by anything in our code. "Eight" is ~0.5 s against a 2-4 s
+  rep; "eight, go deeper" is ~1.5 s and most of the slack is gone. This is a
+  second, independent route to the decision below that **richness belongs in the
+  post-set summary** — no latency budget there.
+- **When form cues land, they outrank the rep number**, because both fire at rep
+  completion and `QUEUE_FLUSH` means one erases the other. Losing "eight" is
+  self-correcting — the next rep says "nine" — and losing "knees out" is not.
+- **Cue text is chosen by a shared mapper in the feature module**
+  (`ui/mapper/SessionCue.kt`), not carried on the domain type. CLAUDE.md
+  previously predicted `Waiting(message: UiText)`; that is wrong, because
+  `:core:exercise` is pure Kotlin and `UiText` is Android. One mapper feeds both
+  the composable and the speaker, so the drawn and spoken lines cannot drift.
+- **`CueAnnouncer` turns a per-frame condition into tolerable speech.** The
+  mapper describes what is true on every frame; the announcer speaks only what
+  **differs from the last line**, with an optional repeat interval. Two
+  consequences worth not re-deriving: cue *inequality* is the entire mechanism,
+  so two states that must both be heard need distinct `UiText` (hence the rep
+  callout having its own resource despite rendering the same text as the
+  count-in); and **silence deliberately does not clear what was last said**, or a
+  gate flickering near its threshold would restart the same instruction several
+  times a second. `reset()` belongs to starting a set, where the press proves the
+  user is listening.
+- **Settings, when they land: switch by category, not by message** — setup
+  guidance, rep counting, form cues, summary. Per-message granularity sounds
+  respectful and is unusable. Needs DataStore, so it rides with the setup and
+  settings work; and the categories cannot be designed before form cues exist.
 
 **Form feedback: hand-written geometry rules, not an LLM.** Cues must fire within
 ~100 ms, and knee valgus is a measurement, not a judgement. Per-exercise rule =
@@ -866,7 +936,7 @@ are committed. If it works out, enable it in a convention plugin.
 unit tests, and screenshot validation once it exists. Cache the Gradle
 distribution and build cache.
 
-## Current status (2026-08-09)
+## Current status (2026-08-11)
 
 - **Milestone 1 (camera + overlay): done**, validated on device.
 - **Milestone 2 steps 1–4: done**, validated on device — 8 reps performed, 8
@@ -908,10 +978,25 @@ distribution and build cache.
   is not tied to UI visibility but the camera is, so a `delay` countdown kept
   running while the app was backgrounded and CameraX had unbound — reaching zero
   and starting a set on a stream delivering nothing.
-- **Next:** step 5 (form rules + TTS — the first time `UiText`, `:core:ui` and
-  `Event` earn their place). 129 unit tests.
-- **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet),
-  `:core:ui`, and Navigation 3 (one screen, nothing to navigate to — it lands with
+- **Voice: done and validated on device 2026-08-10/11.** `:core:audio` and
+  `:core:ui` both have their first caller. The app now speaks setup problems, the
+  count-in, "Go", **every rep**, and the set summary. Details and the rules that
+  came out of it are under *Voice feedback*. Verified by ear: ducking dips the
+  music rather than stopping it; backgrounding the app silences cues instantly
+  (only the in-flight utterance finishes, which is `TextToSpeech` being an OS
+  service and is left alone); and at normal rep cadence nothing truncates.
+  **A set is now startable and finishable by ear alone**, which was the point —
+  the screen is unreadable from three meters.
+- **Next:** form rules — the two with evidence already behind them, shallow rep
+  (`Rep.isAtDepth`) and abandoned descent (`AbandonedDescent`). Both fire *after*
+  a rep, so neither needs a new threshold or a latency budget. **Priority
+  arbitration lands with them, not before**: an arbitrator over one cue is dead
+  code, but a form cue and the rep number collide on the same frame by
+  construction. Valgus, forward lean and heel lift stay parked — they need
+  research and tuning against footage, and two of them need the vertical
+  reference gated on the setup check. 166 unit tests.
+- **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
+  and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is
   the *set* boundary, where you are still three meters away and want a number and
   "go again"; the screen is the *workout* boundary, where you have picked the phone
@@ -965,14 +1050,32 @@ distribution and build cache.
   **No `TOO_FAR` arm**: a real failure mode, but no too-far case has been recorded
   and a guessed lower bound would block real users — the exact mistake
   `MAX_TORSO_FRACTION` was widened from 0.30 to 0.40 to avoid.
-  **`SetupCheck.MAX_TORSO_FRACTION = 0.32` has never run on a device.** It sits
-  inside the 0.29–0.34 band measured while leaning in, so it is the number most
-  likely to be wrong in the annoying direction. The leg check does the real work.
-- **Known issues from the validation footage**, both UX rather than code: feet at
-  or past the bottom edge during deep reps (leg landmarks start being inferred —
-  will corrupt heel-lift and shin rules), and arms held forward occluding the legs
-  at the bottom, which front-on framing makes worst. The back camera at 0.5x fixes
-  the framing half.
+  **`SetupCheck.MAX_TORSO_FRACTION = 0.32` turns out to be almost unreachable**,
+  and it is the leg check that decides essentially every case. Verified on device
+  2026-08-11, and it inverts an earlier note here calling 0.32 "the number most
+  likely to be wrong in the annoying direction". The geometry: the torso is ~29%
+  of a person's height, so a body that just fits head to toe already reads ~0.29
+  — *under* 0.32. By the time your ankles are inside the frame the size arm has
+  therefore already passed, and when you are closer than that your ankles are out
+  of frame, which the leg arm catches anyway. The two arms are not independent
+  tests; they are nearly the same geometric condition, and the stricter one needs
+  no threshold at all.
+  Good news, since the arm doing the work is a fact rather than a tuned guess. It
+  is **not dead code**: a phone propped low and angled up gives feet in frame
+  *and* a large torso, and then 0.32 is the backstop that fires.
+  Also retired: the worry that deep reps push feet out of frame and so the check
+  passes a setup that breaks mid-set. **Feet do not move during a squat** — the
+  hips and head come down, which is why torso fraction falls rather than rises.
+  A `SetupCheck` that passes while standing therefore holds for the whole rep.
+- **Known issue from the validation footage:** arms held forward occlude the legs
+  at the bottom of a rep, which front-on framing makes worst — leg landmarks
+  start being inferred, and that will corrupt heel-lift and shin rules. This is
+  confidence degrading *within* a rep, so `SetupCheck` cannot see it: the check
+  runs while you are standing, and nothing gates on landmark quality during
+  `Active`. The other half of this note — feet leaving the bottom edge — is
+  retired above; feet do not move during a squat, and marginal framing is now
+  refused before the set starts. The back camera at 0.5x remains the answer for
+  small rooms.
 - **`WorkoutViewModel` still has no tests**, but far less now depends on that.
   What remains in it is camera facing resolution, the resolved-once rule and the
   flip guard — real, but small. Covering them needs a fake, and
@@ -980,11 +1083,15 @@ distribution and build cache.
   worth doing** (a data source in name, this feature's whole outside world in
   role, which is what "what every ViewModel test fakes" means) but it is no longer
   the prerequisite for testing the interesting logic.
-- **The completed `Rep`s are being thrown away.** `repCounter.update(...)` returns
-  `RepUpdate(phase, completedRep)` and only `.phase` is read, so `deepestAngle` and
-  the descent/ascent timings — everything a summary beyond a single number needs —
-  are discarded every set. Collecting them is a two-line change and the prerequisite
-  for "depth 88%, up from 81%".
+- **The completed `Rep`s are collected now** (2026-08-09), in a `reps` list the
+  ViewModel clears on `startSet`, so `deepestAngle` and the descent/ascent timings
+  survive the set. `repsAtDepth` is the first thing built on them and is spoken in
+  the set summary. This was the prerequisite for "depth 88%, up from 81%"; what is
+  still missing is somewhere to *persist* them, which arrives with history.
+  `repsAtDepth` is recomputed from the list inside the same `update` that moves
+  `repCount`, rather than incremented: the guard above it fires on every frame
+  that completes a rep, so it cannot go stale, and a derived value cannot drift
+  the way a counter maintained in three places can.
 - **`:feature:workout` exposes exactly `WorkoutRoot(modifier)`**; the ViewModel,
   state and actions are `internal`, so `:core:pose` and `:core:exercise` are
   `implementation`. Root itself becomes internal when `navigation/` exists — a
@@ -1146,17 +1253,19 @@ cannot misfire mid-squat.
 ## Roadmap
 
 1. **Camera + skeleton overlay** — done.
-2. **The squat** — angles, smoothing, rep state machine done; **form heuristics
-   + TTS is what remains**.
+2. **The squat** — angles, smoothing, rep state machine and the whole voice
+   channel done; **form heuristics are what remains**.
 3. **Local persistence & app shell** — Room history, Nav 3 flows, stats screen.
 4. **Backend & sync** — Spring Boot API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
 
 Backlog: remembering the camera choice and zoom across launches (needs DataStore,
-which the setup/settings work will bring anyway); a `PoseCameraDataSource`
-interface so the ViewModel's camera logic can be faked; widening the fixture CSVs
-so framing is testable against real footage.
+which the setup/settings work will bring anyway); per-category cue switches (same
+DataStore); a `PoseCameraDataSource` interface so the ViewModel's camera logic can
+be faked; widening the fixture CSVs so framing is testable against real footage;
+`TtsSpeaker` has no `shutdown()` and holds its engine for the life of the process,
+which is defensible for a `@Singleton` but is a choice rather than an oversight.
 
 Scope guard: **2–3 exercises max, done well.** Form heuristics are the hard part,
 not ML Kit — landmarks jitter (smoothing + hysteresis are non-negotiable) and
