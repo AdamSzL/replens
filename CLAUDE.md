@@ -11,15 +11,15 @@ Enjoying the work and getting a real release out is the payoff; portfolio value 
 a side effect, not a driver. **Explicitly not a race to a minimum release** — v1
 should feel finished: history, stats, sync, leaderboard, a few exercises, setup
 guidance that works. No deadline, so quality and experimentation beat speed.
-Corollary: **the backend is hand-built (Kotlin + Spring Boot) and is part of v1**
-— Firebase/BaaS was considered and rejected; building it is part of the fun.
+Corollary: **the backend is hand-built (Kotlin + Ktor) and is part of v1** —
+Firebase/BaaS was considered and rejected; building it is part of the fun.
 
 ## Repository layout
 
 ```
 replens/
 ├── client/   # Android app — independent Gradle build, open in Android Studio
-└── server/   # Spring Boot API — independent Gradle build, open in IntelliJ
+└── server/   # Ktor API — independent Gradle build, open in IntelliJ
 ```
 
 - **Two independent Gradle builds; no root Gradle project.** Never add a root
@@ -29,6 +29,36 @@ replens/
   evolution discipline from day 1: default values, `@SerialName`, tolerant
   reading, versioned endpoints. Revisit at ~20–30 DTOs (upgrade path: OpenAPI).
 
+**Reconsidered 2026-08-11 and kept.** A root `settings.gradle.kts` with a
+`:shared` module is the standard full-stack Kotlin advice, and it is right for a
+web client — which is redeployed *with* its server. Mobile inverts that premise:
+
+- **A shared DTO makes the compiler lie about compatibility.** Renaming a field,
+  tightening `String?` to `String`, or adding a required one compiles clean and
+  passes every test, then breaks every installed app. Duplication is what forces
+  the version skew to be *felt*: changing the server's copy means walking to the
+  client's and deciding what an old client does with it. Discipline inside a
+  shared module is discipline nothing checks.
+- **Enums are DTOs.** The server adds `PULL_UP` and an old client's `enumValueOf`
+  throws. The client needs a tolerant fallback arm regardless — a client-side
+  decision the server must not own.
+- **The client is the fragile build.** AGP 9's built-in Kotlin, modules that must
+  not apply `kotlin.android`, a Kotlin version raised only via classpath conflict
+  resolution, convention plugins limited to what is already on the buildscript
+  classpath (see *Toolchain gotchas*). Merging puts server plugin resolution
+  through the most delicate machinery here; today a broken server build cannot
+  stop the app shipping. Also lost: the server in IntelliJ rather than Android
+  Studio, and deploy pipelines that don't check out the other half.
+
+What would actually be shared is thin. Validation rules are a regex and two ints,
+and the server must re-validate anyway since it cannot trust a client. The one
+genuinely valuable share — exercise thresholds — isn't needed, because the server
+aggregates and writes summaries and does no pose math. **If duplication starts to
+hurt, the answer is OpenAPI, not `:shared`:** generated client DTOs are sharing
+*with* a version boundary, since regeneration is deliberate and the skew appears
+in a diff. `includeBuild` of a shared module is the middle option, and it fixes
+the Gradle-fragility objection while fixing none of the compatibility one.
+
 ## Identifiers
 
 - Android `applicationId`: `com.replens.app` — **permanent on Play after first
@@ -37,14 +67,56 @@ replens/
 - Domain `replens.app` — owned (Cloudflare, expires 2027-08-05). Future API host
   `api.replens.app`; `.app` is HSTS-preloaded, so HTTPS is mandatory.
 
+## Server tech stack
+
+**Ktor, not Spring Boot — decided 2026-08-11, before a line was written.** Spring's
+value is amortizing complexity across a team and many modules; this API is ~12–15
+endpoints written by one person, which is exactly the regime where the amortization
+never happens and only the tax is paid: ~2–4 s startup against a few hundred ms
+(cold-start latency on anything that scales to zero), roughly 3–4x the idle memory,
+`allOpen`/`noArg` compiler plugins to make JPA entities work, and Jackson as the
+well-trodden path — which would put a *different* serializer on each side of the
+wire for no reason. Ktor is also the more hand-built of the two, which is the
+stated reason this backend exists at all.
+
+- Ktor + kotlinx.serialization, Exposed, Flyway, Postgres, HikariCP. Exposed's DSL
+  is about as short as JPA repositories at this schema size and the SQL stays
+  visible.
+- **No Hilt — it is Android-only.** DI is constructor wiring in
+  `Application.module()`; Koin only if that stops scaling.
+- **Spring Security is the one real loss, and it is not close** — nothing in Ktor
+  matches it. Priced before choosing: verifying a Google ID token means fetching
+  the JWKS and checking the signature plus `iss`/`aud`/`exp`, which is the `jwt {}`
+  block and ~40 lines against stable, well-documented behavior. An evening, not a
+  wall — and the payoff is understanding our own auth.
+
 ## Client tech stack
 
 - Kotlin, Jetpack Compose (pure, no Views), Jetpack Navigation 3
 - Hilt (DI), Room (local history), kotlinx.serialization
 - CameraX (`ImageAnalysis`) + ML Kit Pose Detection
-- **HTTP client undecided — Retrofit vs Ktor, settle when `:core:network` is
-  built.** The `safeApiCall`-style wrapper this project wants (see *Result and
-  errors*) is native in Ktor and needs a custom `CallAdapter` in Retrofit.
+- **Ktor Client — settled 2026-08-11** (was "Retrofit vs Ktor, decide when
+  `:core:network` is built"). The margin is small and worth stating honestly: both
+  sit on OkHttp, so connection pooling, HTTP/2 and the cache are identical either
+  way, and Retrofit's annotated interface is the nicer thing to read. Three points
+  decided it:
+  - **Token refresh.** Ktor's `Auth` plugin
+    (`bearer { loadTokens; refreshTokens }`) retries the original request after a
+    401 and serializes concurrent refreshes. Retrofit means an OkHttp
+    `Authenticator` written by hand, where five requests 401-ing at once all firing
+    a refresh is a classic thing to ship broken. With optional login plus
+    background sync that is a Tuesday, not an edge case.
+  - **Error bodies.** Per-endpoint sealed errors (see *Result and errors*) need the
+    failure payload. Retrofit hands back `errorBody(): ResponseBody?` to
+    deserialize by hand on a path separate from the success one; Ktor's `body<T>()`
+    doesn't care about the status.
+  - **One HTTP library across both halves**, now that the server is Ktor — one
+    serialization setup and one mental model for the person writing a route and its
+    caller in the same sitting.
+
+  The `safeApiCall`-style wrapper is real but smaller than it sounds: ~30 lines in
+  Ktor against a `CallAdapter.Factory` or `Response<T>` at every call site. **This
+  would not have been worth a migration** — greenfield is what makes it free.
 
 ### Toolchain gotchas (non-obvious)
 
@@ -1256,7 +1328,7 @@ cannot misfire mid-squat.
 2. **The squat** — angles, smoothing, rep state machine and the whole voice
    channel done; **form heuristics are what remains**.
 3. **Local persistence & app shell** — Room history, Nav 3 flows, stats screen.
-4. **Backend & sync** — Spring Boot API (auth or device-ID first), leaderboard.
+4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
 
