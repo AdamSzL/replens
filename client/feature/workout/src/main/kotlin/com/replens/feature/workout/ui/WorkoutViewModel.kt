@@ -15,7 +15,6 @@ import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.isAtDepth
 import com.replens.core.exercise.squat.squatDepthAngle
 import com.replens.core.model.PoseFrame
-import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -69,7 +68,7 @@ internal class WorkoutViewModel @Inject constructor(
                     it.copy(
                         cameraOptions = options,
                         // Resolved once — a later options update must not undo a flip.
-                        cameraFacing = it.cameraFacing ?: options?.facings?.preferred(),
+                        cameraFacing = it.cameraFacing ?: options?.facings?.preferred,
                     )
                 }
             }
@@ -156,10 +155,6 @@ internal class WorkoutViewModel @Inject constructor(
         // The new lens reports its own range, so a ratio from the old one is meaningless.
         state.update { it.copy(cameraFacing = next, zoomRatio = 1f) }
     }
-
-    /** Front first: the only lens where you can see your own framing. */
-    private fun Set<CameraFacing>.preferred(): CameraFacing? =
-        if (CameraFacing.FRONT in this) CameraFacing.FRONT else firstOrNull()
 
     private fun onFrame(frame: PoseFrame) {
         // Publishing the smoothed pose keeps the overlay showing what the rep
