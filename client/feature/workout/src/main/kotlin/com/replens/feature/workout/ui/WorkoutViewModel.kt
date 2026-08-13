@@ -63,7 +63,7 @@ internal class WorkoutViewModel @Inject constructor(
     /** Kept for the set summary; the counter itself only ever knows the total. */
     private val reps = mutableListOf<Rep>()
 
-    private var session: Job? = null
+    private var cameraJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -81,11 +81,14 @@ internal class WorkoutViewModel @Inject constructor(
 
     /**
      * Takes a [LifecycleOwner] because CameraX binds the camera to UI visibility —
-     * the session must stop when the screen does, not when the ViewModel is cleared.
+     * the feed must stop when the screen does, not when the ViewModel is cleared.
+     *
+     * Nothing to do with a *set*, which [SessionState] tracks; this is the camera
+     * running, which it does in every session state.
      */
-    fun startSession(lifecycleOwner: LifecycleOwner) {
-        if (session?.isActive == true) return
-        session = viewModelScope.launch {
+    fun startCamera(lifecycleOwner: LifecycleOwner) {
+        if (cameraJob?.isActive == true) return
+        cameraJob = viewModelScope.launch {
             // Driven from state, not a second source of truth, so what the camera
             // does can't drift from what the screen shows.
             poseCamera.poseFrames(
@@ -171,7 +174,11 @@ internal class WorkoutViewModel @Inject constructor(
         // into position — but only a started set counts.
         val session = setSession.onFrame(smoothed.setupCheck(), smoothed.timestampMillis)
         val repUpdate = if (session == SessionState.Active) countRep(smoothed) else null
+        repUpdate?.completedRep?.let(reps::add)
         val phase = repUpdate?.phase ?: state.value.phase
+        // Derived rather than incremented: the list is then the only thing that can
+        // be wrong, where a counter maintained alongside it can drift out of step.
+        val repsAtDepth = reps.count { it.isAtDepth(repConfig) }
 
         // Read first to skip the copy on the frames that change nothing, but write
         // through `update`: the buttons write this too.
@@ -186,21 +193,19 @@ internal class WorkoutViewModel @Inject constructor(
                     repCount = repCounter.repCount,
                     // Not in the guard above, and it does not need to be: `reps`
                     // only grows on a frame that also moves `repCount`.
-                    repsAtDepth = reps.count { rep -> rep.isAtDepth(repConfig) },
+                    repsAtDepth = repsAtDepth,
                     phase = phase,
                 )
             }
         }
 
-        // After the state is written, so the summary speaks the numbers the card is
-        // showing rather than the previous frame's. Every frame, not only the ones
-        // that changed something: a setup instruction has to be repeated on a timer,
-        // and the frame stream is that timer.
+        // Every frame, not only the ones that changed something: a setup instruction
+        // has to be repeated on a timer, and the frame stream is that timer.
         cues.onFrame(
             session = session,
             repUpdate = repUpdate,
             repCount = repCounter.repCount,
-            repsAtDepth = state.value.repsAtDepth,
+            repsAtDepth = repsAtDepth,
             timestampMillis = smoothed.timestampMillis,
         )?.let(speaker::speak)
     }
@@ -215,8 +220,6 @@ internal class WorkoutViewModel @Inject constructor(
             .squatSignals(frame.timestampMillis)
             .depthAngle
             .takeIf { frame.framing() == Framing.OK }
-        val update = repCounter.update(depthAngle, frame.timestampMillis)
-        update.completedRep?.let(reps::add)
-        return update
+        return repCounter.update(depthAngle, frame.timestampMillis)
     }
 }

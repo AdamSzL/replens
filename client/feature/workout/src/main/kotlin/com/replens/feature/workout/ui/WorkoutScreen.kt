@@ -50,7 +50,7 @@ fun WorkoutRoot(modifier: Modifier = Modifier) {
     val poseFrame = viewModel.poseFrame.collectAsStateWithLifecycle()
 
     LaunchedEffect(lifecycleOwner) {
-        viewModel.startSession(lifecycleOwner)
+        viewModel.startCamera(lifecycleOwner)
     }
 
     WorkoutScreen(
