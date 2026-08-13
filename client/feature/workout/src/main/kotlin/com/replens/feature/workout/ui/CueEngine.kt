@@ -12,53 +12,29 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * How long before the same correction is worth making again.
- *
  * Someone who squats shallow squats shallow on every rep, so a correction tied to
- * the fault alone would fire every two seconds and stop being heard by the third —
- * the cue decay that is already on the risk list. At ten seconds a correction lands
- * roughly every third rep, and the reps in between get their number spoken, which
- * is also what tells the user those reps still counted.
+ * the fault alone would fire every two seconds and stop being heard. At ten
+ * seconds it lands roughly every third rep, and the reps in between get their
+ * number spoken — which is also what tells the user they still counted.
  *
- * A guess to be tuned by ear, like the setup repeat interval.
+ * A guess to be tuned by ear.
  */
 private val CORRECTION_COOLDOWN = 10.seconds
 
 /**
- * Everything the app might say on one frame, reduced to the one line worth saying.
+ * Decides what is worth saying on this frame; [CueAnnouncer] then decides whether
+ * the listener has already heard it. The cooldown lives here rather than there
+ * because it changes *which* cue is chosen — its job is to let the rep number win.
  *
- * This and [CueAnnouncer] answer different questions, and the split is what keeps
- * either of them small: **this decides what is true and what matters**, the
- * announcer decides **whether the listener has already heard it**. So the timing
- * rule here is a cooldown that changes *which* cue is chosen, while the announcer's
- * `repeatAfter` only changes whether the chosen one is said again.
+ * **A correction and the rep number arrive on the same frame by construction** — a
+ * shallow rep is a completed rep — but the fault lands on one frame while the
+ * number stays true until the next rep. A correction that only won on the frame it
+ * fired would be cut off by "eight" one frame later, `QUEUE_FLUSH` and all, so it
+ * stands in for the number for as long as that rep is current: [correctingRepCount].
+ * Losing "eight" is self-correcting, because the next rep says "nine".
  *
- * ### Why a correction has to be held
- *
- * **A fault and the rep number arrive on the same frame by construction** — a
- * shallow rep is a completed rep — but they are offered at different rates: the
- * fault on one frame, the number on every frame until the next rep. So a
- * correction that only won on the frame it fired would be followed by "eight" one
- * frame later, and `QUEUE_FLUSH` would cut it off about 33 ms in. It has to stand
- * in for the number for as long as that rep is the current one, which is what
- * [correctingRepCount] does. Losing "eight" is self-correcting, because the next
- * rep says "nine"; losing "go deeper" is not.
- *
- * The cooldown is the other half of that, and it is not politeness: a held
- * correction suppresses the number of the rep it belongs to, so without it a set
- * of uniformly shallow reps would go quiet after the first one.
- *
- * ### What is squat-specific
- *
- * Two expressions, deliberately kept identifiable: [squatFormFault] below, and the
- * wording in `mapper/FormCue.kt`. Everything else — the session cues, the
- * arbitration, the cooldown — reads the same for any exercise, so exercise #2
- * should be parameters rather than a second engine. Not parameterized today,
- * because a strategy interface with one implementation is dead code.
- *
- * Frame-driven, like [com.replens.core.exercise.SetSession] and the counter: every
- * interval is measured against the timestamps the frames already carry, so nothing
- * here runs on in a backgrounded app whose camera has unbound.
+ * Squat-specific in exactly two expressions — [squatFormFault] and the wording in
+ * `mapper/FormCue.kt`; the rest would read the same for another exercise.
  *
  * Stateful and not thread-safe; one instance per screen.
  */
@@ -69,11 +45,9 @@ internal class CueEngine(private val repConfig: SquatRepConfig) {
     private var correcting: FormFault? = null
 
     /**
-     * The rep count [correcting] belongs to, and the whole hold mechanism. An
-     * abandoned descent counts nothing, so it pins the count it interrupted and the
-     * hold ends when the next real rep moves the number on — which is also what
-     * stops the previous rep's number being announced into the silence behind the
-     * correction.
+     * An abandoned descent counts nothing, so it pins the count it interrupted —
+     * which is what stops the previous rep's number being announced into the
+     * silence behind the correction.
      */
     private var correctingRepCount = 0
 
@@ -129,8 +103,6 @@ internal class CueEngine(private val repConfig: SquatRepConfig) {
             correctingRepCount = repCount
             correctedAtMillis = timestampMillis
         }
-        // A fault dropped for the cooldown leaves the rep number to be spoken as
-        // normal, which is how the count survives a run of shallow reps.
         return correcting.takeIf { repCount == correctingRepCount }
     }
 

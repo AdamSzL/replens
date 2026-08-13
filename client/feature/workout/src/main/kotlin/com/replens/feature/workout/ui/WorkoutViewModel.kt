@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Runs each frame through smoothing -> signal extraction -> rep counting. */
 @HiltViewModel
 internal class WorkoutViewModel @Inject constructor(
     private val poseCamera: PoseCameraDataSource,
@@ -36,7 +35,6 @@ internal class WorkoutViewModel @Inject constructor(
 
     val surfaceRequests: StateFlow<SurfaceRequest?> = poseCamera.surfaceRequests
 
-    /** Low-frequency screen state: changes about once per rep. */
     val state: StateFlow<WorkoutState>
         field = MutableStateFlow(WorkoutState())
 
@@ -49,8 +47,7 @@ internal class WorkoutViewModel @Inject constructor(
         field = MutableStateFlow(null)
 
     private val smoother = PoseSmoother()
-    // Held rather than defaulted twice, so the counter and the depth grading can
-    // never disagree about where the bottom is.
+    // Shared so the counter and the depth grading cannot disagree about the bottom.
     private val repConfig = SquatRepConfig()
     private val repCounter = SquatRepCounter(repConfig)
     private val setSession = SetSession()
@@ -75,18 +72,11 @@ internal class WorkoutViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Takes a [LifecycleOwner] because CameraX binds the camera to UI visibility —
-     * the feed must stop when the screen does, not when the ViewModel is cleared.
-     *
-     * Nothing to do with a *set*, which [SessionState] tracks; this is the camera
-     * running, which it does in every session state.
-     */
     fun startCamera(lifecycleOwner: LifecycleOwner) {
         if (cameraJob?.isActive == true) return
         cameraJob = viewModelScope.launch {
-            // Driven from state, not a second source of truth, so what the camera
-            // does can't drift from what the screen shows.
+            // Driven from state, so what the camera does can't drift from what the
+            // screen shows.
             poseCamera.poseFrames(
                 lifecycleOwner = lifecycleOwner,
                 facings = state.mapNotNull { it.cameraFacing },
@@ -144,27 +134,22 @@ internal class WorkoutViewModel @Inject constructor(
 
     private fun flipCamera() {
         val current = state.value
-        // Guarded rather than left to the hidden button: binding a lens the device
-        // doesn't have throws.
+        // The flip button is only shown when a second lens exists; guarded here
+        // anyway, because binding one the device doesn't have throws rather than
+        // no-ops.
         val next = current.cameraFacing?.opposite ?: return
         if (next !in current.cameraOptions?.facings.orEmpty()) return
-        // Landmarks from the new lens are mirrored and differently framed; smoothing
-        // them against the old ones would drag the skeleton across the screen. The
-        // rep count deliberately survives.
+        // Landmarks from the new lens are mirrored and differently framed, so
+        // smoothing across the flip would drag the skeleton. The count survives.
         smoother.reset()
         // The new lens reports its own range, so a ratio from the old one is meaningless.
         state.update { it.copy(cameraFacing = next, zoomRatio = 1f) }
     }
 
     private fun onFrame(frame: PoseFrame) {
-        // Publishing the smoothed pose keeps the overlay showing what the rep
-        // counter actually decided on — including the frames it refuses to measure,
-        // so a user standing too close can see why nothing is counting.
         val smoothed = smoother.smooth(frame)
         poseFrame.value = smoothed
 
-        // The camera runs in every session state — you have to see yourself to get
-        // into position — but only a started set counts.
         val session = setSession.onFrame(smoothed.setupCheck(), smoothed.timestampMillis)
         val repUpdate = if (session == SessionState.Active) {
             repCounter.update(smoothed.squatDepthAngle(), smoothed.timestampMillis)
@@ -173,13 +158,10 @@ internal class WorkoutViewModel @Inject constructor(
         }
         repUpdate?.completedRep?.let(reps::add)
         val phase = repUpdate?.phase ?: state.value.phase
-        // Derived rather than incremented: the list is then the only thing that can
-        // be wrong, where a counter maintained alongside it can drift out of step.
+        // Derived rather than incremented, so the list is the only thing that can
+        // be wrong.
         val repsAtDepth = reps.count { it.isAtDepth(repConfig) }
 
-        // Unguarded on purpose: a copy equal to the current value is discarded by
-        // StateFlow's own conflation, so the frames that change nothing cost one
-        // short-lived object against the ~2,000 a second this path already makes.
         state.update {
             it.copy(
                 session = session,
@@ -189,8 +171,6 @@ internal class WorkoutViewModel @Inject constructor(
             )
         }
 
-        // Every frame, not only the ones that changed something: a setup instruction
-        // has to be repeated on a timer, and the frame stream is that timer.
         cues.onFrame(
             session = session,
             repUpdate = repUpdate,

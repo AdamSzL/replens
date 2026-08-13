@@ -6,17 +6,13 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * Decides which cues actually reach the speaker.
+ * Turns a per-frame condition into speech a person would tolerate: the mapper
+ * reports the same cue ~30 times a second, and only what differs from the last
+ * line is spoken.
  *
- * The mapper describes what is true on every frame, so the same cue arrives ~30
- * times a second; this is what turns that into speech a person would tolerate.
- *
- * **Frame-driven**, like [com.replens.core.exercise.SetSession] and
- * [com.replens.core.exercise.squat.SquatRepCounter]: the repeat interval is
- * measured against the timestamps the frames already carry rather than a clock of
- * its own. A cue is a statement about what the camera is seeing, so when the
- * camera stops delivering there is nothing left to say — and a `delay` would go on
- * announcing it to a backgrounded app anyway.
+ * **Frame-driven** — intervals are measured against the timestamps frames carry
+ * rather than a clock of their own, so a backgrounded app whose camera has unbound
+ * falls silent by construction. A `delay` would keep announcing to it.
  *
  * Stateful and not thread-safe; one instance per screen.
  */
@@ -29,14 +25,13 @@ internal class CueAnnouncer {
      * Returns the line to speak now, or null for silence.
      *
      * Sameness is [UiText] equality, which is why its arms are data classes over a
-     * `List` — with an `Array` two identical cues would never compare equal and
-     * every frame would speak.
+     * `List`: with an `Array`, two identical cues never compare equal and every
+     * frame speaks.
      */
     fun onFrame(cue: SpokenCue?, timestampMillis: Long): UiText? {
-        // Silence deliberately does not clear what was last said. A gate that sits
-        // near its threshold flickers, and clearing here would let a torso fraction
-        // hovering at MAX_TORSO_FRACTION restart "step back from the phone" several
-        // times a second. The interval is about the listener, not the condition.
+        // Silence deliberately does not clear what was last said: a gate sitting
+        // near its threshold flickers, and clearing here would restart the same
+        // instruction several times a second.
         if (cue == null) return null
 
         if (cue.text == spoken) {
@@ -52,10 +47,8 @@ internal class CueAnnouncer {
     }
 
     /**
-     * Forgets what was said, so the next cue speaks however recently the same line
-     * was heard. Belongs to starting a set: pressing Start and getting four seconds
-     * of silence because the same instruction was given during the last attempt
-     * reads as a broken app, and the press itself proves the user is listening.
+     * Belongs to starting a set: pressing Start and hearing nothing because the
+     * same instruction was given during the last attempt reads as a broken app.
      */
     fun reset() {
         spoken = null
