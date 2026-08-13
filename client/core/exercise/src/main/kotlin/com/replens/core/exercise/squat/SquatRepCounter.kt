@@ -5,6 +5,7 @@ import com.replens.core.exercise.FormFault
 import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
 import com.replens.core.exercise.RepUpdate
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Thresholds for [SquatRepCounter], in **interior knee angle degrees** (180 is a
@@ -166,8 +167,7 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
         if (startedAt == null) return null
         return AbandonedDescent(
             deepestAngle = deepest,
-            startedAtMillis = startedAt,
-            abandonedAtMillis = timestampMillis,
+            total = (timestampMillis - startedAt).milliseconds,
         )
     }
 
@@ -185,9 +185,8 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
         return Rep(
             index = repCount,
             deepestAngle = deepest,
-            startedAtMillis = startedAt,
-            bottomAtMillis = bottomAt,
-            completedAtMillis = timestampMillis,
+            descent = (bottomAt - startedAt).milliseconds,
+            ascent = (timestampMillis - bottomAt).milliseconds,
         )
     }
 

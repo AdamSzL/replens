@@ -1,5 +1,7 @@
 package com.replens.core.exercise
 
+import kotlin.time.Duration
+
 /**
  * Vocabulary shared by every exercise, kept out of the per-exercise packages
  * (`…exercise.squat`, and whatever follows) so those never need to depend on
@@ -26,18 +28,18 @@ enum class RepPhase {
  * lenient so reps that felt real are not silently dropped, and quality is graded
  * from this number afterwards. Ten shallow reps should read as "10 reps, depth
  * 42%", not "0 reps".
+ *
+ * Durations rather than the timestamps they were measured from, so **the frame
+ * clock never leaves the counter**. Those timestamps are monotonic with an
+ * arbitrary origin, which would make a stored rep and a live one mean different
+ * things by the same field name.
  */
 data class Rep(
     val index: Int,
     val deepestAngle: Float,
-    val startedAtMillis: Long,
-    val bottomAtMillis: Long,
-    val completedAtMillis: Long,
-) {
-    val descentMillis: Long get() = bottomAtMillis - startedAtMillis
-    val ascentMillis: Long get() = completedAtMillis - bottomAtMillis
-    val totalMillis: Long get() = completedAtMillis - startedAtMillis
-}
+    val descent: Duration,
+    val ascent: Duration,
+)
 
 /**
  * A descent that turned back before reaching the counting threshold, so nothing
@@ -47,14 +49,13 @@ data class Rep(
  * someone doing quarter-squats gets no reps *and* no explanation, which is
  * indistinguishable from the app being broken. [deepestAngle] is also the
  * evidence per-user calibration needs — it is how far this body actually goes.
+ *
+ * One duration, not two: there is no bottom to split it at.
  */
 data class AbandonedDescent(
     val deepestAngle: Float,
-    val startedAtMillis: Long,
-    val abandonedAtMillis: Long,
-) {
-    val totalMillis: Long get() = abandonedAtMillis - startedAtMillis
-}
+    val total: Duration,
+)
 
 /** Result of feeding one frame to a rep counter. */
 data class RepUpdate(

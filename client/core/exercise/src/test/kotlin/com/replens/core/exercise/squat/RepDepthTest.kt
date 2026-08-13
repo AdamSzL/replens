@@ -4,15 +4,15 @@ import com.replens.core.exercise.Rep
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration.Companion.milliseconds
 
 private val config = SquatRepConfig()
 
 private fun rep(deepestAngle: Float) = Rep(
     index = 1,
     deepestAngle = deepestAngle,
-    startedAtMillis = 0L,
-    bottomAtMillis = 500L,
-    completedAtMillis = 1_000L,
+    descent = 500.milliseconds,
+    ascent = 500.milliseconds,
 )
 
 class RepDepthTest {

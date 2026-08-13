@@ -13,6 +13,7 @@ import com.replens.feature.workout.ui.mapper.message
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import kotlin.time.Duration.Companion.milliseconds
 
 private val config = SquatRepConfig()
 
@@ -31,9 +32,8 @@ private fun completed(deepestAngle: Float) = RepUpdate(
     completedRep = Rep(
         index = 1,
         deepestAngle = deepestAngle,
-        startedAtMillis = 0L,
-        bottomAtMillis = 500L,
-        completedAtMillis = 1_000L,
+        descent = 500.milliseconds,
+        ascent = 500.milliseconds,
     ),
 )
 
@@ -44,8 +44,7 @@ private val bailedOut = RepUpdate(
     phase = RepPhase.STANDING,
     abandonedDescent = AbandonedDescent(
         deepestAngle = 140f,
-        startedAtMillis = 0L,
-        abandonedAtMillis = 800L,
+        total = 800.milliseconds,
     ),
 )
 

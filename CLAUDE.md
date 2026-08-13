@@ -800,6 +800,22 @@ happened (ordering is `index`), and per-gap rest between reps (aggregate rest is
 still free — set duration minus the sum of rep durations). Both are additive if
 they ever matter.
 
+**Nothing reads `descent`/`ascent` yet, and they are kept anyway — a decision, not
+an oversight.** The justification is cost asymmetry rather than a planned feature:
+16 bytes a rep, ~96 KB a year, produced by a subtraction the counter already makes
+for `minRepDurationMillis`, and **unrecoverable after the fact** — add the columns
+in six months and every earlier rep is a permanent hole. That is the same
+"we have no reader yet" argument the landmark stream lost, four orders of
+magnitude cheaper (96 KB against 300 MB a year), which is why it comes out the
+other way. Two columns also yield three metrics: rep duration, time under tension
+(their sum), and rest (set duration minus that sum). And history and stats showing
+only angles would be a thin product — tempo is a real lifting metric and *"your
+descent slowed 40% over the last three reps"* is something a mirror cannot tell
+you, which is on-brand for the cue-decay problem.
+If they are still unread when history and stats ship, that is evidence to drop
+them — deleting a column nothing reads is a far easier call than adding one you
+wish you had.
+
 | | domain | entity | column |
 |---|---|---|---|
 | rep timings | `Duration` | `Long` | INTEGER millis |

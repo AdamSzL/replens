@@ -8,6 +8,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration
 
 private const val FRAME_INTERVAL_MILLIS = 33L
 private const val STANDING_ANGLE = 175f
@@ -245,9 +246,8 @@ class SquatRepCounterTest {
         val session = Session().feed(standing() + squat() + standing())
 
         val rep = session.completed.single()
-        assertTrue("descent should take time", rep.descentMillis > 0)
-        assertTrue("ascent should take time", rep.ascentMillis > 0)
-        assertEquals(rep.totalMillis, rep.descentMillis + rep.ascentMillis)
+        assertTrue("descent should take time", rep.descent > Duration.ZERO)
+        assertTrue("ascent should take time", rep.ascent > Duration.ZERO)
     }
 
     @Test
