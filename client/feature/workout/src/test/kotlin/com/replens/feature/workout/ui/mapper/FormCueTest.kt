@@ -33,7 +33,7 @@ class FormCueTest {
         assertEquals(emptySet<Any>(), corrections intersect counts.toSet())
     }
 
-    /** Repeating is [com.replens.feature.workout.ui.FormCueSelector]'s question. */
+    /** Repeating is [com.replens.feature.workout.ui.CueEngine]'s question. */
     @Test
     fun `a correction is never told to repeat itself`() {
         FormFault.entries.forEach { assertNull(it.spokenCue.repeatAfter) }

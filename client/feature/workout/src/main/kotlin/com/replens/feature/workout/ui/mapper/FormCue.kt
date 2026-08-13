@@ -8,7 +8,7 @@ import com.replens.feature.workout.ui.model.SpokenCue
 /**
  * What to say about a fault.
  *
- * No `repeatAfter` on either: [com.replens.feature.workout.ui.FormCueSelector]
+ * No `repeatAfter` on either: [com.replens.feature.workout.ui.CueEngine]'s cooldown
  * already answers how often a correction is worth making, and a repeat interval
  * here would be a second answer to the same question that could disagree with it.
  */

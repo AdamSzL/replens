@@ -16,13 +16,11 @@ import com.replens.core.exercise.setupCheck
 import com.replens.core.exercise.squat.SquatRepConfig
 import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.isAtDepth
-import com.replens.core.exercise.squat.squatFormFault
 import com.replens.core.exercise.squat.squatSignals
 import com.replens.core.model.PoseFrame
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
-import com.replens.feature.workout.ui.mapper.spokenCue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,8 +58,7 @@ internal class WorkoutViewModel @Inject constructor(
     private val repConfig = SquatRepConfig()
     private val repCounter = SquatRepCounter(repConfig)
     private val setSession = SetSession()
-    private val announcer = CueAnnouncer()
-    private val formCues = FormCueSelector()
+    private val cues = CueEngine(repConfig)
 
     /** Kept for the set summary; the counter itself only ever knows the total. */
     private val reps = mutableListOf<Rep>()
@@ -116,8 +113,7 @@ internal class WorkoutViewModel @Inject constructor(
 
     private fun startSet() {
         repCounter.reset()
-        announcer.reset()
-        formCues.reset()
+        cues.reset()
         reps.clear()
         state.update {
             it.copy(
@@ -177,16 +173,6 @@ internal class WorkoutViewModel @Inject constructor(
         val repUpdate = if (session == SessionState.Active) countRep(smoothed) else null
         val phase = repUpdate?.phase ?: state.value.phase
 
-        // Consulted only while counting, which is what keeps a held fault from
-        // replacing the summary the moment the set ends.
-        val fault = repUpdate?.let {
-            formCues.onFrame(
-                fault = it.squatFormFault(repConfig),
-                repCount = repCounter.repCount,
-                timestampMillis = smoothed.timestampMillis,
-            )
-        }
-
         // Read first to skip the copy on the frames that change nothing, but write
         // through `update`: the buttons write this too.
         val current = state.value
@@ -210,11 +196,11 @@ internal class WorkoutViewModel @Inject constructor(
         // showing rather than the previous frame's. Every frame, not only the ones
         // that changed something: a setup instruction has to be repeated on a timer,
         // and the frame stream is that timer.
-        announcer.onFrame(
-            // The elvis is the whole of the arbitration. A fault does not queue
-            // behind the rep number, it stands in for it — see FormCueSelector.
-            cue = fault?.spokenCue
-                ?: session.spokenCue(repCounter.repCount, state.value.repsAtDepth),
+        cues.onFrame(
+            session = session,
+            repUpdate = repUpdate,
+            repCount = repCounter.repCount,
+            repsAtDepth = state.value.repsAtDepth,
             timestampMillis = smoothed.timestampMillis,
         )?.let(speaker::speak)
     }
