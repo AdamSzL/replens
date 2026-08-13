@@ -1,6 +1,7 @@
 package com.replens.core.exercise.squat
 
 import com.replens.core.exercise.AbandonedDescent
+import com.replens.core.exercise.FormFault
 import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
 import com.replens.core.exercise.RepUpdate
@@ -223,3 +224,18 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
  */
 fun Rep.isAtDepth(config: SquatRepConfig): Boolean =
     deepestAngle <= config.goodDepthAngle
+
+/**
+ * What this frame's update is evidence of, or null on the frames that are just
+ * movement.
+ *
+ * At most one arm can match: [SquatRepCounter] reports a completed rep from
+ * ASCENDING and an abandoned descent from DESCENDING, and a frame runs one of
+ * those. So the order below records the intended precedence for whatever is added
+ * next rather than resolving a collision that exists today.
+ */
+fun RepUpdate.squatFormFault(config: SquatRepConfig): FormFault? = when {
+    abandonedDescent != null -> FormFault.ABANDONED_DESCENT
+    completedRep?.isAtDepth(config) == false -> FormFault.SHALLOW_REP
+    else -> null
+}

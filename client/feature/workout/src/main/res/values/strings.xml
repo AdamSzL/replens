@@ -24,6 +24,14 @@
          because a coach counts "one, two, three", and because it has to fit in the
          gap between two reps. -->
     <string name="workout_cue_rep">%1$d</string>
+    <!-- Spoken only, and both kept short because they land at rep completion and
+         have to fit in the gap before the next rep. "Go deeper" replaces the rep
+         number rather than following it: "eight, go deeper" is roughly three times
+         as long and the gap is not that big. -->
+    <string name="workout_cue_go_deeper">Go deeper</string>
+    <!-- Says what happened rather than what to do, because nothing counted and
+         "go deeper" would imply something did. -->
+    <string name="workout_cue_all_the_way_down">All the way down</string>
     <!-- Spoken at the end of a set. Redundant today, since the only way to finish
          is to walk over and press the button, and the card is then right there.
          It earns its place when a set can end without a press - a rep target, or

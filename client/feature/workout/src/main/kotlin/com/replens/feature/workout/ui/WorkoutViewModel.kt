@@ -8,6 +8,7 @@ import com.replens.core.audio.Speaker
 import com.replens.core.exercise.Framing
 import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
+import com.replens.core.exercise.RepUpdate
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetSession
 import com.replens.core.exercise.framing
@@ -15,6 +16,7 @@ import com.replens.core.exercise.setupCheck
 import com.replens.core.exercise.squat.SquatRepConfig
 import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.isAtDepth
+import com.replens.core.exercise.squat.squatFormFault
 import com.replens.core.exercise.squat.squatSignals
 import com.replens.core.model.PoseFrame
 import com.replens.core.pose.CameraFacing
@@ -59,6 +61,7 @@ internal class WorkoutViewModel @Inject constructor(
     private val repCounter = SquatRepCounter(repConfig)
     private val setSession = SetSession()
     private val announcer = CueAnnouncer()
+    private val formCues = FormCueSelector()
 
     /** Kept for the set summary; the counter itself only ever knows the total. */
     private val reps = mutableListOf<Rep>()
@@ -114,6 +117,7 @@ internal class WorkoutViewModel @Inject constructor(
     private fun startSet() {
         repCounter.reset()
         announcer.reset()
+        formCues.reset()
         reps.clear()
         state.update {
             it.copy(
@@ -170,8 +174,18 @@ internal class WorkoutViewModel @Inject constructor(
         // The camera runs in every session state — you have to see yourself to get
         // into position — but only a started set counts.
         val session = setSession.onFrame(smoothed.setupCheck(), smoothed.timestampMillis)
-        val phase =
-            if (session == SessionState.Active) countRep(smoothed) else state.value.phase
+        val repUpdate = if (session == SessionState.Active) countRep(smoothed) else null
+        val phase = repUpdate?.phase ?: state.value.phase
+
+        // Consulted only while counting, which is what keeps a held fault from
+        // replacing the summary the moment the set ends.
+        val fault = repUpdate?.let {
+            formCues.onFrame(
+                fault = it.squatFormFault(repConfig),
+                repCount = repCounter.repCount,
+                timestampMillis = smoothed.timestampMillis,
+            )
+        }
 
         // Read first to skip the copy on the frames that change nothing, but write
         // through `update`: the buttons write this too.
@@ -197,7 +211,10 @@ internal class WorkoutViewModel @Inject constructor(
         // that changed something: a setup instruction has to be repeated on a timer,
         // and the frame stream is that timer.
         announcer.onFrame(
-            cue = session.spokenCue(repCounter.repCount, state.value.repsAtDepth),
+            // The elvis is the whole of the arbitration. A fault does not queue
+            // behind the rep number, it stands in for it — see FormCueSelector.
+            cue = fault?.spokenCue
+                ?: session.spokenCue(repCounter.repCount, state.value.repsAtDepth),
             timestampMillis = smoothed.timestampMillis,
         )?.let(speaker::speak)
     }
@@ -207,13 +224,13 @@ internal class WorkoutViewModel @Inject constructor(
      * which is the state the counter already knows how to abandon a rep from. The
      * overlay still draws it, so the user can see why nothing counts.
      */
-    private fun countRep(frame: PoseFrame): RepPhase {
+    private fun countRep(frame: PoseFrame): RepUpdate {
         val depthAngle = frame.pose
             .squatSignals(frame.timestampMillis)
             .depthAngle
             .takeIf { frame.framing() == Framing.OK }
         val update = repCounter.update(depthAngle, frame.timestampMillis)
         update.completedRep?.let(reps::add)
-        return update.phase
+        return update
     }
 }
