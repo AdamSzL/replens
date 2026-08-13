@@ -5,18 +5,15 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.replens.core.audio.Speaker
-import com.replens.core.exercise.Framing
 import com.replens.core.exercise.Rep
 import com.replens.core.exercise.RepPhase
-import com.replens.core.exercise.RepUpdate
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetSession
-import com.replens.core.exercise.framing
 import com.replens.core.exercise.setupCheck
 import com.replens.core.exercise.squat.SquatRepConfig
 import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.isAtDepth
-import com.replens.core.exercise.squat.squatSignals
+import com.replens.core.exercise.squat.squatDepthAngle
 import com.replens.core.model.PoseFrame
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.PoseCameraDataSource
@@ -166,14 +163,19 @@ internal class WorkoutViewModel @Inject constructor(
 
     private fun onFrame(frame: PoseFrame) {
         // Publishing the smoothed pose keeps the overlay showing what the rep
-        // counter actually decided on.
+        // counter actually decided on — including the frames it refuses to measure,
+        // so a user standing too close can see why nothing is counting.
         val smoothed = smoother.smooth(frame)
         poseFrame.value = smoothed
 
         // The camera runs in every session state — you have to see yourself to get
         // into position — but only a started set counts.
         val session = setSession.onFrame(smoothed.setupCheck(), smoothed.timestampMillis)
-        val repUpdate = if (session == SessionState.Active) countRep(smoothed) else null
+        val repUpdate = if (session == SessionState.Active) {
+            repCounter.update(smoothed.squatDepthAngle(), smoothed.timestampMillis)
+        } else {
+            null
+        }
         repUpdate?.completedRep?.let(reps::add)
         val phase = repUpdate?.phase ?: state.value.phase
         // Derived rather than incremented: the list is then the only thing that can
@@ -210,16 +212,4 @@ internal class WorkoutViewModel @Inject constructor(
         )?.let(speaker::speak)
     }
 
-    /**
-     * A frame that fails the framing check reads as "no angle", not as a bad one —
-     * which is the state the counter already knows how to abandon a rep from. The
-     * overlay still draws it, so the user can see why nothing counts.
-     */
-    private fun countRep(frame: PoseFrame): RepUpdate {
-        val depthAngle = frame.pose
-            .squatSignals(frame.timestampMillis)
-            .depthAngle
-            .takeIf { frame.framing() == Framing.OK }
-        return repCounter.update(depthAngle, frame.timestampMillis)
-    }
 }

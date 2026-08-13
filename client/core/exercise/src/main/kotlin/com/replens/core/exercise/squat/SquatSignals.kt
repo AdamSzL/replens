@@ -1,8 +1,11 @@
 package com.replens.core.exercise.squat
 
 import com.replens.core.exercise.DEFAULT_MIN_LIKELIHOOD
+import com.replens.core.exercise.Framing
+import com.replens.core.exercise.framing
 import com.replens.core.model.BodyPose
 import com.replens.core.model.LandmarkType
+import com.replens.core.model.PoseFrame
 import com.replens.core.posemath.Point
 import com.replens.core.posemath.angleDegrees
 import com.replens.core.posemath.angleFromVerticalDegrees
@@ -72,6 +75,26 @@ fun BodyPose.squatSignals(
         torsoLeanDegrees = torsoLean(),
     )
 }
+
+/**
+ * The one number [SquatRepCounter] consumes, or null when this frame is not worth
+ * measuring.
+ *
+ * A frame that fails the framing check yields **no reading** rather than a bad
+ * one, deliberately the same answer as legs the detector could not resolve — so
+ * the counter's existing missing-frame handling abandons a rep in progress and
+ * nothing new has to know that [Framing] exists.
+ *
+ * Passing the angle through instead is the bug this exists for: carrying the
+ * phone at arm's length sweeps a fictional skeleton's knee through
+ * 168 -> 115 -> 168, which is one clean rep off a face.
+ */
+fun PoseFrame.squatDepthAngle(
+    maxTorsoFraction: Float = Framing.MAX_TORSO_FRACTION,
+    minLikelihood: Float = DEFAULT_MIN_LIKELIHOOD,
+): Float? = pose.squatSignals(timestampMillis, minLikelihood)
+    .depthAngle
+    .takeIf { framing(maxTorsoFraction) == Framing.OK }
 
 private fun BodyPose.confidentPoint(type: LandmarkType, minLikelihood: Float): Point? =
     this[type]?.takeIf { it.inFrameLikelihood >= minLikelihood }?.point
