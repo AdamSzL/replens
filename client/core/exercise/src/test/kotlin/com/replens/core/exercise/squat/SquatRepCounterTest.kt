@@ -109,6 +109,7 @@ class SquatRepCounterTest {
         val session = Session().feed(standing() + List(5) { squat() }.flatten() + standing())
 
         assertEquals(5, session.counter.repCount)
+        // 1-based and sequential, which is what a user is told.
         assertEquals(listOf(1, 2, 3, 4, 5), session.completed.map(Rep::index))
     }
 

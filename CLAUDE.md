@@ -715,6 +715,24 @@ reps            id, setId (FK, indexed, cascade)       ← Rep / RepEntity
                 descentMillis, ascentMillis
 ```
 
+**`index` stays on `Rep`, and it is 1-based** — it is the number a user is told.
+Removing it was tried on 2026-08-14 and reverted, so the reasoning is worth
+keeping: it is redundant *live* (`SquatRepCounter.repCount` is the same number,
+which is why the ViewModel passes `repCount` to `CueEngine` separately) and
+redundant *in a list* (position says it). It earns its place at the persistence
+boundary. Re-deriving it on write makes **"the list is complete and in order" a
+silent invariant of the mapper** rather than data, the entity → domain → entity
+round trip stops being lossless, and every reader wanting to name a rep pays an
+off-by-one — `reps.withIndex().minBy { it.value.deepestAngle }` then `+ 1`, at a
+user-facing call site, for a feature that is actually planned ("show me the rep
+you got wrong").
+The argument for removing it was that `Rep` should carry measurements only, with
+the fixtures passing `index = 1` as noise offered as evidence. That evidence does
+not hold: the same fixtures pass `descent = 500.milliseconds` as noise too, in
+tests that only care about the angle. `ORDER BY id` would also have been sound —
+a completed set is immutable, written once in one transaction — so the column was
+never load-bearing for ordering either. The round trip is what decides it.
+
 `ExerciseSet`, not `WorkoutSet` — the latter parses as "the set belonging to the
 workout", which read as *the whole workout* to a fresh pair of eyes and is exactly
 the ambiguity that made `session` mean two things in the ViewModel. `ExerciseSet`

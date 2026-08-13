@@ -33,6 +33,12 @@ enum class RepPhase {
  * clock never leaves the counter**. Those timestamps are monotonic with an
  * arbitrary origin, which would make a stored rep and a live one mean different
  * things by the same field name.
+ *
+ * [index] is 1-based, so it is the number a user is told. Carried on the rep
+ * rather than left to list position because the round trip has to survive one:
+ * re-deriving it on write would make "the list is complete and in order" a silent
+ * invariant of the mapper, and every reader wanting to name a rep would pay an
+ * off-by-one.
  */
 data class Rep(
     val index: Int,
