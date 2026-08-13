@@ -134,13 +134,12 @@ internal class WorkoutViewModel @Inject constructor(
 
     private fun flipCamera() {
         val current = state.value
-        // The flip button is only shown when a second lens exists; guarded here
-        // anyway, because binding one the device doesn't have throws rather than
-        // no-ops.
+        // The button is hidden without a second lens; guarded anyway, because
+        // binding one the device lacks throws rather than no-ops.
         val next = current.cameraFacing?.opposite ?: return
         if (next !in current.cameraOptions?.facings.orEmpty()) return
-        // Landmarks from the new lens are mirrored and differently framed, so
-        // smoothing across the flip would drag the skeleton. The count survives.
+        // The new lens is mirrored and differently framed, so smoothing across the
+        // flip would drag the skeleton. The count deliberately survives.
         smoother.reset()
         // The new lens reports its own range, so a ratio from the old one is meaningless.
         state.update { it.copy(cameraFacing = next, zoomRatio = 1f) }
