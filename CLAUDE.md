@@ -693,6 +693,166 @@ guard, and it silently never reaches the screen. No compile error and no test
 catches that. **A field list that must be kept in sync by hand is not worth 1% of
 an allocation budget.**
 
+## Local data model — decided 2026-08-14, before any code
+
+Three tables. Domain names avoid `Set`, which shadows `kotlin.collections.Set`;
+**table names do not have to match class names**, so the schema keeps the clean
+plurals and the Kotlin type pays one extra word.
+
+```
+workouts        id, startedAt, endedAt          ← Workout
+                serverId?, updatedAt, isDirty
+
+sets            id, workoutId (FK, indexed, cascade)   ← ExerciseSet / SetEntity
+                exercise                        ← String, tolerant read
+                startedAt, endedAt
+                repCount, repsAtDepth
+                abandonedCount, deepestAbandonedAngle?
+                serverId?, updatedAt, isDirty
+
+reps            id, setId (FK, indexed, cascade)       ← Rep / RepEntity
+                index, deepestAngle
+                descentMillis, ascentMillis
+```
+
+`ExerciseSet`, not `WorkoutSet` — the latter parses as "the set belonging to the
+workout", which read as *the whole workout* to a fresh pair of eyes and is exactly
+the ambiguity that made `session` mean two things in the ViewModel. `ExerciseSet`
+names the row by the column that actually discriminates it (`exercise`), and it
+cannot be falsified by a future exercise that is not rep-based, which `RepSet`
+could.
+
+**A workout is a real entity, but has no "finish" trigger.** There is no button
+for it and there should not be, because the common real behavior is pressing
+nothing at all — you finish your last set, pick the phone up, close the app. Any
+rule that depends on a press gets the usual case wrong. Instead, the boundary is
+inferred **when a set starts**:
+
+> attach to the most recent workout if its last set ended under **60 minutes**
+> ago, otherwise open a new one.
+
+No close event, so an abandoned workout is already correct: `endedAt` is just its
+last set's. Killing the app mid-workout is safe. Pressing Done and changing your
+mind five minutes later still reads as one workout, where an explicit close would
+have produced two. An explicit **Finish workout** stays available later as a
+purely additive flag that makes the gap rule skip that workout — add it only with
+evidence that forcing a boundary is wanted.
+
+**Reps are rows, not a blob.** 3 workouts/week × 4 sets × 10 reps ≈ 6,000 rows a
+year, which is nothing for SQLite, and rows are queryable — that *is* the stats
+milestone — and migratable without hand-written JSON versioning.
+
+**`repCount` / `repsAtDepth` are denormalized onto the set on purpose.** This does
+not contradict the derive-don't-store rule that governs `repsAtDepth` in the
+ViewModel: that rule exists because a live counter can drift from its source, and
+**a completed set is immutable**, so there is nothing to drift from. A history list
+that JOINs and aggregates per row to print "12 reps" is the wrong trade.
+
+**Abandoned descents are two columns on the set**, not their own table and not
+dropped. The non-obvious reason is calibration: the trigger is *"reaches
+`DESCENDING` and never `BOTTOM`"*, which **is** an abandoned descent, so storing
+`deepestAbandonedAngle` turns calibration from a live heuristic into a question
+asked of history — *"across your last 20 attempts you never got below 128°"* —
+which is a far better basis for offering it than one bad session. Note the name is
+a **minimum**: 128° is shallower than 95°, consistent with `Rep.deepestAngle`.
+
+**The landmark stream is deliberately not stored.** Measured, not guessed: 33
+landmarks × 4 floats = 528 bytes/frame, ~81 frames for a 3 s rep ≈ **42 KB per
+rep**, ~500 KB per set, **~300 MB per year** — CLAUDE.md previously called this
+"kilobytes", which was optimistic by three orders of magnitude. Quantizing x/y to
+16-bit and dropping z and likelihood still leaves ~80 MB/year. Rejected for now
+because you would be designing a serialization format with **no reader to validate
+it against**, and retention (when do old streams get deleted?) is a whole design
+problem. `reps` has a stable id, so a `rep_frames` table is additive whenever the
+feature arrives.
+The planned first version is **in-memory only** — replay the reps of the workout
+you just did, on the summary screen, nothing persisted. That is a genuine stepping
+stone rather than a dead end, because the compaction it requires (one `FloatArray`
+per rep, ~21 KB, instead of retaining ~130k live `Landmark` objects and turning
+cheap young-gen churn into retained old-gen pressure) **is** the serialization
+format. What it does not do is discharge the risk the roadmap assigns to replay:
+CLAUDE.md lists it as an answer to **cue novelty decay**, and a replay that
+vanishes on app close cannot be part of "history worth browsing".
+
+### Time types: domain speaks in time, entities speak in the column's primitive
+
+`Rep` was reshaped for this (2026-08-14) and came out **better on its own merits**:
+
+```kotlin
+data class Rep(val index: Int, val deepestAngle: Float,
+               val descent: Duration, val ascent: Duration)
+```
+
+The three timestamps it used to carry — `startedAtMillis`, `bottomAtMillis`,
+`completedAtMillis` — existed **only to be subtracted from each other**; the
+durations were already there as derived properties, and nothing outside the
+counter and its test fixtures read the raw values. Storing durations means the
+frame clock never escapes `SquatRepCounter`, so a loaded `Rep` and a live `Rep`
+cannot mean different things by the same field name — the ambiguity stops existing
+rather than getting documented.
+
+`Duration` over `Long` because this project already has the scar: `READY_FRAMES =
+14`, *"~0.5 s at ~27 fps"*, was a full second at 15 fps. `SetSession.settleFor` and
+`SpokenCue.repeatAfter` are `Duration` for the same reason.
+
+What it gives up, neither of which is wanted today: *when* within a set a rep
+happened (ordering is `index`), and per-gap rest between reps (aggregate rest is
+still free — set duration minus the sum of rep durations). Both are additive if
+they ever matter.
+
+| | domain | entity | column |
+|---|---|---|---|
+| rep timings | `Duration` | `Long` | INTEGER millis |
+| set/workout times | `Instant` | `Long` | INTEGER epoch millis |
+
+`java.time` is available natively at **minSdk 26** — no desugaring, no
+kotlinx-datetime.
+
+**The conversion lives in the mapper, not a Room converter.** The entity *is* the
+schema: `descentMillis: Long` says "INTEGER, milliseconds" to anyone who opens the
+file, where `descent: Duration` says "something, converted elsewhere". Same
+instinct as duplicating DTOs rather than sharing them — make the boundary felt.
+
+### Room 3, not Room 2 — decided 2026-08-14
+
+`androidx.room3:room3-runtime` 3.0.1, **stable** since 2026-07-01. Not adventurism:
+
+- **Coroutine-first is mandatory** — every DAO function is `suspend` or returns
+  `Flow`, there is no Executor support, and `InvalidationTracker` is Flow-based.
+  There is not an `Executor` anywhere in this codebase.
+- **KSP required, Kotlin-only codegen.** KSP is already on the classpath for Hilt;
+  there is no KAPT to avoid.
+- **The main migration pain does not apply.** `@TypeConverter` became
+  `@ColumnTypeConverter` — and per the rule above we need **no converters at all**.
+- **Greenfield makes it free**, exactly as with Ktor Client. New Maven group, so
+  there is nothing to migrate and being wrong costs a rename.
+
+The honest cost: six weeks old as stable, so search results and snippets will be
+Room 2 with different imports and API shapes (`withWriteTransaction`, not
+`runInTransaction`; `useReaderConnection`, not `query`). The Room Gradle plugin is
+`androidx.room3` and must be declared `apply false` in the root build file like
+every other third-party plugin (see *Toolchain gotchas*). Commit the schema
+directory from day one so migrations are reviewable.
+
+### Where these live
+
+`Workout` and `ExerciseSet` go in **`:core:exercise`** beside `Rep` and
+`SetSession` — pure Kotlin, same vocabulary, and `Rep` is already there, so
+putting them in `:core:model` would force a dependency in the wrong direction.
+It widens that module's charter slightly from "exercise knowledge" to "exercise
+vocabulary and knowledge", which is the smaller cost.
+
+`:core:database` owns entities, DAOs and the database; `:core:data` owns the
+repository (interface *and* impl) and the mappers. The repository is shared rather
+than per-feature because `:feature:workout` writes it while `:feature:history` and
+`:feature:stats` read it — the one case CLAUDE.md's per-feature `domain/` rule
+does not cover.
+
+**Sign-out is an unanswered question.** With no `userId` locally, the database is
+"this device's history" and signing in claims it — so if user A signs out and B
+signs in, B inherits A's sets. That is a milestone-4 problem, named here so the
+answer is a decision rather than a migration.
+
 ## Product decisions
 
 **Voice feedback: platform TTS, on-device.** Non-obvious requirements, all of
@@ -1127,8 +1287,8 @@ distribution and build cache.
   does not move either. Fixable in two lines now that the engine owns the
   announcer (`announcer.reset()` on a deliberate re-emission), but that is a guess
   until it has annoyed somebody.
-- **Next:** hear the above on device, then Milestone 3 — Room history, Nav 3, the
-  stats screen. 193 unit tests.
+- **Next:** hear the above on device, then Milestone 3 — see *Local data model*,
+  which is decided but unbuilt. 193 unit tests.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
   and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is
