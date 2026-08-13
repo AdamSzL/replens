@@ -171,14 +171,15 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :app                MainActivity: camera permission gate -> WorkoutRoot. Later:
                     NavDisplay, back stack, every cross-feature edge.
 :feature:workout    …workout.ui/            the five files (no Event yet), plus
-                                            CueAnnouncer — the speech gate
-                    …workout.ui.mapper/     SessionCue: SetupCheck/SessionState
-                                            -> UiText, drawn and spoken from one
-                                            source
+                                            CueEngine (what to say), CueAnnouncer
+                                            (whether to say it again) and
+                                            CameraSelection (which lens to open on)
+                    …workout.ui.mapper/     SessionCue + FormCue: domain state ->
+                                            UiText, drawn and spoken from one source
                     …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
-                    22 tests.
+                    39 tests.
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
@@ -192,8 +193,8 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :core:posemath      Point, joint angles, torso size, normalized distances, line
                     deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
                     domain-free (no thresholds, no exercise names). 55 tests.
-:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 76 tests.
-                      …exercise/       Rep, RepPhase, RepUpdate, Framing,
+:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 86 tests.
+                      …exercise/       Rep, RepPhase, RepUpdate, Framing, FormFault,
                                        SetupCheck, SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
 ```
@@ -724,14 +725,40 @@ confirmation that line would have given.
   rep; "eight, go deeper" is ~1.5 s and most of the slack is gone. This is a
   second, independent route to the decision below that **richness belongs in the
   post-set summary** — no latency budget there.
-- **When form cues land, they outrank the rep number**, because both fire at rep
-  completion and `QUEUE_FLUSH` means one erases the other. Losing "eight" is
-  self-correcting — the next rep says "nine" — and losing "knees out" is not.
+- **A form cue does not outrank the rep number, it replaces it** — and the
+  difference is the whole of the arbitration (built 2026-08-13). Both fire at rep
+  completion, so `QUEUE_FLUSH` means one erases the other; the trap is that they
+  are offered at *different rates*. The fault lands on one frame, the number stays
+  true on every frame until the next rep. A cue that merely won on the frame it
+  fired would be followed by "eight" ~33 ms later and cut off mid-word — worse
+  than either alone. So a correction stands in for the number **for as long as
+  that rep is the current one**, keyed on the rep count. Losing "eight" is
+  self-correcting; losing "go deeper" is not.
+- **The cooldown on corrections prevents silence, not noise.** Second-order
+  consequence of the hold: a held correction suppresses the number of the rep it
+  belongs to, so a uniformly shallow set would say "go deeper" once and then go
+  quiet for the rest of the set. `CORRECTION_COOLDOWN` (10 s, a guess to be tuned
+  by ear) lets the correction step aside so the numbers flow again — which is also
+  what tells the user those reps still counted.
 - **Cue text is chosen by a shared mapper in the feature module**
   (`ui/mapper/SessionCue.kt`), not carried on the domain type. CLAUDE.md
   previously predicted `Waiting(message: UiText)`; that is wrong, because
   `:core:exercise` is pure Kotlin and `UiText` is Android. One mapper feeds both
   the composable and the speaker, so the drawn and spoken lines cannot drift.
+- **Two classes, two questions — `CueEngine` decides *what is worth saying*,
+  `CueAnnouncer` decides *whether the listener has already heard it*.** The engine
+  owns the announcer, so the ViewModel hands over what the frame produced and
+  speaks whatever comes back. The dividing rule: **anything that changes which cue
+  is chosen belongs to the engine; anything that changes whether the chosen one is
+  repeated belongs to the announcer.** That is why the cooldown is the engine's —
+  its job is to let the rep number *win* — while `SpokenCue.repeatAfter` is the
+  announcer's, and `SpokenCue` is exactly the message between them.
+  Only the engine gets rewritten per exercise, and even then in two expressions:
+  fault detection (`squatFormFault`) and wording (`mapper/FormCue.kt`). The
+  session cues, the arbitration and the cooldown read the same for any exercise,
+  so **exercise #2 should be parameters, not a second engine** — not
+  parameterized today, because a strategy interface with one implementation is
+  dead code.
 - **`CueAnnouncer` turns a per-frame condition into tolerable speech.** The
   mapper describes what is true on every frame; the announcer speaks only what
   **differs from the last line**, with an optional repeat interval. Two
@@ -888,6 +915,17 @@ doubles as the CSV fixture row format. Average rather than min/max: a large
 left/right disagreement is far more often measurement error than real asymmetry,
 and averaging cancels error where min/max amplify it.
 
+`PoseFrame.squatDepthAngle` composes the two and applies the framing gate, so the
+rule *"a badly framed frame reads as no reading rather than a bad one"* is stated
+once, in core, with both thresholds as arguments a test supplies. It is a
+composition rather than a third layer: `SquatSignals` stays public and separate
+because `FixtureGenerator` needs **all five** of its fields for the CSV, and
+because per-leg gating and framing fail for unrelated reasons and deserve
+unrelated tests. Note this means `femurInclination` and `torsoLeanDegrees` have no
+production consumer at all — they exist to reach the fixtures, so that depth
+scoring and forward lean can be tuned against footage later. An "unused field"
+cleanup there costs a regeneration of all eight clips.
+
 ### Reference frames — which rules need true vertical
 
 | signal | measured against | needs true vertical? |
@@ -1021,7 +1059,7 @@ are committed. If it works out, enable it in a convention plugin.
 unit tests, and screenshot validation once it exists. Cache the Gradle
 distribution and build cache.
 
-## Current status (2026-08-11)
+## Current status (2026-08-13)
 
 - **Milestone 1 (camera + overlay): done**, validated on device.
 - **Milestone 2 steps 1–4: done**, validated on device — 8 reps performed, 8
@@ -1072,14 +1110,25 @@ distribution and build cache.
   service and is left alone); and at normal rep cadence nothing truncates.
   **A set is now startable and finishable by ear alone**, which was the point —
   the screen is unreadable from three meters.
-- **Next:** form rules — the two with evidence already behind them, shallow rep
-  (`Rep.isAtDepth`) and abandoned descent (`AbandonedDescent`). Both fire *after*
-  a rep, so neither needs a new threshold or a latency budget. **Priority
-  arbitration lands with them, not before**: an arbitrator over one cue is dead
-  code, but a form cue and the rep number collide on the same frame by
-  construction. Valgus, forward lean and heel lift stay parked — they need
-  research and tuning against footage, and two of them need the vertical
-  reference gated on the setup check. 166 unit tests.
+- **The first two form cues: done** (2026-08-13), **not yet heard on device.**
+  `FormFault.SHALLOW_REP` and `ABANDONED_DESCENT`, both decided *after* a rep off
+  a `RepUpdate` the counter already produced, so neither needed a new threshold or
+  a latency budget. The shallow arm lives in the gap between `bottomEnterAngle`
+  (115°, what counts) and `goodDepthAngle` (95°, what is parallel) — grading it
+  against the counting threshold instead would make the fault unreachable.
+  Arbitration turned out to be one elvis plus a hold rather than a priority
+  system; see *Voice feedback*. Valgus, forward lean and heel lift stay parked —
+  they need research and tuning against footage, and two of them need the vertical
+  reference gated on the setup check.
+- **Two things to judge by ear, both deliberate rather than oversights:** a
+  shallow rep 8 means you hear "go deeper" and never "eight", and **consecutive
+  identical faults are silent** — the held cue never changes, so the announcer has
+  nothing new to say. Weakest for repeated abandoned descents, where the count
+  does not move either. Fixable in two lines now that the engine owns the
+  announcer (`announcer.reset()` on a deliberate re-emission), but that is a guess
+  until it has annoyed somebody.
+- **Next:** hear the above on device, then Milestone 3 — Room history, Nav 3, the
+  stats screen. 193 unit tests.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
   and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is
@@ -1097,7 +1146,11 @@ distribution and build cache.
   Apparent size can. `Framing` (`:core:exercise`) rejects a frame whose torso
   spans too much of the frame height, and a rejected frame yields a **null depth
   angle** rather than a special case — which is the "no reading" path
-  `maxMissingFrames` already handles, so it needed no new state machine.
+  `maxMissingFrames` already handles, so it needed no new state machine. The gate
+  is applied in `PoseFrame.squatDepthAngle`, not in the ViewModel: it is a rule,
+  not wiring, and the test that matters asserts that a too-close frame has a
+  perfectly good knee angle and is refused anyway — which is the shape of the bug,
+  since a hallucinated skeleton reads fine too.
 - **The model fits a skeleton to anything human-shaped, so every gate is
   geometric — because geometry is all there is to gate on.** Observed 2026-08-09
   (`microphone_squat.mp4`): a mic stand on a desk — a vertical pole with a splayed
@@ -1161,21 +1214,25 @@ distribution and build cache.
   retired above; feet do not move during a squat, and marginal framing is now
   refused before the set starts. The back camera at 0.5x remains the answer for
   small rooms.
-- **`WorkoutViewModel` still has no tests**, but far less now depends on that.
-  What remains in it is camera facing resolution, the resolved-once rule and the
-  flip guard — real, but small. Covering them needs a fake, and
-  `PoseCameraDataSource` is a concrete class: **extracting an interface is still
-  worth doing** (a data source in name, this feature's whole outside world in
-  role, which is what "what every ViewModel test fakes" means) but it is no longer
-  the prerequisite for testing the interesting logic.
+- **`WorkoutViewModel` still has no tests, and after 2026-08-13 has almost nothing
+  left worth testing.** Everything that was a *decision* has been moved out to a
+  pure, tested collaborator: cue arbitration to `CueEngine`, the framing gate to
+  `PoseFrame.squatDepthAngle`, the lens preference to `Set<CameraFacing>.preferred`.
+  What remains is the resolved-once rule and the flip guard. Covering those still
+  needs a fake, and `PoseCameraDataSource` is a concrete class — **extracting an
+  interface is still worth doing**, but it now buys the last 5% rather than the
+  interesting logic.
+  The lesson generalizes: **when a ViewModel is hard to test, look for the
+  decision hiding in it before reaching for the fake.** Each extraction here was a
+  pure function or a frame-driven object, testable on plain JUnit with no
+  ceremony, and each left the ViewModel reading as routing rather than logic.
 - **The completed `Rep`s are collected now** (2026-08-09), in a `reps` list the
   ViewModel clears on `startSet`, so `deepestAngle` and the descent/ascent timings
   survive the set. `repsAtDepth` is the first thing built on them and is spoken in
   the set summary. This was the prerequisite for "depth 88%, up from 81%"; what is
   still missing is somewhere to *persist* them, which arrives with history.
-  `repsAtDepth` is recomputed from the list inside the same `update` that moves
-  `repCount`, rather than incremented: the guard above it fires on every frame
-  that completes a rep, so it cannot go stale, and a derived value cannot drift
+  `repsAtDepth` is recomputed from the list every frame rather than incremented,
+  so the list is the only thing that can be wrong — a derived value cannot drift
   the way a counter maintained in three places can.
 - **`:feature:workout` exposes exactly `WorkoutRoot(modifier)`**; the ViewModel,
   state and actions are `internal`, so `:core:pose` and `:core:exercise` are
@@ -1195,16 +1252,19 @@ distribution and build cache.
   `resourcePrefix`, default `testInstrumentationRunner`, `animationsDisabled`,
   `disableUnnecessaryAndroidTests`.
 
-### Next up: camera selection vs capabilities
+### Camera selection vs capabilities — built 2026-08-08
 
 Two groups, two natures. **Selection** is what the camera is doing, chosen by the
 user. **Capabilities** are what it could do, discovered from the device. Conflating
-them is why `cameraFacing` currently defaults to `FRONT` without knowing a front
-lens exists — on a device without one, `requireLensFacing` throws and the app
-**crashes at startup**, not on the flip. The manifest already declares
-`android.hardware.camera.any` (deliberately not `camera.front`, since the
-recommended setup is a back-camera position), so the manifest and the code
-disagree today.
+them is why `cameraFacing` used to default to `FRONT` without knowing a front lens
+exists — on a device without one, `requireLensFacing` throws and the app
+**crashed at startup**, not on the flip. The manifest declares
+`android.hardware.camera.any` and deliberately **not** `camera.front`, which would
+filter the app off Play for devices without a selfie camera; it has to run on a
+back lens alone. (That is a statement about what the app must *tolerate*, not a
+preference — **front-first is the right default**, confirmed in use: it is the
+only lens where you can check your own framing. The back camera's 0.5x ultra-wide
+is the escape hatch for a room you cannot back far enough away in.)
 
 `:core:pose` publishes one nullable object instead of a growing row of flows:
 
@@ -1227,7 +1287,17 @@ capabilities second — and a non-null `zoomRange` would deadlock.
 `WorkoutState` holds only the selection — `cameraFacing: CameraFacing?`,
 `zoomRatio: Float = 1f` — plus the options it renders from. The "prefer front"
 rule is a **product constant, so it lives in code**, not in state:
-`if (FRONT in options.facings) FRONT else BACK`.
+`Set<CameraFacing>.preferred` in `:feature:workout`.
+
+**It lives in the feature module and not next to `CameraFacing`**, and the name is
+the reason: *preferred by whom?* `:core:pose` knows which lenses exist and has no
+standing to have a favorite — everything else in `CameraFacing.kt` is a fact about
+the enum or a translation to CameraX's constants. Selection is the feature's.
+The empty set returning null is the load-bearing case: nothing is selected, so
+`facings` never emits and nothing binds, where a fallback would hand CameraX a
+lens the device does not have. It moves the day a second consumer appears — a
+settings screen with a default-camera preference — and even then it lands with
+that preference, not in `:core:pose`.
 
 The ordering is a handshake, not a bootstrap problem: `poseFrames` resolves the
 provider and publishes `options.facings` **before** it waits on a facing, so the
@@ -1338,8 +1408,9 @@ cannot misfire mid-squat.
 ## Roadmap
 
 1. **Camera + skeleton overlay** — done.
-2. **The squat** — angles, smoothing, rep state machine and the whole voice
-   channel done; **form heuristics are what remains**.
+2. **The squat** — angles, smoothing, rep state machine, the whole voice channel
+   and the first two form cues done; **the live geometric rules (valgus, forward
+   lean, heel lift) are what remains, and they need footage before code**.
 3. **Local persistence & app shell** — Room history, Nav 3 flows, stats screen.
 4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
