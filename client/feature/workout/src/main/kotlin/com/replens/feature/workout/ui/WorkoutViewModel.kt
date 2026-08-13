@@ -182,23 +182,16 @@ internal class WorkoutViewModel @Inject constructor(
         // be wrong, where a counter maintained alongside it can drift out of step.
         val repsAtDepth = reps.count { it.isAtDepth(repConfig) }
 
-        // Read first to skip the copy on the frames that change nothing, but write
-        // through `update`: the buttons write this too.
-        val current = state.value
-        if (current.session != session ||
-            current.repCount != repCounter.repCount ||
-            current.phase != phase
-        ) {
-            state.update {
-                it.copy(
-                    session = session,
-                    repCount = repCounter.repCount,
-                    // Not in the guard above, and it does not need to be: `reps`
-                    // only grows on a frame that also moves `repCount`.
-                    repsAtDepth = repsAtDepth,
-                    phase = phase,
-                )
-            }
+        // Unguarded on purpose: a copy equal to the current value is discarded by
+        // StateFlow's own conflation, so the frames that change nothing cost one
+        // short-lived object against the ~2,000 a second this path already makes.
+        state.update {
+            it.copy(
+                session = session,
+                repCount = repCounter.repCount,
+                repsAtDepth = repsAtDepth,
+                phase = phase,
+            )
         }
 
         // Every frame, not only the ones that changed something: a setup instruction

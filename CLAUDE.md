@@ -673,11 +673,24 @@ whereas this is the same object seen through a narrower declared type, so an
 external `as MutableStateFlow<…>` would succeed at runtime. Encapsulation is
 compile-time, not runtime.
 
-**Prefer `update { }` over `value = value.copy(…)`.** Read-modify-write is not
-atomic; it only survives today because `viewModelScope` is main-confined, and
-CLAUDE.md plans to inject dispatchers later. The exception is a single-writer hot
-path, where the point of reading first is to skip the copy — `onFrame` allocating
-a `WorkoutState` 30×/s would cost more than the race it avoids.
+**`update { }`, always — there is no hot-path exception.** Read-modify-write is
+not atomic; it only survives today because `viewModelScope` is main-confined, and
+CLAUDE.md plans to inject dispatchers later.
+
+`onFrame` used to guard the write behind a hand-written "did anything change?"
+check. **Removed 2026-08-13, because it was protecting against a cost that isn't
+there.** `update { }` is a CAS loop, and `StateFlow.compareAndSet` returns without
+emitting when the new value `equals` the old — conflation is by contract, using
+`Any.equals`. So a redundant `copy` costs **one short-lived object and nothing
+else**: no emission, no collector wakeup, no recomposition. At ~28 skipped frames
+a second against the ~2,000 objects/second this path already allocates, the guard
+was saving ~1.4% of the churn.
+
+What it cost was worse: the guard listed three fields while the `copy` wrote four,
+so it was a standing trap — add a state field, write it in `onFrame`, forget the
+guard, and it silently never reaches the screen. No compile error and no test
+catches that. **A field list that must be kept in sync by hand is not worth 1% of
+an allocation budget.**
 
 ## Product decisions
 
