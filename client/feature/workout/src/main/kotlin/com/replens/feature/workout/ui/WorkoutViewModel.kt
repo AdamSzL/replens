@@ -5,6 +5,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.replens.core.audio.Speaker
+import com.replens.core.data.WorkoutRepository
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetSession
 import com.replens.core.exercise.setupCheck
@@ -12,6 +13,8 @@ import com.replens.core.exercise.squat.SquatRepConfig
 import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.isAtDepth
 import com.replens.core.exercise.squat.squatDepthAngle
+import com.replens.core.model.AbandonedDescent
+import com.replens.core.model.Exercise
 import com.replens.core.model.PoseFrame
 import com.replens.core.model.Rep
 import com.replens.core.model.RepPhase
@@ -26,11 +29,16 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 @HiltViewModel
 internal class WorkoutViewModel @Inject constructor(
     private val poseCamera: PoseCameraDataSource,
     private val speaker: Speaker,
+    private val repository: WorkoutRepository,
+    private val clock: Clock,
 ) : ViewModel() {
 
     val surfaceRequests: StateFlow<SurfaceRequest?> = poseCamera.surfaceRequests
@@ -53,8 +61,21 @@ internal class WorkoutViewModel @Inject constructor(
     private val setSession = SetSession()
     private val cues = CueEngine(repConfig)
 
-    /** Kept for the set summary; the counter itself only ever knows the total. */
+    /** Kept for the set summary and the write; the counter only knows the total. */
     private val reps = mutableListOf<Rep>()
+
+    /** Never spoken about, only stored — they are what per-user calibration reads. */
+    private val abandoned = mutableListOf<AbandonedDescent>()
+
+    /**
+     * Wall clock and frame clock at the same instant, so a set can be timed with
+     * the clock its reps were timed with. Non-null exactly while a set is in
+     * progress, which is also what stops a second Finish writing a second row.
+     */
+    private data class SetStart(val at: Instant, val frameMillis: Long)
+
+    private var setStart: SetStart? = null
+    private var lastFrameMillis = 0L
 
     private var cameraJob: Job? = null
 
@@ -104,6 +125,8 @@ internal class WorkoutViewModel @Inject constructor(
         repCounter.reset()
         cues.reset()
         reps.clear()
+        abandoned.clear()
+        setStart = null
         state.update {
             it.copy(
                 session = setSession.start(),
@@ -115,11 +138,40 @@ internal class WorkoutViewModel @Inject constructor(
     }
 
     private fun cancelSet() {
+        // Discarding the set *is* what cancel means, so the write is dropped by
+        // dropping what a write would need.
+        setStart = null
         state.update { it.copy(session = setSession.cancel()) }
     }
 
     private fun finishSet() {
+        val start = setStart
+        setStart = null
         state.update { it.copy(session = setSession.finish()) }
+        if (start == null) return
+        // Nothing happened. Abandoned descents alone are still worth keeping: they
+        // are the evidence that the counting threshold is wrong for this body.
+        if (reps.isEmpty() && abandoned.isEmpty()) return
+
+        // Read before launching, not inside: the coroutine body does not run until
+        // the next dispatch, by which time "Go again" may have cleared both lists.
+        val endedAt = start.at + (lastFrameMillis - start.frameMillis).milliseconds
+        val recorded = reps.toList()
+        val abandonedCount = abandoned.size
+        val deepestAbandonedAngle = abandoned.minOfOrNull(AbandonedDescent::deepestAngle)
+        val repsAtDepth = state.value.repsAtDepth
+
+        viewModelScope.launch {
+            repository.recordSet(
+                exercise = Exercise.SQUAT,
+                startedAt = start.at,
+                endedAt = endedAt,
+                repsAtDepth = repsAtDepth,
+                abandonedCount = abandonedCount,
+                deepestAbandonedAngle = deepestAbandonedAngle,
+                reps = recorded,
+            )
+        }
     }
 
     private fun dismissSummary() {
@@ -148,14 +200,22 @@ internal class WorkoutViewModel @Inject constructor(
     private fun onFrame(frame: PoseFrame) {
         val smoothed = smoother.smooth(frame)
         poseFrame.value = smoothed
+        lastFrameMillis = smoothed.timestampMillis
 
         val session = setSession.onFrame(smoothed.setupCheck(), smoothed.timestampMillis)
+        // The count-in and the walk out to your spot are not the set. Guarded on
+        // null rather than on the transition, so re-entering Active cannot restart
+        // the clock on a set already under way.
+        if (session == SessionState.Active && setStart == null) {
+            setStart = SetStart(clock.now(), smoothed.timestampMillis)
+        }
         val repUpdate = if (session == SessionState.Active) {
             repCounter.update(smoothed.squatDepthAngle(), smoothed.timestampMillis)
         } else {
             null
         }
         repUpdate?.completedRep?.let(reps::add)
+        repUpdate?.abandonedDescent?.let(abandoned::add)
         val phase = repUpdate?.phase ?: state.value.phase
         // Derived rather than incremented, so the list is the only thing that can
         // be wrong.

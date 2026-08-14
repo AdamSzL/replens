@@ -10,6 +10,7 @@ android {
 
 dependencies {
     implementation(projects.core.audio)
+    implementation(projects.core.data)
     implementation(projects.core.designsystem)
     implementation(projects.core.exercise)
     implementation(projects.core.pose)
@@ -22,4 +23,5 @@ dependencies {
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

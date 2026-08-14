@@ -179,7 +179,7 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                     …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
-                    39 tests.
+                    59 tests.
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
@@ -1448,8 +1448,15 @@ distribution and build cache.
   does not move either. Fixable in two lines now that the engine owns the
   announcer (`announcer.reset()` on a deliberate re-emission), but that is a guess
   until it has annoyed somebody.
-- **Next:** hear the above on device, then Milestone 3 — see *Local data model*,
-  which is decided but unbuilt. 193 unit tests.
+- **Milestone 3, persistence: the write path is done** (2026-08-14), **not yet
+  seen on device.** `:core:database` (Room 3), `:core:data` (repository, mappers,
+  the 60-minute gap rule) and the `:feature:workout` wiring all exist, so finishing
+  a set stores it. What is not built: any screen that reads it back — `workout(id)`
+  has no caller, and `workouts()` does not exist because its shape is the history
+  screen's question to answer.
+- **Next:** confirm on device that a set survives killing the app, then the
+  workout summary screen (which brings Nav 3), then `:feature:history`.
+  236 unit tests.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
   and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is
@@ -1535,18 +1542,28 @@ distribution and build cache.
   retired above; feet do not move during a squat, and marginal framing is now
   refused before the set starts. The back camera at 0.5x remains the answer for
   small rooms.
-- **`WorkoutViewModel` still has no tests, and after 2026-08-13 has almost nothing
-  left worth testing.** Everything that was a *decision* has been moved out to a
-  pure, tested collaborator: cue arbitration to `CueEngine`, the framing gate to
-  `PoseFrame.squatDepthAngle`, the lens preference to `Set<CameraFacing>.preferred`.
-  What remains is the resolved-once rule and the flip guard. Covering those still
-  needs a fake, and `PoseCameraDataSource` is a concrete class — **extracting an
-  interface is still worth doing**, but it now buys the last 5% rather than the
-  interesting logic.
-  The lesson generalizes: **when a ViewModel is hard to test, look for the
-  decision hiding in it before reaching for the fake.** Each extraction here was a
-  pure function or a frame-driven object, testable on plain JUnit with no
-  ceremony, and each left the ViewModel reading as routing rather than logic.
+- **`WorkoutViewModel` is tested end to end now** (2026-08-14, 20 tests across
+  `WorkoutViewModelTest` and `WorkoutCameraTest`), against a fake
+  `PoseCameraDataSource` — the interface extracted the same day. It was
+  deferred for a long time on the grounds that it bought "the last 5%", and that
+  was right until persistence arrived: the write path is the first thing here that
+  can **lose or duplicate a user's data**, which is worth more than the routing
+  around it. The double-write guard was mutation-checked (removing it fails
+  exactly one test).
+  The lesson still generalizes: **when a ViewModel is hard to test, look for the
+  decision hiding in it before reaching for the fake.** Cue arbitration went to
+  `CueEngine`, the framing gate to `PoseFrame.squatDepthAngle`, the lens preference
+  to `Set<CameraFacing>.preferred` — each a pure function or a frame-driven object,
+  testable with no ceremony, each leaving the ViewModel reading as routing.
+  Two things the tests needed that are worth not re-deriving. **The ViewModel must
+  be built lazily**: JUnit constructs the test instance *before* applying rules, and
+  the `init` block touches `viewModelScope`, which binds whatever `Dispatchers.Main`
+  is at that moment — as a plain field it silently gets a scope that never runs
+  anything, and every test fails with an empty list rather than an error. And
+  **driving it needs real landmark geometry** (`SquatFrames.kt`): a set only reaches
+  `Active` after 3.5 s of `READY` frames, and a rep only counts after a smoothed
+  168 → 115 → 168 sweep, so the fixture builds a body at a given interior knee angle
+  rather than stubbing the angle.
 - **The completed `Rep`s are collected now** (2026-08-09), in a `reps` list the
   ViewModel clears on `startSet`, so `deepestAngle` and the descent/ascent timings
   survive the set. `repsAtDepth` is the first thing built on them and is spoken in
