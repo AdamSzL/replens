@@ -1169,7 +1169,7 @@ alpha; host-side, so CI-friendly unlike instrumented tests. Gotchas: renaming a
 `@PreviewTest` orphans its reference image, it's memory-hungry, and reference PNGs
 are committed. If it works out, enable it in a convention plugin.
 
-**GitHub Actions** — `.github/workflows/client.yml`, one job running
+**GitHub Actions** — `.github/workflows/client-ci.yml`, one job running
 `./gradlew test assembleRelease` on pushes to `master` and on every PR.
 
 `assembleDebug` is deliberately absent: `test` already compiles the debug main
@@ -1182,6 +1182,17 @@ instrumented test on a release build.
 Docs-only changes are skipped via `paths-ignore`, and `concurrency` cancels
 superseded runs. Both are safe only while no branch protection requires a check
 to have run. Screenshot validation joins this job once it exists.
+
+**Naming, so later workflows slot in rather than collide.** CI is named by
+*subject* — `Client CI`, `Server CI` — because that is the axis that varies.
+Release workflows are named by *destination* — `Firebase distribution`,
+`Play release` — because that is what you go looking for. Files mirror the names,
+and **renaming a workflow file orphans its run history**, so get the name right
+before there is history worth keeping.
+
+**Release workflows stay separate from CI for a security reason, not a tidiness
+one:** they need signing secrets, and CI needs none. Keeping them apart means no
+workflow with access to the keystore ever runs on an untrusted PR.
 
 - **`WorkoutViewModel` is tested end to end now** (2026-08-14, 20 tests across
   `WorkoutViewModelTest` and `WorkoutCameraTest`), against a fake
