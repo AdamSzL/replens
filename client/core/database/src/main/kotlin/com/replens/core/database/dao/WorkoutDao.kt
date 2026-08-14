@@ -31,6 +31,9 @@ interface WorkoutDao {
     @Query("UPDATE workouts SET endedAt = :endedAt, updatedAt = :updatedAt, isDirty = 1 WHERE id = :id")
     suspend fun touchWorkout(id: Long, endedAt: Long, updatedAt: Long)
 
+    @Query("SELECT * FROM workouts WHERE id = :id")
+    suspend fun workout(id: Long): WorkoutEntity?
+
     @Query("SELECT * FROM workouts ORDER BY startedAt DESC")
     fun workouts(): Flow<List<WorkoutEntity>>
 

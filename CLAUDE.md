@@ -199,10 +199,15 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                       …exercise/       Framing, FormFault, SetupCheck,
                                        SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
+:core:database      Room 3: entities, WorkoutDao, ReplensDatabase (internal).
+                    Tested on the JVM against BundledSQLiteDriver. 12 tests.
+                      …dao/  …di/  …entity/
+:core:data          WorkoutRepository + impl, the entity mappers, WORKOUT_GAP.
+                    The only module speaking both vocabularies. 11 tests.
+                      …mapper/  …di/
 ```
 
-Planned, not built: `:core:data`, `:core:network`, `:core:database`,
-`:feature:{history,stats,leaderboard}`.
+Planned, not built: `:core:network`, `:feature:{history,stats,leaderboard}`.
 
 ### Key decisions
 
