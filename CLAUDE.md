@@ -96,7 +96,9 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
   (KGP refuses). The Kotlin version is raised by declaring
   `alias(libs.plugins.kotlin.android) apply false` in the root build file —
   classpath conflict resolution lifts AGP's bundled KGP. Built-in Kotlin aligns
-  `jvmTarget` with `compileOptions`; don't add a `kotlin {}` block for it.
+  `jvmTarget` with `compileOptions`; don't add a `kotlin {}` block for it. The ban
+  covers only KGP itself — Kotlin *compiler plugins* apply normally, verified with
+  `kotlin.plugin.serialization` on `:feature:workout`.
 - **Convention plugins can only apply plugins already on the buildscript
   classpath.** Hence every third-party plugin is declared `apply false` in the
   root build file, which is also where its version is pinned. build-logic's
@@ -138,9 +140,11 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
 Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 
 ```
-:app                MainActivity: camera permission gate -> WorkoutRoot. Later:
-                    NavDisplay, back stack, every cross-feature edge.
-:feature:workout    …workout.ui/            the five files (no Event yet), plus
+:app                MainActivity: camera permission gate -> NavDisplay. Owns the
+                    back stack and every cross-feature edge.
+:feature:workout    …workout.navigation/    WorkoutRoute + workoutEntries — the
+                                            module's whole public surface
+                    …workout.ui/            the five files (no Event yet), plus
                                             CueEngine (what to say), CueAnnouncer
                                             (whether to say it again) and
                                             CameraSelection (which lens to open
@@ -200,12 +204,13 @@ Planned, not built: `:core:network`, `:feature:{history,stats,leaderboard}`.
   A per-feature convention, **not** a generic `BaseViewModel<S, A, E>` —
   inheritance-based MVI is where this pattern dies. Details in *Feature
   architecture*.
-- **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
-  and Navigation 3 (one screen, nothing to navigate to — it lands with
-  the post-workout summary). The **set summary card is not that screen**: a card is
-  the *set* boundary, where you are still three meters away and want a number and
-  "go again"; the screen is the *workout* boundary, where you have picked the phone
-  up. Keep both.
+- **Deferred until they have a job to do:** `WorkoutEvent` — nothing one-shot yet;
+  it lands with the navigation to the summary. Navigation 3 was deferred on the
+  same rule and **landed 2026-08-15** with the post-workout summary, which is what
+  gave it something to navigate to. The **set summary card is not that screen**: a
+  card is the *set* boundary, where you are still three meters away and want a
+  number and "go again"; the screen is the *workout* boundary, where you have
+  picked the phone up. Keep both.
 - Convention plugins in `client/build-logic/` (included build):
   `replens.android.application`, `replens.android.library`,
   `replens.android.compose` (additive: compose flag + BOM + tooling; non-UI
@@ -563,34 +568,64 @@ or a lambda capturing changing state goes stale.
 
 ### Navigation (Navigation 3)
 
-Each feature owns its routes and entry provider:
+Built 2026-08-15 on stable `navigation3-runtime`/`-ui` **1.1.6**.
+`lifecycle-viewmodel-navigation3` rides the lifecycle version, not nav3's.
+`adaptive-navigation3` is **not** a dependency: it is list-detail and
+supporting-pane layouts for tablets, and this is a full-screen camera.
+
+**1.2.0 is alpha, and the two things in it worth wanting are named so the upgrade
+is a decision rather than a version bump.** `ResultEventBus` returns a result from
+a destination — nothing needs it yet, since the summary screen pops rather than
+answering. **Deep links are the likelier trigger**: a "you haven't trained in
+three days" notification or a Play app shortcut both open a route directly, and
+both are release-time features. Move when one of those is actually being built,
+not before — the back stack is the last place to run alpha code, because its
+failures are process-death failures nobody reproduces by hand.
+
+**A feature's entire public surface is its `NavKey`s and one entry-provider
+extension.** Everything else — the Root composable included — is `internal`, so
+`:app` cannot name a screen or a ViewModel even by accident.
 
 ```kotlin
 @Serializable data object WorkoutRoute : NavKey
 
-fun EntryProviderScope<NavKey>.workoutEntries(
-    navigator: Navigator,
-    navigateToHistory: () -> Unit,       // cross-feature: :app decides
-) {
-    entry<WorkoutRoute> {
-        WorkoutRoot(navigateToSummary = { navigator.goTo(WorkoutSummaryRoute(it)) })
-    }
+fun EntryProviderScope<NavKey>.workoutEntries() {
+    entry<WorkoutRoute> { WorkoutRoot() }
 }
 ```
 
 - **No shared routes module.** A feature can only name its own routes, so handing
-  it a `Navigator` is safe — the compiler enforces that cross-feature edges are
+  it the back stack is safe — the compiler enforces that cross-feature edges are
   hoisted lambdas wired in `:app`.
+- **No `Navigator` object, and the back stack persistence gotcha it created is
+  gone with it.** CLAUDE.md used to plan an `@ActivityRetainedScoped Navigator`
+  holding `mutableStateListOf`, which survives rotation but **not process death** —
+  filed as "fix before release". `rememberNavBackStack` serializes the keys into
+  saved state, so choosing it means that bug never exists rather than being
+  scheduled. It also removes the reason to invent a type: a `Navigator` would have
+  to live somewhere both `:app` and every feature can see, which is the shared
+  module being avoided two bullets up.
+- **Routes are `@Serializable` from the first one, not from when persistence is
+  wanted.** `rememberNavBackStack` resolves each key's serializer reflectively at
+  save time, so a key that forgot the annotation passes every test that does not
+  kill the process and fails on a user's phone. That same reflection is the shape
+  R8 usually breaks; kotlinx.serialization's consumer rules hold it, checked in
+  `mapping.txt` rather than inferred from a green `assembleRelease`.
+- **Adding any decorator replaces the defaults**, so `NavDisplay` lists
+  `rememberSaveableStateHolderNavEntryDecorator()` *and*
+  `rememberViewModelStoreNavEntryDecorator()`. Dropping the first silently loses
+  per-entry `rememberSaveable`; dropping the second is the ViewModel scoping bug
+  under *Toolchain gotchas*. There is no defaults list to append to in 1.1.6.
 - **Google's multibinding recipe (`@IntoSet EntryProviderInstaller`) was rejected.**
   Hilt constructs the installer, so cross-feature lambdas can't be passed — which
   pushes you to a shared routes module or the api/impl split. Its payoff is
   unavailable anyway: a bottom bar means `:app` names all top-level routes
   regardless. Reversible in ~10 lines per feature if dynamic features ever appear.
-- **Back stack persistence gotcha:** an `@ActivityRetainedScoped Navigator` holding
-  `mutableStateListOf` survives rotation but **not process death**. `NavKey`s are
-  `@Serializable` from day one so it's fixable (`SavedStateHandle`, or a
-  `rememberNavBackStack`-backed list) — do it before release.
 - Wrap navigation clicks in `dropUnlessResumed { }`.
+
+**Bottom navigation and a login flow change nothing here.** Multiple back stacks
+is a map of `rememberNavBackStack`s and conditional navigation is swapping the
+root — both `:app`'s business, both leaving `workoutEntries()` untouched.
 
 ### Explicit backing fields
 

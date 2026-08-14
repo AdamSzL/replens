@@ -85,7 +85,14 @@ Last updated 2026-08-14.
   own. Pull the file instead (`adb exec-out run-as com.replens.app cat
   databases/replens.db`), taking `-wal` and `-shm` too or recent writes are
   missing. It also leaves a `replens.db.lck` beside them, which a wipe must delete.
-- **Next:** the workout summary screen (which brings Nav 3), then
+- **Navigation 3 wired 2026-08-15** on stable 1.1.6, on branch
+  `feat/workout-summary`. One destination so far, so behavior is unchanged; what
+  it buys is that `:feature:workout` is now reachable only through `WorkoutRoute`
+  and `workoutEntries()`, with `WorkoutRoot` internal. No `Navigator` object —
+  `rememberNavBackStack` already survives process death, so the persistence
+  gotcha CLAUDE.md had filed as "fix before release" never got built.
+- **Next:** the rest of the workout summary screen — `recordSet` returning the
+  workout id, `WorkoutEvent` + `ObserveAsEvents`, then the screen itself. Then
   `:feature:history`. 236 unit tests.
 
 ## Roadmap
@@ -94,8 +101,8 @@ Last updated 2026-08-14.
 2. **The squat** — angles, smoothing, rep state machine, the whole voice channel
    and the first two form cues done; **the live geometric rules (valgus, forward
    lean, heel lift) are what remains, and they need footage before code**.
-3. **Local persistence & app shell** — Room history done; Nav 3 flows and the
-   stats screen remain.
+3. **Local persistence & app shell** — Room history and the Nav 3 wiring done; the
+   summary, history and stats screens remain.
 4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
@@ -116,10 +123,10 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
   `repsAtDepth` is recomputed from the list every frame rather than incremented,
   so the list is the only thing that can be wrong — a derived value cannot drift
   the way a counter maintained in three places can.
-- **`:feature:workout` exposes exactly `WorkoutRoot(modifier)`**; the ViewModel,
-  state and actions are `internal`, so `:core:pose` and `:core:exercise` are
-  `implementation`. Root itself becomes internal when `navigation/` exists — a
-  one-keyword change. The `RepPhase` text is a debug affordance; removing the
+- **`:feature:workout` exposes exactly `WorkoutRoute` and `workoutEntries()`**;
+  `WorkoutRoot`, the ViewModel, state and actions are all `internal`, so
+  `:core:pose` and `:core:exercise` are `implementation`. The `RepPhase` text is a
+  debug affordance; removing the
   `Text` alone won't cut recompositions, since `phase` living in `WorkoutState` is
   what drives them. The real cleanup is dropping it from state once cues are
   events.
