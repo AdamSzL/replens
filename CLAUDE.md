@@ -868,6 +868,26 @@ Room 2 with different imports and API shapes (`withWriteTransaction`, not
 every other third-party plugin (see *Toolchain gotchas*). Commit the schema
 directory from day one so migrations are reviewable.
 
+**`:core:database` exports coroutines, not Room.** `room3-runtime` is
+`implementation` because the only Room type in a public supertype —
+`ReplensDatabase : RoomDatabase` — is **`internal`**, and Room's annotations are
+skipped rather than resolved when a class file is read (the same mechanism as
+`@Composable` in `:core:ui`). What *does* have to be `api` is
+`kotlinx-coroutines-core`, because `Flow` is in DAO signatures — and it was
+arriving transitively through room-runtime, which is exactly the "works only via
+someone else's transitive graph" trap under *Dependency rules*. `-core`, not the
+`-android` artifact `:core:pose` uses: nothing here wants a Main dispatcher.
+
+**Now in Android's `core:database` looks different for reasons that don't
+transfer.** It `api`s `core:model` because it maps *inside* the database module
+(`TopicEntity.asExternalModel()`); our mappers live in `:core:data` because our
+domain models sit in `:core:exercise`, which is exercise *knowledge* — depending
+on it here would drag squat math onto the database module's classpath to convert
+three longs. And its Room setup is a convention plugin applied to exactly one
+module, because build-logic is part of what that repo demonstrates. **The rule
+here: a convention plugin earns its keep at the second call site.** The trigger
+would be `:core:database` splitting.
+
 ### Where these live
 
 `Workout` and `ExerciseSet` go in **`:core:exercise`** beside `Rep` and

@@ -16,6 +16,8 @@ kotlinxCoroutines = "1.11.0"
 hilt = "2.60.1"
 androidxHilt = "1.4.0"
 ksp = "2.3.11"
+room = "3.0.1"
+sqlite = "2.7.0"
 
 [libraries]
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidxAnnotation" }
@@ -44,10 +46,20 @@ androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", 
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-compose = { group = "androidx.camera", name = "camera-compose", version.ref = "camerax" }
 mlkit-pose-detection-accurate = { group = "com.google.mlkit", name = "pose-detection-accurate", version.ref = "mlkitPoseDetection" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 androidx-hilt-lifecycle-viewmodel-compose = { group = "androidx.hilt", name = "hilt-lifecycle-viewmodel-compose", version.ref = "androidxHilt" }
+androidx-room-runtime = { group = "androidx.room3", name = "room3-runtime", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room3", name = "room3-compiler", version.ref = "room" }
+# The driver Room 3 runs on. The `-jvm` variant has to be named explicitly: an
+# Android module resolves the plain artifact to `-android`, whose natives are
+# built for device ABIs, so a host unit test fails with `no sqliteJni in
+# java.library.path`.
+androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqlite" }
+androidx-sqlite-bundled-jvm = { group = "androidx.sqlite", name = "sqlite-bundled-jvm", version.ref = "sqlite" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 # build-logic convention plugin classpath
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
@@ -61,6 +73,7 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+room = { id = "androidx.room3", version.ref = "room" }
 
 # Plugins defined by this project (build-logic)
 replens-android-application = { id = "replens.android.application" }
