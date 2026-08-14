@@ -839,8 +839,25 @@ wish you had.
 | rep timings | `Duration` | `Long` | INTEGER millis |
 | set/workout times | `Instant` | `Long` | INTEGER epoch millis |
 
-`java.time` is available natively at **minSdk 26** — no desugaring, no
-kotlinx-datetime.
+**Both are `kotlin.time`** — `Instant` and `Clock` moved into the stdlib and are
+stable on Kotlin 2.4.10 (verified 2026-08-14: no opt-in, no warning). This
+supersedes an earlier note here recommending `java.time` on the grounds that
+minSdk 26 needs no desugaring; that was answering "java.time or
+kotlinx-datetime", and the stdlib is a third option that beats both.
+
+The deciding case is the workout gap rule, since `Instant - Instant` is a
+`kotlin.time.Duration` directly:
+
+```kotlin
+now - lastEndedAt < WORKOUT_GAP          // kotlin.time
+Duration.between(a, b).toKotlinDuration() < WORKOUT_GAP   // java.time
+```
+
+`Rep` already carries `kotlin.time.Duration`, so `java.time.Instant` would put
+**two `Duration` types in one module** and charge a conversion at exactly the
+place the rule lives. Smaller wins: `kotlin.time.Clock` is an interface with
+`Clock.System`, so faking now() in a test needs no `Clock.fixed(instant, zone)`;
+and there is no minSdk caveat left to remember.
 
 **The conversion lives in the mapper, not a Room converter.** The entity *is* the
 schema: `descentMillis: Long` says "INTEGER, milliseconds" to anyone who opens the
@@ -895,6 +912,29 @@ would be `:core:database` splitting.
 putting them in `:core:model` would force a dependency in the wrong direction.
 It widens that module's charter slightly from "exercise knowledge" to "exercise
 vocabulary and knowledge", which is the smaller cost.
+
+**`Workout` and `ExerciseSet` are read models, so `id` is always real.** No
+`id: Long = 0` — that is Room's `autoGenerate` sentinel leaking into a type that
+should not know Room exists, and it is the same lie as `zoomStops = emptyList()`
+meaning two things. A nullable id would be honest but would make every history
+call site unwrap a value that is always present after a read. Instead **recording
+a set does not go through these types**: the repository is handed what the set
+produced (`exercise`, the two `Instant`s, `repsAtDepth`, and the `Rep` /
+`AbandonedDescent` lists) and derives `repCount`, `abandonedCount` and
+`deepestAbandonedAngle` from the lists, so nothing has to be kept in sync by
+hand. `repsAtDepth` is the one value the caller must supply, because grading
+depth needs `SquatRepConfig` and that is the feature's knowledge.
+
+**The three summary numbers get three different treatments on `ExerciseSet`, and
+the differences are the design.** `repCount` is a derived property (`reps.size`)
+— the same rule the ViewModel follows when it recomputes `repsAtDepth` every
+frame rather than incrementing, so the list is the only thing that can be wrong.
+`abandonedCount` and `deepestAbandonedAngle` are stored, because abandoned
+descents are not rows and there is no list to derive them from. `repsAtDepth` is
+stored despite the reps being right there, for the tunable-threshold reason
+above. Note this does **not** drop the `repCount` *column*: the column is what
+lets SQL answer "12 reps" without joining `reps`, which is the escape hatch if
+eager loading ever hurts.
 
 `:core:database` owns entities, DAOs and the database; `:core:data` owns the
 repository (interface *and* impl) and the mappers. The repository is shared rather
