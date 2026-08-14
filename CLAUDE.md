@@ -15,11 +15,18 @@ Corollary: **the backend is hand-built (Kotlin + Ktor) and is part of v1** —
 Firebase/BaaS was considered and rejected; building it is part of the fun.
 
 **This file is the rules: what to do, what to avoid, and what has already been
-ruled out.** Milestones, device-validation results, the roadmap and the backlog
-live in [`docs/status.md`](docs/status.md) — that is the file that changes every
-session, and keeping it here made these rules churn for no reason. If you need to
-know *where the project is*, read that; if you need to know *how to write code
-here*, read this.
+ruled out.** Two companions carry what it used to:
+
+- [`docs/status.md`](docs/status.md) — milestones, device-validation results, the
+  roadmap, the backlog. The file that changes every session; keeping it here made
+  these rules churn for no reason.
+- [`docs/decisions.md`](docs/decisions.md) — the arguments, measurements and
+  rejected options behind the rules below. Read it to *reopen* a decision, not to
+  follow one.
+
+Every conclusion here carries what it ruled out, so nothing needs re-deriving from
+the record. **When you add a decision, put the rule here and the argument there** —
+that split is the only thing keeping this file readable.
 
 ## Repository layout
 
@@ -36,35 +43,13 @@ replens/
   evolution discipline from day 1: default values, `@SerialName`, tolerant
   reading, versioned endpoints. Revisit at ~20–30 DTOs (upgrade path: OpenAPI).
 
-**Reconsidered 2026-08-11 and kept.** A root `settings.gradle.kts` with a
-`:shared` module is the standard full-stack Kotlin advice, and it is right for a
-web client — which is redeployed *with* its server. Mobile inverts that premise:
-
-- **A shared DTO makes the compiler lie about compatibility.** Renaming a field,
-  tightening `String?` to `String`, or adding a required one compiles clean and
-  passes every test, then breaks every installed app. Duplication is what forces
-  the version skew to be *felt*: changing the server's copy means walking to the
-  client's and deciding what an old client does with it. Discipline inside a
-  shared module is discipline nothing checks.
-- **Enums are DTOs.** The server adds `PULL_UP` and an old client's `enumValueOf`
-  throws. The client needs a tolerant fallback arm regardless — a client-side
-  decision the server must not own.
-- **The client is the fragile build.** AGP 9's built-in Kotlin, modules that must
-  not apply `kotlin.android`, a Kotlin version raised only via classpath conflict
-  resolution, convention plugins limited to what is already on the buildscript
-  classpath (see *Toolchain gotchas*). Merging puts server plugin resolution
-  through the most delicate machinery here; today a broken server build cannot
-  stop the app shipping. Also lost: the server in IntelliJ rather than Android
-  Studio, and deploy pipelines that don't check out the other half.
-
-What would actually be shared is thin. Validation rules are a regex and two ints,
-and the server must re-validate anyway since it cannot trust a client. The one
-genuinely valuable share — exercise thresholds — isn't needed, because the server
-aggregates and writes summaries and does no pose math. **If duplication starts to
-hurt, the answer is OpenAPI, not `:shared`:** generated client DTOs are sharing
-*with* a version boundary, since regeneration is deliberate and the skew appears
-in a diff. `includeBuild` of a shared module is the middle option, and it fixes
-the Gradle-fragility objection while fixing none of the compatibility one.
+**A root `settings.gradle.kts` with a `:shared` module was reconsidered and
+rejected** — it is right for a web client, which redeploys *with* its server, and
+wrong for mobile, which cannot be force-updated. Two consequences that are coding
+rules rather than history: a shared DTO makes the compiler lie about
+compatibility, and **enums are DTOs** — the server adding `PULL_UP` must not throw
+in an old client, so every enum read from the wire or the database needs a
+tolerant fallback arm. [The full trade](docs/decisions.md#no-shared-module).
 
 ## Identifiers
 
@@ -76,54 +61,32 @@ the Gradle-fragility objection while fixing none of the compatibility one.
 
 ## Server tech stack
 
-**Ktor, not Spring Boot — decided 2026-08-11, before a line was written.** Spring's
-value is amortizing complexity across a team and many modules; this API is ~12–15
-endpoints written by one person, which is exactly the regime where the amortization
-never happens and only the tax is paid: ~2–4 s startup against a few hundred ms
-(cold-start latency on anything that scales to zero), roughly 3–4x the idle memory,
-`allOpen`/`noArg` compiler plugins to make JPA entities work, and Jackson as the
-well-trodden path — which would put a *different* serializer on each side of the
-wire for no reason. Ktor is also the more hand-built of the two, which is the
-stated reason this backend exists at all.
+Ktor + kotlinx.serialization, Exposed, Flyway, Postgres, HikariCP. **Spring Boot
+was rejected** before a line was written: its value is amortizing complexity
+across a team and many modules, and ~12–15 endpoints written by one person is
+exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-spring-boot).
 
-- Ktor + kotlinx.serialization, Exposed, Flyway, Postgres, HikariCP. Exposed's DSL
-  is about as short as JPA repositories at this schema size and the SQL stays
-  visible.
 - **No Hilt — it is Android-only.** DI is constructor wiring in
   `Application.module()`; Koin only if that stops scaling.
-- **Spring Security is the one real loss, and it is not close** — nothing in Ktor
-  matches it. Priced before choosing: verifying a Google ID token means fetching
-  the JWKS and checking the signature plus `iss`/`aud`/`exp`, which is the `jwt {}`
-  block and ~40 lines against stable, well-documented behavior. An evening, not a
-  wall — and the payoff is understanding our own auth.
+- **Auth is a `jwt {}` block**, not a framework. Verifying a Google ID token means
+  fetching the JWKS and checking the signature plus `iss`/`aud`/`exp` — roughly 40
+  lines against stable, well-documented behavior. Losing Spring Security is the
+  one real cost of the choice above, and it was priced before choosing.
 
 ## Client tech stack
 
 - Kotlin, Jetpack Compose (pure, no Views), Jetpack Navigation 3
 - Hilt (DI), Room (local history), kotlinx.serialization
 - CameraX (`ImageAnalysis`) + ML Kit Pose Detection
-- **Ktor Client — settled 2026-08-11** (was "Retrofit vs Ktor, decide when
-  `:core:network` is built"). The margin is small and worth stating honestly: both
-  sit on OkHttp, so connection pooling, HTTP/2 and the cache are identical either
-  way, and Retrofit's annotated interface is the nicer thing to read. Three points
-  decided it:
-  - **Token refresh.** Ktor's `Auth` plugin
-    (`bearer { loadTokens; refreshTokens }`) retries the original request after a
-    401 and serializes concurrent refreshes. Retrofit means an OkHttp
-    `Authenticator` written by hand, where five requests 401-ing at once all firing
-    a refresh is a classic thing to ship broken. With optional login plus
-    background sync that is a Tuesday, not an edge case.
-  - **Error bodies.** Per-endpoint sealed errors (see *Result and errors*) need the
-    failure payload. Retrofit hands back `errorBody(): ResponseBody?` to
-    deserialize by hand on a path separate from the success one; Ktor's `body<T>()`
-    doesn't care about the status.
-  - **One HTTP library across both halves**, now that the server is Ktor — one
-    serialization setup and one mental model for the person writing a route and its
-    caller in the same sitting.
-
-  The `safeApiCall`-style wrapper is real but smaller than it sounds: ~30 lines in
-  Ktor against a `CallAdapter.Factory` or `Response<T>` at every call site. **This
-  would not have been worth a migration** — greenfield is what makes it free.
+- **Ktor Client**, not Retrofit. The margin was small and both sit on OkHttp, so
+  this is settled rather than obvious. Two things to actually *use* when
+  `:core:network` is built: Ktor's `Auth` plugin
+  (`bearer { loadTokens; refreshTokens }`) for token refresh, because it retries
+  the original request after a 401 and **serializes concurrent refreshes** — five
+  requests 401-ing at once is a classic thing to ship broken; and `body<T>()` for
+  error payloads, which does not care about the status, unlike Retrofit's separate
+  `errorBody()` path. Budget ~30 lines for a `safeApiCall`-style wrapper.
+  [Why](docs/decisions.md#ktor-client-not-retrofit).
 
 ### Toolchain gotchas (non-obvious)
 
@@ -265,106 +228,56 @@ Planned, not built: `:core:network`, `:feature:{history,stats,leaderboard}`.
 
 ### Design system — custom vocabulary, not Material's
 
-**Built 2026-08-08.** Color and typography have RepLens names and RepLens values;
-M3 remains a component library we wrap. Note what was **not** rejected: Now in
-Android is itself fully custom — its palette and all 15 type slots are its own.
-The only axis was whose semantic vocabulary to adopt, so this is not "Material bad."
-
-Two arguments decided it:
-
-- **The component → role mapping is library-internal and versioned.** `Card` reads
-  `surfaceContainerLow`; it used to read `surfaceVariant`. Under Material's
-  vocabulary a `compose-material3` bump can restyle the app with no code change.
-  Colors stated at our own wrappers can't be touched by an upgrade.
-- **M3's five button variants encode Material's emphasis hierarchy, not ours.**
-  Every choice between `FilledTonalButton` and `ElevatedButton` is a developer
-  answering a Material question, and inconsistent answers are how a solo-built app
-  drifts. `PrimaryButton` makes the right choice the only choice.
-
-What exists:
+Color and typography have RepLens names and RepLens values; M3 remains a component
+library we wrap. **Material's semantic vocabulary was rejected**, not Material: a
+`compose-material3` bump can restyle an app that names `surfaceContainerLow`, and
+M3's five button variants encode Material's emphasis hierarchy rather than ours.
+[The argument and every contrast measurement](docs/decisions.md#design-system).
 
 - **Two tiers.** `Palette` is `internal`, holds only raw values (`Slate6`,
-  `Cyan11`), and is never referenced by UI. `RepLensColors` maps those onto names
-  that mean something. Light/dark works because the semantics remap, not because
-  there are two palettes.
-- **Radix Colors** — `slate` + `cyan`, values copied from the repo. Its numbered
-  steps have defined jobs (9 = solid brand, 11 = low-contrast text, 12 =
-  high-contrast), so contrast is inherited rather than eyeballed. **Keep Radix's
-  numbering**: the number is a foreign key into their docs, and gaps just mean we
-  have not needed those steps yet.
+  `Cyan11`) and is **never referenced by UI**. `RepLensColors` maps those onto
+  names that mean something. Theming is a remap, not a second palette.
+- **Radix Colors** — `slate` + `cyan`. **Keep Radix's numbering**: the number is a
+  foreign key into their docs (9 = solid brand, 11 = low-contrast text, 12 =
+  high-contrast), so contrast is inherited rather than eyeballed. Gaps just mean
+  we have not needed those steps yet.
 - **`accent` is cyan, deliberately not green/amber/red** — those three are spoken
-  for by form feedback, and a brand color that collides with "your knees are
-  caving" makes the one moment color carries meaning meaningless.
-- **`accent` inverts with the theme; overlay colors never do.** A fill has to
-  separate from what is behind it, so a *fixed* accent against a background that
-  flips can only be right in one mode — cyan 9 measured 2.93:1 on the light page,
-  under the 3:1 a component boundary needs. It is now **Radix step 11 in both
-  themes**: dark fill with a light label on white (4.65:1), light fill with a dark
-  label on dark (9.96:1). Step 9 left the palette entirely — it is Radix's "pure
-  brand" step, kept near-identical across modes on purpose, which is exactly wrong
-  for this job. `accentText` went with it, since step 11 already *is* the text step.
-- **Overlay colors are theme-independent.** Anything drawn on the camera feed is
-  competing with an unknown room, not with our background. And no fixed color is
-  legible over arbitrary video — cyan on a mid-gray wall measures 2.09:1 — so the
-  skeleton is drawn with a dark outline behind it and carries its own contrast.
-  The rule that makes this coherent: **a camera feed under a scrim is a dark
-  surface, permanently**, so overlay colors are the dark-theme values frozen —
-  which is why `LightColors` reaching into `Palette.Dark` is correct rather than a
-  slip. `Palette.Dark`/`Light` name the *surface* a color sits on, Radix's own
-  meaning, not the app's theme.
+  for by form feedback, and a brand color colliding with "your knees are caving"
+  makes the one moment color carries meaning meaningless.
+- **`accent` inverts with the theme; overlay colors never do.** Anything drawn on
+  the camera feed competes with an unknown room, not with our background.
+- **`Palette.Dark`/`Light` name the surface a color sits on, not the app's theme**
+  — Radix's own meaning. So `LightColors` reaching into `Palette.Dark` for overlay
+  colors is correct rather than a slip: a camera feed under a scrim is a dark
+  surface permanently.
 - **`overlayScrim` tints, `overlaySurface` covers — a scrim is not a fill.** Two
-  scrims stack (50% over 50% is 75%), so a scrim-filled button on a scrimmed card
-  rendered *darker* than the card, and only looked like a button because the room
-  behind it happened to be bright. Panels over the feed are opaque; nothing can
-  reliably contrast against a translucent surface, because its rendered color is
-  partly the room. Buttons on the feed are opaque too, and primary and secondary
-  separate **by hue, not lightness** — every dark secondary measures 1.2–1.4:1
-  against that panel.
-- **`on` pairing kept in our names** (`accent`/`onAccent`). The one genuinely
-  valuable part of M3's color system. Giving it up makes **contrast our job**:
-  every pair was measured once, and the worst is 4.65:1.
+  scrims stack, so panels and buttons over the feed are **opaque**; primary and
+  secondary separate **by hue, not lightness**.
+- **`on` pairing kept in our names** (`accent`/`onAccent`) — the one genuinely
+  valuable part of M3's color system. It makes contrast our job: every pair was
+  measured once, and the worst is 4.65:1.
 - **No `MaterialTheme` at all.** `RepLensTheme` provides two `CompositionLocal`s
-  and nothing else. Un-wrapped M3 components fall back to Material's own defaults
-  and render visibly wrong, which is how we find them — the absence *is* the leak
-  detector, so don't add a floor "to be safe". `IconButton` was the last leak —
-  it took its colors from `IconButtonDefaults`, hence `OverlayIconButton`.
+  and nothing else. Un-wrapped M3 components fall back to Material's defaults and
+  render visibly wrong, which is how we find them — **the absence *is* the leak
+  detector, so do not add a floor "to be safe".**
+- **Wrap every M3 component before first use.** `IconButton` was the last leak; it
+  read `IconButtonDefaults`, hence `OverlayIconButton`.
 - **Typography named for the job, not the size** — `display`, `title`, `body`,
   `label`. `Title28` becomes a lie the moment the size changes or an accessibility
-  setting scales it. Four sizes, two weights. `display` sets `tnum` so the rep
-  counter doesn't reflow as it passes 9.
-- **Montserrat, subset by `tools/subset-fonts.sh`** — Google Fonts ships 325 KB per
-  weight for a character set we don't render; Latin + Polish is 101 KB. The
-  variable font is 672 KB against 649 KB for two statics, so it only pays from
-  three weights up.
-- **Wrap every M3 component before first use.** Nia's `DesignSystemDetector` lint
-  rule is the eventual enforcement, once there are enough wrappers to police.
+  setting scales it. Four sizes, two weights; `display` sets `tnum` so the rep
+  counter does not reflow as it passes 9.
+- **Montserrat, subset by `tools/subset-fonts.sh`** to Latin + Polish.
 
 **No spacing, sizing or radius tokens — plain `.dp` at call sites.** Color varies
-by theme and type size varies by the user's font scale, so both earn a token layer;
-spacing varies by nothing, so a token is just a second name for a number. Two
-failure modes seen first-hand and rejected:
-
-- **Semantic scales** (`Spacing.md`, `IconSize.large`) give no guidance — is a
-  card's inner padding `md` or `lg`? Two people answer differently and the same gap
-  ends up under two names, which is worse than raw numbers because the
-  inconsistency is no longer visible.
-- **Rescaling wrappers** (`.figmaDp`) are worse than a naming problem: `dp` is a
-  platform guarantee that 48dp is a 48dp touch target, and a wrapper that rescales
-  it makes accessibility minimums silently approximate.
-
-Keep the **rule** instead — only 4/8/12/16/24/32 — enforceable by a detekt rule if
-it ever drifts. A `private val` for a value repeated within one file is fine; that
-is naming a local constant, not building a token layer.
+by theme and type size varies by the user's font scale, so both earn a token
+layer; spacing varies by nothing. Semantic scales (`Spacing.md`) and rescaling
+wrappers (`.figmaDp`) were both rejected — the second is worse than a naming
+problem, since `dp` is a platform guarantee that 48dp is a 48dp touch target.
+Keep the **rule** instead: only **4/8/12/16/24/32**. A `private val` for a value
+repeated within one file is naming a local constant, not building a token layer.
 
 **Build the structure, populate on demand.** Tokens designed against imaginary
 screens are guesses.
-
-Written by a solo dev with no designer, which shapes the tactics: **borrow a
-palette** rather than invent one, and hold to few values. Amateur UI comes from too
-many values, not the wrong ones. The visual load here is unusually low anyway — the
-workout screen is invisible during a set, and history/stats/summary are lists and
-numbers.
-
 ### Icons
 
 **No `material-icons-*` dependency.** Compose no longer bundles `Icons`, and the
@@ -714,11 +627,13 @@ guard, and it silently never reaches the screen. No compile error and no test
 catches that. **A field list that must be kept in sync by hand is not worth 1% of
 an allocation budget.**
 
-## Local data model — decided 2026-08-14, before any code
+## Local data model
 
-Three tables. Domain names avoid `Set`, which shadows `kotlin.collections.Set`;
-**table names do not have to match class names**, so the schema keeps the clean
-plurals and the Kotlin type pays one extra word.
+Three tables. **Table names do not have to match class names**, so the schema
+keeps the clean plurals and the Kotlin type pays one extra word — `ExerciseSet`,
+because `Set` shadows `kotlin.collections.Set`. Not `WorkoutSet` (reads as *the
+whole workout*) and not `RepSet` (falsified by a future exercise that is not
+rep-based). [Full argument](docs/decisions.md#the-schema).
 
 ```
 workouts        id, startedAt, endedAt          ← Workout
@@ -736,364 +651,130 @@ reps            id, setId (FK, indexed, cascade)       ← Rep / RepEntity
                 descentMillis, ascentMillis
 ```
 
-**`index` stays on `Rep`, and it is 1-based** — it is the number a user is told.
-Removing it was tried on 2026-08-14 and reverted, so the reasoning is worth
-keeping: it is redundant *live* (`SquatRepCounter.repCount` is the same number,
-which is why the ViewModel passes `repCount` to `CueEngine` separately) and
-redundant *in a list* (position says it). It earns its place at the persistence
-boundary. Re-deriving it on write makes **"the list is complete and in order" a
-silent invariant of the mapper** rather than data, the entity → domain → entity
-round trip stops being lossless, and every reader wanting to name a rep pays an
-off-by-one — `reps.withIndex().minBy { it.value.deepestAngle }` then `+ 1`, at a
-user-facing call site, for a feature that is actually planned ("show me the rep
-you got wrong").
-The argument for removing it was that `Rep` should carry measurements only, with
-the fixtures passing `index = 1` as noise offered as evidence. That evidence does
-not hold: the same fixtures pass `descent = 500.milliseconds` as noise too, in
-tests that only care about the angle. `ORDER BY id` would also have been sound —
-a completed set is immutable, written once in one transaction — so the column was
-never load-bearing for ordering either. The round trip is what decides it.
-
-`ExerciseSet`, not `WorkoutSet` — the latter parses as "the set belonging to the
-workout", which read as *the whole workout* to a fresh pair of eyes and is exactly
-the ambiguity that made `session` mean two things in the ViewModel. `ExerciseSet`
-names the row by the column that actually discriminates it (`exercise`), and it
-cannot be falsified by a future exercise that is not rep-based, which `RepSet`
-could.
-
-**A workout is a real entity, but has no "finish" trigger.** There is no button
-for it and there should not be, because the common real behavior is pressing
-nothing at all — you finish your last set, pick the phone up, close the app. Any
-rule that depends on a press gets the usual case wrong. Instead, the boundary is
-inferred **when a set starts**:
-
-> attach to the most recent workout if its last set ended under **60 minutes**
-> ago, otherwise open a new one.
-
-No close event, so an abandoned workout is already correct: `endedAt` is just its
-last set's. Killing the app mid-workout is safe. Pressing Done and changing your
-mind five minutes later still reads as one workout, where an explicit close would
-have produced two. An explicit **Finish workout** stays available later as a
-purely additive flag that makes the gap rule skip that workout — add it only with
-evidence that forcing a boundary is wanted.
-
-**Reps are rows, not a blob.** 3 workouts/week × 4 sets × 10 reps ≈ 6,000 rows a
-year, which is nothing for SQLite, and rows are queryable — that *is* the stats
-milestone — and migratable without hand-written JSON versioning.
-
-**`repCount` / `repsAtDepth` are denormalized onto the set on purpose.** This does
-not contradict the derive-don't-store rule that governs `repsAtDepth` in the
-ViewModel: that rule exists because a live counter can drift from its source, and
-**a completed set is immutable**, so there is nothing to drift from. A history list
-that JOINs and aggregates per row to print "12 reps" is the wrong trade.
-
-**Abandoned descents are two columns on the set**, not their own table and not
-dropped. The non-obvious reason is calibration: the trigger is *"reaches
-`DESCENDING` and never `BOTTOM`"*, which **is** an abandoned descent, so storing
-`deepestAbandonedAngle` turns calibration from a live heuristic into a question
-asked of history — *"across your last 20 attempts you never got below 128°"* —
-which is a far better basis for offering it than one bad session. Note the name is
-a **minimum**: 128° is shallower than 95°, consistent with `Rep.deepestAngle`.
-
-**The landmark stream is deliberately not stored.** Measured, not guessed: 33
-landmarks × 4 floats = 528 bytes/frame, ~81 frames for a 3 s rep ≈ **42 KB per
-rep**, ~500 KB per set, **~300 MB per year** — CLAUDE.md previously called this
-"kilobytes", which was optimistic by three orders of magnitude. Quantizing x/y to
-16-bit and dropping z and likelihood still leaves ~80 MB/year. Rejected for now
-because you would be designing a serialization format with **no reader to validate
-it against**, and retention (when do old streams get deleted?) is a whole design
-problem. `reps` has a stable id, so a `rep_frames` table is additive whenever the
-feature arrives.
-The planned first version is **in-memory only** — replay the reps of the workout
-you just did, on the summary screen, nothing persisted. That is a genuine stepping
-stone rather than a dead end, because the compaction it requires (one `FloatArray`
-per rep, ~21 KB, instead of retaining ~130k live `Landmark` objects and turning
-cheap young-gen churn into retained old-gen pressure) **is** the serialization
-format. What it does not do is discharge the risk the roadmap assigns to replay:
-CLAUDE.md lists it as an answer to **cue novelty decay**, and a replay that
-vanishes on app close cannot be part of "history worth browsing".
+- **`index` stays on `Rep`, 1-based** — the number a user is told. Removing it was
+  tried and reverted: re-deriving on write makes "the list is complete and in
+  order" a silent invariant of the mapper, and the round trip stops being lossless.
+- **A workout has no "finish" trigger, and must not get one.** The boundary is
+  inferred when a set *starts*: attach to the most recent workout if its last set
+  ended under **60 minutes** ago, else open a new one. Any rule that waits for a
+  press gets the common case — pressing nothing at all — wrong. An explicit Finish
+  stays available later as a purely additive flag.
+- **Reps are rows, not a blob** — ~6,000 rows a year, queryable, migratable.
+- **`repCount` / `repsAtDepth` are denormalized on purpose.** This does not
+  contradict derive-don't-store: that rule guards a *live* counter against
+  drifting, and **a completed set is immutable**.
+- **Abandoned descents are two columns on the set**, not a table and not dropped —
+  they are what per-user calibration will read. `deepestAbandonedAngle` is a
+  **minimum**: 128° is shallower than 95°.
+- **The landmark stream is deliberately not stored.** Rejected on measured size
+  (~300 MB/year, not the "kilobytes" an earlier note claimed) and on having no
+  reader to validate a format against. `reps` has a stable id, so a `rep_frames`
+  table is additive. [Numbers, and the in-memory stepping stone](docs/decisions.md#the-landmark-stream).
 
 ### Time types: domain speaks in time, entities speak in the column's primitive
-
-`Rep` was reshaped for this (2026-08-14) and came out **better on its own merits**:
-
-```kotlin
-data class Rep(val index: Int, val deepestAngle: Float,
-               val descent: Duration, val ascent: Duration)
-```
-
-The three timestamps it used to carry — `startedAtMillis`, `bottomAtMillis`,
-`completedAtMillis` — existed **only to be subtracted from each other**; the
-durations were already there as derived properties, and nothing outside the
-counter and its test fixtures read the raw values. Storing durations means the
-frame clock never escapes `SquatRepCounter`, so a loaded `Rep` and a live `Rep`
-cannot mean different things by the same field name — the ambiguity stops existing
-rather than getting documented.
-
-`Duration` over `Long` because this project already has the scar: `READY_FRAMES =
-14`, *"~0.5 s at ~27 fps"*, was a full second at 15 fps. `SetSession.settleFor` and
-`SpokenCue.repeatAfter` are `Duration` for the same reason.
-
-What it gives up, neither of which is wanted today: *when* within a set a rep
-happened (ordering is `index`), and per-gap rest between reps (aggregate rest is
-still free — set duration minus the sum of rep durations). Both are additive if
-they ever matter.
-
-**Nothing reads `descent`/`ascent` yet, and they are kept anyway — a decision, not
-an oversight.** The justification is cost asymmetry rather than a planned feature:
-16 bytes a rep, ~96 KB a year, produced by a subtraction the counter already makes
-for `minRepDurationMillis`, and **unrecoverable after the fact** — add the columns
-in six months and every earlier rep is a permanent hole. That is the same
-"we have no reader yet" argument the landmark stream lost, four orders of
-magnitude cheaper (96 KB against 300 MB a year), which is why it comes out the
-other way. Two columns also yield three metrics: rep duration, time under tension
-(their sum), and rest (set duration minus that sum). And history and stats showing
-only angles would be a thin product — tempo is a real lifting metric and *"your
-descent slowed 40% over the last three reps"* is something a mirror cannot tell
-you, which is on-brand for the cue-decay problem.
-If they are still unread when history and stats ship, that is evidence to drop
-them — deleting a column nothing reads is a far easier call than adding one you
-wish you had.
-
-**They split at the deepest frame, and the first device data is why** (2026-08-14).
-The original split was at threshold crossings: `descent` ran from `standingExit`
-(160°) to `bottomEnter` (115°), and `ascent` from there to `standingEnter` (168°).
-That made `descent` a fixed 45° window — a genuine speed measure — while `ascent`
-absorbed everything else, including the bottom half of the descent and the
-turnaround. So its length tracked **depth**, not tempo: the first seven real reps
-measured ascent/descent at **3.7–4.9x at ~60°** against **1.8–1.9x at ~102°**, at
-the same cadence. Depth leaking into the one metric whose job is tempo would have
-made *"your descent slowed 40%"* report reps that merely went deeper.
-Splitting at the minimum-angle frame instead is threshold-independent, keeps the
-sum (and therefore rep duration, time under tension and rest) identical, and cost
-three lines — `SquatRepCounter` already tracked the minimum, only its timestamp
-was thrown away. `bottomAtMillis` disappeared with it.
-Confirmed on device the same day: two continuous reps in one set, **20° apart in
-depth** (39.8° and 60.2°), split 608/608 and 509/541 — ratios of 1.00 and 1.06,
-where the old rule would have charged the deeper one a much longer ascent for
-distance alone.
-Two residual biases, both accepted: the rep still *starts* at the 160° crossing
-rather than at first movement, so a fast descent starts measuring ~8° late; and it
-ends at 168°, so the window is lopsided by the hysteresis band. Both apply equally
-to every rep, so comparisons between reps hold — comparisons against anything
-external do not.
-
-**The known weakness is a pause at the bottom, and it is not fixable by picking
-first-or-last minimum.** During a hold the angle wobbles ±0.5–1°, so exactly one
-frame is lowest and it sits at a **random position inside the pause** — first and
-last are the same frame once the signal is real. Measured 2026-08-14: three reps
-done continuously split at ratios 1.21/1.33/1.37 (13% spread), while three the
-lifter paused on split at 0.76/1.09/0.55 (**98%**). Well-defined for a continuous
-rep, arbitrary for a paused one.
-The robust version treats the bottom as a **band** rather than a point — frames
-within ~3° of the minimum, `descent` ending at the first and `ascent` starting
-after the last — which makes the pause a third duration, keeps the sum equal to
-the rep, and is a real metric in its own right. **Deliberately not built**, on the
-primary-key argument: until release the whole population of this schema is one
-phone, so this stays a wipe rather than a migration, and designing a three-phase
-tempo metric with no reader is the mistake the landmark stream lost on.
-It is also **not a device question** — a lifter cannot feel where 160° is, so no
-amount of careful squatting validates it. The tool is a fixture: one recorded clip
-with a deliberate pause gives the angle trace, and where the minimum lands is then
-something to read off a plot. Another reason to widen the CSVs.
-**This is why the fix could not wait for a reader.** The turnaround timestamp is
-not stored, so data written under the old split cannot be recomposed into the new
-one — exactly the argument that kept the columns in the first place, applied to
-their definition.
 
 | | domain | entity | column |
 |---|---|---|---|
 | rep timings | `Duration` | `Long` | INTEGER millis |
 | set/workout times | `Instant` | `Long` | INTEGER epoch millis |
 
-**Both are `kotlin.time`** — `Instant` and `Clock` moved into the stdlib and are
-stable on Kotlin 2.4.10 (verified 2026-08-14: no opt-in, no warning). This
-supersedes an earlier note here recommending `java.time` on the grounds that
-minSdk 26 needs no desugaring; that was answering "java.time or
-kotlinx-datetime", and the stdlib is a third option that beats both.
+**Both are `kotlin.time`** — `Instant` and `Clock` are stdlib and stable on Kotlin
+2.4.10 (verified: no opt-in, no warning). `java.time` and `kotlinx-datetime` were
+both rejected: `Instant - Instant` yields a `kotlin.time.Duration` directly, which
+is exactly where the gap rule lives, and `java.time` would put two `Duration` types
+in one module. [Comparison](docs/decisions.md#time-types).
 
-The deciding case is the workout gap rule, since `Instant - Instant` is a
-`kotlin.time.Duration` directly:
-
-```kotlin
-now - lastEndedAt < WORKOUT_GAP          // kotlin.time
-Duration.between(a, b).toKotlinDuration() < WORKOUT_GAP   // java.time
-```
-
-`Rep` already carries `kotlin.time.Duration`, so `java.time.Instant` would put
-**two `Duration` types in one module** and charge a conversion at exactly the
-place the rule lives. Smaller wins: `kotlin.time.Clock` is an interface with
-`Clock.System`, so faking now() in a test needs no `Clock.fixed(instant, zone)`;
-and there is no minSdk caveat left to remember.
+**`Duration` over `Long`** because this project has the scar: `READY_FRAMES = 14`,
+*"~0.5 s at ~27 fps"*, was a full second at 15 fps.
 
 **The conversion lives in the mapper, not a Room converter.** The entity *is* the
 schema: `descentMillis: Long` says "INTEGER, milliseconds" to anyone who opens the
-file, where `descent: Duration` says "something, converted elsewhere". Same
-instinct as duplicating DTOs rather than sharing them — make the boundary felt.
+file. Same instinct as duplicating DTOs — make the boundary felt.
 
-### Room 3, not Room 2 — decided 2026-08-14
+**`descent`/`ascent` split at the deepest frame, never at a threshold crossing.**
+Splitting at `bottomEnter` measured a fixed angular window down and everything else
+up, so a deeper rep reported a longer `ascent` at identical tempo — depth leaking
+into the one metric whose job is tempo. **Known weakness, accepted:** a pause at
+the bottom puts the split at a random point inside the pause, because exactly one
+frame is lowest. A band-based three-phase version is designed but **not built** —
+no reader yet, and until release the schema's whole population is one phone.
+[Measurements](docs/decisions.md#rep-timings).
 
-`androidx.room3:room3-runtime` 3.0.1, **stable** since 2026-07-01. Not adventurism:
+**Nothing reads `descent`/`ascent` yet and they are kept anyway** — 96 KB a year,
+produced by a subtraction the counter already makes, and **unrecoverable after the
+fact**. That is the same "no reader yet" argument the landmark stream *lost*, four
+orders of magnitude cheaper, which is why it comes out the other way.
 
-- **Coroutine-first is mandatory** — every DAO function is `suspend` or returns
-  `Flow`, there is no Executor support, and `InvalidationTracker` is Flow-based.
-  There is not an `Executor` anywhere in this codebase.
-- **KSP required, Kotlin-only codegen.** KSP is already on the classpath for Hilt;
-  there is no KAPT to avoid.
-- **The main migration pain does not apply.** `@TypeConverter` became
-  `@ColumnTypeConverter` — and per the rule above we need **no converters at all**.
-- **Greenfield makes it free**, exactly as with Ktor Client. New Maven group, so
-  there is nothing to migrate and being wrong costs a rename.
+### Room 3, not Room 2
 
-The honest cost: six weeks old as stable, so search results and snippets will be
-Room 2 with different imports and API shapes (`withWriteTransaction`, not
-`runInTransaction`; `useReaderConnection`, not `query`). The Room Gradle plugin is
-`androidx.room3` and must be declared `apply false` in the root build file like
-every other third-party plugin (see *Toolchain gotchas*). Commit the schema
-directory from day one so migrations are reviewable.
+`androidx.room3:room3-runtime`. Coroutine-first is mandatory (every DAO function is
+`suspend` or `Flow`; no Executor support), KSP-only codegen, and `@TypeConverter`
+became `@ColumnTypeConverter` — which we need none of. The honest cost is that
+search results are Room 2 with different API shapes (`withWriteTransaction`, not
+`runInTransaction`; `useReaderConnection`, not `query`). The Gradle plugin is
+`androidx.room3` and must be `apply false` in the root build file like every other
+third-party plugin. **Commit the schema directory** so migrations are reviewable.
 
 **`:core:database` exports coroutines, not Room.** `room3-runtime` is
 `implementation` because the only Room type in a public supertype —
 `ReplensDatabase : RoomDatabase` — is **`internal`**, and Room's annotations are
-skipped rather than resolved when a class file is read (the same mechanism as
-`@Composable` in `:core:ui`). What *does* have to be `api` is
-`kotlinx-coroutines-core`, because `Flow` is in DAO signatures — and it was
-arriving transitively through room-runtime, which is exactly the "works only via
-someone else's transitive graph" trap under *Dependency rules*. `-core`, not the
-`-android` artifact `:core:pose` uses: nothing here wants a Main dispatcher.
-`:core:data` declared the same `api` and had **no coroutine type in any
-signature**; removed 2026-08-14. It returns when `workouts()` reaches the
-repository.
+skipped rather than resolved when a class file is read (same mechanism as
+`@Composable` in `:core:ui`). `kotlinx-coroutines-core` is `api` because `Flow` is
+in DAO signatures, and it was arriving transitively through room-runtime — the
+"works only via someone else's transitive graph" trap. `-core`, not `-android`:
+nothing here wants a Main dispatcher. `:core:data` declared the same `api` with no
+coroutine type in any signature; removed, and it returns when `workouts()` reaches
+the repository.
 
-**A DAO is the typed interface to a schema, not application logic, and that
-changes what counts as speculative.** A table you can insert into but never list
-is an incomplete interface, so `workouts()` having no production caller is a
-statement about the app being half-built rather than about the method being a
-guess — and four write-path tests read their results through it, so removing it
-would mean inventing a worse-named replacement. Where the line actually falls:
-- **`repsFor(setId)` was deleted** (2026-08-14) because it is a strict *subset*
-  of `repsForWorkout`, which orders by `setId, rep_index` and returns identical
-  rows for one set. That is duplication, not early API, and two overlapping
-  queries make every call site a choice with no right answer.
-- **`deleteWorkout` was kept and is genuinely test-only.** It is the only lever
-  the cascade test can pull, and `onDelete = CASCADE` is free to keep and needs a
-  migration to add, so leaving it declared-but-unverified is the worse trade. It
-  is probably not what deletion will eventually call either: a hard delete on a
-  synced row returns on the next pull, so that wants a tombstone.
-The general rule: **keep an unused query when it is an obvious operation on the
-table, delete it when it is a narrower spelling of one that already exists.**
-
-**Now in Android's `core:database` looks different for reasons that don't
-transfer.** It `api`s `core:model` because it maps *inside* the database module
-(`TopicEntity.asExternalModel()`); our mappers live in `:core:data` because our
-domain models sit in `:core:exercise`, which is exercise *knowledge* — depending
-on it here would drag squat math onto the database module's classpath to convert
-three longs. And its Room setup is a convention plugin applied to exactly one
-module, because build-logic is part of what that repo demonstrates. **The rule
-here: a convention plugin earns its keep at the second call site.** The trigger
-would be `:core:database` splitting.
+**A DAO is the typed interface to a schema, not application logic**, so a query
+with no production caller is not automatically speculative — a table you can insert
+into but never list is an incomplete interface. The rule: **keep an unused query
+when it is an obvious operation on the table, delete it when it is a narrower
+spelling of one that already exists.** `repsFor(setId)` went (a subset of
+`repsForWorkout`); `deleteWorkout` stayed and is genuinely test-only, because it is
+the only lever the cascade test can pull and `onDelete = CASCADE` needs a migration
+to add.
 
 ### Where these live
 
-`Workout`, `ExerciseSet` and `Exercise` go in **`:core:model`**, and `Rep.kt`
-moved there with them (2026-08-14). An earlier version of this file put them in
-`:core:exercise` on the grounds that `:core:model` would then need a dependency
-"in the wrong direction" — **that was wrong**, and only true if `Rep` stayed
-behind. `ExerciseSet` holds `List<Rep>`, so the two move together, and
-`:core:exercise` already depends on `:core:model`; no cycle exists.
+`Workout`, `ExerciseSet`, `Exercise` and `Rep` live in **`:core:model`**.
 
 **The module's charter is the admission test: pure data, no thresholds, no
-behavior, no dependencies.** `Landmark` and `Workout` both pass it; `SetupCheck`
-fails (carries `MAX_TORSO_FRACTION`) and `SetSession` fails (behavior), which is
-why those stay in `:core:exercise` along with `squat/`. Stated as a rule, the
-module cannot drift into meaning "misc types".
-
-**Not split into pose models and workout models**, tempting as the two groups
-look: `:core:exercise` needs `BodyPose` *and* `Rep`, and `:feature:workout` needs
-`PoseFrame` *and* `RepPhase`, so the halves already meet in two modules and would
-be declared together nearly everywhere. There is no consumer that must not see
-the other half, and the pose half is four dependency-free data classes. If the
-flat package ever feels mixed, `pose/` and `workout/` sub-packages are a
-directory move — cheaper than a module, same legibility.
+behavior, no dependencies.** `Landmark` and `Workout` pass; `SetupCheck` fails
+(carries `MAX_TORSO_FRACTION`) and `SetSession` fails (behavior). Stated as a rule,
+the module cannot drift into meaning "misc types". **Not split** into pose models
+and workout models — the halves already meet in two modules, so they would be
+declared together nearly everywhere.
 
 **`Workout` and `ExerciseSet` are read models, so `id` is always real.** No
 `id: Long = 0` — that is Room's `autoGenerate` sentinel leaking into a type that
-should not know Room exists, and it is the same lie as `zoomStops = emptyList()`
-meaning two things. A nullable id would be honest but would make every history
-call site unwrap a value that is always present after a read. Instead **recording
-a set does not go through these types**: `recordSet`'s parameters are exactly
-`ExerciseSet`'s fields **minus `id`**, and that one difference is the whole reason
-it is a parameter list rather than that type. A wrapper type would earn its keep
-if the payload were held or passed through layers; it is constructed and consumed
-in one expression, so it would only add a name.
+must not know Room exists. Instead **recording a set does not go through these
+types**: `recordSet`'s parameters are exactly `ExerciseSet`'s fields **minus `id`**,
+and that one difference is the whole reason it is a parameter list.
 
 **The repository derives what it is handed the source for, and takes what it is
-not.** `repCount` is derived from `reps`, which are passed anyway because they are
-rows. `abandonedCount` and `deepestAbandonedAngle` are passed, because abandoned
-descents are **not** rows and there is nothing here to recompute them from — the
-same asymmetry `ExerciseSet` itself has, and it exists exactly where the schema is
-lossy. `repsAtDepth` is passed for a different reason: grading depth needs
-`SquatRepConfig`, which is the feature's knowledge.
+not.** `repCount` from `reps` (rows, passed anyway); `abandonedCount` and
+`deepestAbandonedAngle` passed, because abandoned descents are not rows. The
+asymmetry sits exactly where the schema is lossy. `repsAtDepth` is passed for a
+different reason: grading depth needs `SquatRepConfig`, the feature's knowledge.
 
-### Primary keys: autoincrement is a hold, not a default
+**Primary keys: autoincrement is a hold, not a default.** The question that settles
+it — *does the sync API accept client-supplied ids?* — is answered when sync is
+**designed**, alongside the anonymous→account path. Yes means client-generated
+UUIDs and `serverId` disappears; no means autoincrement was right all along. Not
+now, because until release the schema's whole population is one phone, so switching
+stays a wipe rather than a migration. [The full trade](docs/decisions.md#primary-keys).
 
-**The decision to make, and when: *does the sync API accept client-supplied
-ids?*** Answer it when sync is **designed**, before it is written, alongside the
-anonymous→account path. Answering it settles the keys:
-
-- **Yes** → switch to client-generated UUIDs (`kotlin.uuid.Uuid`, now in the
-  stdlib — verify its stability the way `kotlin.time.Instant` was). `serverId`
-  disappears, push becomes an idempotent upsert, and claiming a guest's history is
-  the server attaching a `userId` to rows that already have global identity.
-  Locally it also removes the `id`-shaped awkwardness: `recordSet` stops needing a
-  return value because the caller already knows the id, `WorkoutDao`'s
-  `set`/`reps` callbacks collapse into plain parameters (they exist *only* because
-  each id is unknown until the insert above returns), and write and read models
-  become the same type.
-- **No** → keep `serverId` and the mapping, and autoincrement was right all along.
-
-**Why not now:** the app ships at milestone 5, *after* the backend at milestone 4,
-so until release the entire population of this schema is one phone. Switching keys
-stays a wipe rather than a data migration right up to the moment it ships.
-Adopting UUIDs today would mean committing to a sync design that does not exist
-yet. Note `isDirty` and `updatedAt` stay either way — they are about what to push
-and how to resolve conflicts, not about identity. Nothing orders by `id` already
-(reps by `rep_index`, sets and workouts by their `Instant`s), which was decided for
-sync reasons and happens to keep this door open.
-
-Collisions are not a consideration: 122 random bits, and a colliding insert would
-be rejected by the primary key rather than corrupt anything. The real risk is a
-non-cryptographic random source.
-
-**Measured 2026-08-14, because it decides a tempting shortcut:** Room's
-`autoGenerate` treats **0** — and only 0 — as not-set. An entity inserted with
-`id = -1` stores `-1` as the actual primary key, and the *second* such insert
-fails. So a `-1` sentinel on the domain model would need the mapper to translate
-it to 0, and forgetting that would not fail a compile or the first set of a
-session — it would fail the second. As it stands no mapper forwards an id at all,
-so the question does not arise.
-
-**The three summary numbers get three different treatments on `ExerciseSet`, and
-the differences are the design.** `repCount` is a derived property (`reps.size`)
-— the same rule the ViewModel follows when it recomputes `repsAtDepth` every
-frame rather than incrementing, so the list is the only thing that can be wrong.
-`abandonedCount` and `deepestAbandonedAngle` are stored, because abandoned
-descents are not rows and there is no list to derive them from. `repsAtDepth` is
-stored despite the reps being right there, for the tunable-threshold reason
-above. Note this does **not** drop the `repCount` *column*: the column is what
-lets SQL answer "12 reps" without joining `reps`, which is the escape hatch if
-eager loading ever hurts.
+**Measured, because it decides a tempting shortcut:** Room's `autoGenerate` treats
+**0** — and only 0 — as not-set. An entity inserted with `id = -1` stores `-1` as
+the actual key, and the *second* such insert fails. A `-1` sentinel would not fail
+a compile or the first set of a session; it would fail the second.
 
 `:core:database` owns entities, DAOs and the database; `:core:data` owns the
 repository (interface *and* impl) and the mappers. The repository is shared rather
 than per-feature because `:feature:workout` writes it while `:feature:history` and
-`:feature:stats` read it — the one case CLAUDE.md's per-feature `domain/` rule
-does not cover.
-
-**Sign-out is an unanswered question.** With no `userId` locally, the database is
-"this device's history" and signing in claims it — so if user A signs out and B
-signs in, B inherits A's sets. That is a milestone-4 problem, named here so the
-answer is a decision rather than a migration.
+`:feature:stats` read it — the one case the per-feature `domain/` rule does not
+cover.
 
 ## Product decisions
 
@@ -1271,8 +952,8 @@ for parallel — so the mistake is invisible exactly where you'd check it.
 One threshold forces a bad trade: at true parallel most casual reps don't count
 (app looks broken); lenient and quarter-squats count. So `bottomEnter` only means
 "this was a rep attempt" and is deliberately forgiving, while depth *quality* is
-graded from `Rep.deepestAngle` and never affects the count. Ten shallow reps read
-as "10 reps, depth 42%", not "0 reps".
+graded from `Rep.deepestAngle` and **never affects the count**. Ten shallow reps
+read as "10 reps, depth 42%", not "0 reps".
 
 ```
 standingExit    160°   descent under way
@@ -1283,58 +964,36 @@ goodDepthAngle   95°   scoring only, never affects counting (~parallel)
 ```
 
 Research-informed starting points that **turned out to need no tuning** — all
-eight fixtures pass unchanged (2026-08-08). Hysteresis bands (8° and 10°) must
-stay wider than post-smoothing noise, including the ~10 frames after a descent
-while the One Euro cutoff winds down.
+eight fixtures pass unchanged. Hysteresis bands (8° and 10°) must stay wider than
+post-smoothing noise, including the ~10 frames after a descent while the One Euro
+cutoff winds down.
 
-The fixtures also validate the boundary from both sides: the descending sweep
-counts its 113° rep and rejects its 128° one, and ten deliberately marginal reps
-at 124–141° produce zero rather than an occasional phantom.
-
-**A fixed threshold is still wrong for somebody.** The author's real reps land at
-38–98°, clearing 115° by 20–80°, so it is very forgiving *for him*. Someone whose
-comfortable deepest is 130° — knee issues, poor ankle dorsiflexion, age — gets
-zero reps and an app that is simply broken. Recorded evidence that human ground
-truth is itself ambiguous here: the `tiny` clip (140–145°, intended as non-reps)
-overlaps `borderline` (124–141°, intended as reps), so no fixed value satisfies
-both and raising it only trades a consistent "no" for an inconsistent "sometimes".
-
-**The fix is per-user calibration, and the shape matters:**
-
-- Derive from range, not a constant: `bottomEnter ≈ personalDeepest + 25°`
-  reproduces 115° for this author, and 155° for someone who stops at 130°. **Cap
-  it** — calibrating on knee twitches must not teach the app that knee twitches
-  are reps, or coaching becomes impossible.
-- **Reactive, not upfront.** A mandatory calibration flow is exactly the setup
-  friction that is this product's biggest risk — a tax on everyone to help a
-  minority. The failure is detectable instead: the state machine reaches
-  `DESCENDING` and never `BOTTOM`. Offer calibration only to the people it fails.
-- **Count relatively, coach absolutely.** If the score adapts too, nobody is ever
-  told their depth is objectively shallow and the coaching quietly disappears.
-  "12 reps" against your range; "depth 62% of parallel" against the standard.
-
-Needs somewhere to store a baseline, so it lands with history (milestone 3).
+**A fixed threshold is still wrong for somebody**, and the fixtures prove human
+ground truth is itself ambiguous here. The fix is **per-user calibration**, whose
+shape is already decided: derive from range (`bottomEnter ≈ personalDeepest + 25°`)
+with a **cap**, offer it **reactively** to the people the counter fails rather than
+as an upfront flow, and **count relatively but coach absolutely** — "12 reps"
+against your range, "depth 62% of parallel" against the standard. It needs
+somewhere to store a baseline, so it lands with history.
+[Evidence and the fixture overlap](docs/decisions.md#squat-thresholds).
 
 ### Two layers
 
 `BodyPose -> SquatSignals` (per-leg knee angles gated on `inFrameLikelihood`
-across all three joints, averaged when both survive, `null` when neither) then
-`Float? -> SquatRepCounter`. The state machine never sees a pose, so a test is a
-readable list of angles rather than eight hand-built skeletons. `SquatSignals`
-doubles as the CSV fixture row format. Average rather than min/max: a large
-left/right disagreement is far more often measurement error than real asymmetry,
-and averaging cancels error where min/max amplify it.
+across all three joints, **averaged** when both survive — a large left/right
+disagreement is far more often measurement error than real asymmetry, and
+averaging cancels error where min/max amplify it) then `Float? -> SquatRepCounter`.
+The state machine never sees a pose, so a test is a readable list of angles rather
+than hand-built skeletons. `SquatSignals` doubles as the CSV fixture row format.
 
-`PoseFrame.squatDepthAngle` composes the two and applies the framing gate, so the
-rule *"a badly framed frame reads as no reading rather than a bad one"* is stated
-once, in core, with both thresholds as arguments a test supplies. It is a
-composition rather than a third layer: `SquatSignals` stays public and separate
-because `FixtureGenerator` needs **all five** of its fields for the CSV, and
-because per-leg gating and framing fail for unrelated reasons and deserve
-unrelated tests. Note this means `femurInclination` and `torsoLeanDegrees` have no
-production consumer at all — they exist to reach the fixtures, so that depth
-scoring and forward lean can be tuned against footage later. An "unused field"
-cleanup there costs a regeneration of all eight clips.
+`PoseFrame.squatDepthAngle` composes the two and applies the framing gate, so
+*"a badly framed frame reads as no reading rather than a bad one"* is stated once,
+in core, with both thresholds as arguments a test supplies.
+
+**`femurInclination` and `torsoLeanDegrees` have no production consumer** — they
+exist to reach the fixtures, so depth scoring and forward lean can be tuned
+against footage later. An "unused field" cleanup there costs a regeneration of all
+eight clips.
 
 ### Reference frames — which rules need true vertical
 
@@ -1349,19 +1008,14 @@ cleanup there costs a regeneration of all eight clips.
 Three of five are reference-free, including everything rep counting depends on.
 Forward lean can't be expressed without gravity, so those two rules must be gated
 on the setup check rather than trusted unconditionally. What breaks a vertical
-reference is camera **roll**, which a propped phone rarely has; the Milestone 1
-tilt was **pitch**, which distorts perspective and degrades *every* measurement.
-Interior angles win for the simpler reason that they need no reference frame at
-all.
+reference is camera **roll**, which a propped phone rarely has.
 
 Depth uses the interior knee angle, **not** femur inclination from vertical, even
-though the latter states the parallel standard directly. Compute femur
-inclination into `SquatSignals` anyway for scoring; never let it decide the count.
+though the latter states the parallel standard directly. Compute femur inclination
+into `SquatSignals` anyway for scoring; never let it decide the count.
 
 *If roll ever bites:* during `STANDING` the shoulder→hip segment should be
 vertical, so whatever it reads is the camera roll — subtract it for the session.
-Conflates posture with tilt, but better than assuming image-vertical is true
-vertical, and the state machine says exactly when the user is standing.
 
 ### Form-fault thresholds need later research
 
@@ -1371,139 +1025,80 @@ proportion-dependent). Encoding folklore means confidently nagging people about
 non-faults, which is worse than silence. Every threshold will be tuned against
 **one body** (the author's).
 
-### Smoothing behaviors to remember
+### Smoothing
 
 `minCutoff = 1`, `beta = 0.5` are the One Euro paper's defaults, **untuned**. Tune
-`minCutoff` first with `beta = 0` until rest is clean, then raise `beta` until
-fast reps stop lagging. Two behaviors seen in simulation: **noise inflates the
-resting cutoff** (jitter looks like movement and `beta` multiplies it), and **the
-cutoff decays slowly after motion stops** — for ~10 frames after a descent there
-is less smoothing than at rest, landing exactly at the bottom where depth is read.
+`minCutoff` first with `beta = 0` until rest is clean, then raise `beta` until fast
+reps stop lagging. Two behaviors seen in simulation: **noise inflates the resting
+cutoff**, and **the cutoff decays slowly after motion stops** — for ~10 frames
+after a descent there is less smoothing than at rest, landing exactly at the
+bottom where depth is read.
 
 `PoseSmoother` filters in **units of frame width, not pixels**, so `beta` means the
-same thing at any analysis resolution; both axes divide by width so smoothing
-stays isotropic. A gap over 500 ms resets, so stepping out of frame and back
-doesn't drag the skeleton across the screen.
+same thing at any analysis resolution; both axes divide by width so smoothing stays
+isotropic. A gap over 500 ms resets, so stepping out of frame and back doesn't drag
+the skeleton across the screen.
 
-**Kalman was evaluated and rejected.** A constant-velocity model assumes motion
-continues, but a rep is a sequence of direction reversals — so it's wrong exactly
-where the counter cares. Simulated: ~10° overshoot past the bottom, mean error
-3.6° vs 0.85° for One Euro. Structural, not mistuning (lower `Q` smooths but
-overshoots more; higher `Q` converges on the raw signal), and a steady-state CV
-filter is an alpha-beta filter that doesn't adapt to speed at all. Where Kalman
-*would* win: **missing measurements** — it coasts while a landmark is occluded,
-which One Euro cannot do, and side-view footage occludes far-side limbs by
-definition. If `inFrameLikelihood` gating leaves gaps, try holding the last value
-with decaying confidence first.
+**Kalman was evaluated and rejected** — a constant-velocity model assumes motion
+continues, but a rep is a sequence of direction reversals, so it is wrong exactly
+where the counter cares (~10° overshoot past the bottom). Structural, not
+mistuning. Where it *would* win is missing measurements; if `inFrameLikelihood`
+gating leaves gaps, try holding the last value with decaying confidence first.
+[Simulation numbers](docs/decisions.md#smoothing-kalman-rejected).
 
+### What the detector actually does
 
-### What the detector actually does — findings, not theory
+**ML Kit fits a skeleton to anything human-shaped, and is confident about it — so
+every gate here is geometric, because geometry is all there is to gate on.** At
+20 cm it does not report "no body", it **hallucinates a full skeleton** whose
+`inFrameLikelihood` clears any usable threshold, and carrying the phone sweeps
+those invented joints through 168 → 115 → 168 — one clean rep off a face. A mic
+stand has been tracked as a person. **There is no confidence to tune**:
+`inFrameLikelihood` answers "is this landmark inside the picture", and ML Kit
+exposes no detection score at the `Pose` level at all.
+[The observations](docs/decisions.md#what-ml-kit-does).
 
-- **The rep counter counted garbage; the framing gate fixes half of it.**
-  Observed 2026-08-08: picking the phone up counted **a rep off a face**. An
-  earlier note claimed the `standingEnter` requirement prevented this; it does not.
-  At 20 cm ML Kit does not report "no body" — it **hallucinates a full skeleton**
-  with `inFrameLikelihood` above our 0.5 gate, and as the phone moves those
-  invented joints sweep the angle through 168 → 115 → 168. One sweep is one rep.
-  The state machine is behaving correctly on fictional input, so **no confidence
-  threshold can catch this** — the model is confident.
-  Apparent size can. `Framing` (`:core:exercise`) rejects a frame whose torso
-  spans too much of the frame height, and a rejected frame yields a **null depth
-  angle** rather than a special case — which is the "no reading" path
-  `maxMissingFrames` already handles, so it needed no new state machine. The gate
-  is applied in `PoseFrame.squatDepthAngle`, not in the ViewModel: it is a rule,
-  not wiring, and the test that matters asserts that a too-close frame has a
-  perfectly good knee angle and is refused anyway — which is the shape of the bug,
-  since a hallucinated skeleton reads fine too.
-- **The model fits a skeleton to anything human-shaped, so every gate is
-  geometric — because geometry is all there is to gate on.** Observed 2026-08-09
-  (`microphone_squat.mp4`): a mic stand on a desk — a vertical pole with a splayed
-  base — was detected as a person and, after repeated attempts, got as far as
-  `Active`. It counted nothing, because a stand cannot sweep 168 → 115 → 168.
-  **There is no confidence to tune.** `inFrameLikelihood` answers "is this landmark
-  inside the picture", not "is this a person" or even "is this a knee", and ML Kit
-  exposes nothing at the `Pose` level — no detection score at all. Raising the
-  threshold changes nothing; the model is already certain about the wrong question.
-  What did make it hard was **dropout**: the detector's grip on a non-human
-  flickers, so `Waiting` and the count-in kept restarting and it took hand-aimed
-  framing to hold `READY` for the 3.5 s that `settleFor` + `countIn` require. That
-  is an accident rather than a discriminator and should not be relied on — but it
-  is `SetSession`'s two guards earning their keep, since a single lucky frame would
-  otherwise have started a set.
-  **Deliberately not fixed.** Proportion checks (shoulder width against torso
-  height) would catch it and would also reject anyone filmed side-on, which is the
-  framing this app recommends. "Reject anything too still" punishes the patient
-  user waiting for a countdown. The realistic version — locking onto a chair while
-  you walk to your spot — self-corrects, because you then walk into frame and ML
-  Kit tracks the human.
-- **One threshold could not do both jobs, so there are two checks.** The framing
-  gate above stays lenient because rejecting a real frame mid-set silently drops a
-  rep. That leaves the opposite failure, observed 2026-08-09: leaning over the
-  phone at ~1–1.5 m reads a torso fraction of 0.29–0.34 — *under* the framing
-  threshold — so a set counted in while the skeleton below the knees was a tangle.
-  `SetupCheck` (`:core:exercise`) answers "may a set start?" and takes the
-  opposite bet: refusing costs a message, starting on invented legs costs a whole
-  set measured off nothing. It is tighter on size (0.32) and additionally demands
-  **one genuinely observed leg** — hip, knee and ankle above the confidence gate
-  *and inside the image bounds*, because ML Kit reports coordinates past the edge,
-  which is what feet cut off by the bottom of the frame look like numerically.
-  That bounds test is a fact rather than a tuned number, and it is the arm that
-  actually catches leaning in.
-  **No `TOO_FAR` arm**: a real failure mode, but no too-far case has been recorded
-  and a guessed lower bound would block real users — the exact mistake
-  `MAX_TORSO_FRACTION` was widened from 0.30 to 0.40 to avoid.
-  **`SetupCheck.MAX_TORSO_FRACTION = 0.32` turns out to be almost unreachable**,
-  and it is the leg check that decides essentially every case. Verified on device
-  2026-08-11, and it inverts an earlier note here calling 0.32 "the number most
-  likely to be wrong in the annoying direction". The geometry: the torso is ~29%
-  of a person's height, so a body that just fits head to toe already reads ~0.29
-  — *under* 0.32. By the time your ankles are inside the frame the size arm has
-  therefore already passed, and when you are closer than that your ankles are out
-  of frame, which the leg arm catches anyway. The two arms are not independent
-  tests; they are nearly the same geometric condition, and the stricter one needs
-  no threshold at all.
-  Good news, since the arm doing the work is a fact rather than a tuned guess. It
-  is **not dead code**: a phone propped low and angled up gives feet in frame
-  *and* a large torso, and then 0.32 is the backstop that fires.
-  Also retired: the worry that deep reps push feet out of frame and so the check
-  passes a setup that breaks mid-set. **Feet do not move during a squat** — the
-  hips and head come down, which is why torso fraction falls rather than rises.
-  A `SetupCheck` that passes while standing therefore holds for the whole rep.
-- **Known issue from the validation footage:** arms held forward occlude the legs
-  at the bottom of a rep, which front-on framing makes worst — leg landmarks
-  start being inferred, and that will corrupt heel-lift and shin rules. This is
-  confidence degrading *within* a rep, so `SetupCheck` cannot see it: the check
-  runs while you are standing, and nothing gates on landmark quality during
-  `Active`. The other half of this note — feet leaving the bottom edge — is
-  retired above; feet do not move during a squat, and marginal framing is now
-  refused before the set starts. The back camera at 0.5x remains the answer for
-  small rooms.
-- **An abandoned descent is a two-frame trigger, and walking clears it.** One
-  frame below `standingExit` (160°) then one above `standingEnter` (168°) — no
-  duration, no minimum depth, nothing like the full sweep plus
-  `minRepDurationMillis` a counted rep must earn. So the walk back to the phone
-  can fire "all the way down" at the moment the user is finished, observed
-  2026-08-14 at 159.2°, which is 0.8° past the threshold and not a squat attempt
-  by any reading.
-  **Measured before acting, and the measurement said don't:** across five sets,
-  the three normal ones scored 1, 0 and 0 abandoned descents while two sets of
-  deliberately walking about scored 9 and 4. It does not fire in normal use.
-  What decides it is that **this data is filterable at read time** — calibration
-  asks "how deep did the last 20 attempts get", and `deepestAbandonedAngle < 150`
-  is a `WHERE` clause applied whenever that feature is designed, against rows that
-  kept everything. Exactly the opposite of the tempo split above, where the
-  turnaround timestamp is genuinely unrecoverable and inaction lost it forever.
-  Same shape of question, opposite answer, for a reason worth reusing.
-  A 150° report gate would not have been enough anyway: the walking sets reached
-  145.9°, inside it. The escalation if it ever annoys is **gating form cues on
-  `SetupCheck`**, which costs no new threshold at all — and is safe mid-rep, since
-  torso fraction falls during a squat.
-- Findings from Milestone 1 footage still worth honoring: 45° is the best angle
-  (depth + both knees resolved); pure side view infers far-side limbs, so use
-  near-side joints only; bad framing makes leg landmarks hallucinate. **The
-  "inference warms the phone" note is withdrawn** — it came from one early session
-  where the phone was also charging, and four measurement runs on 2026-08-08 did
-  not reproduce it.
+**Two geometric checks, taking opposite bets — that is the design, not
+duplication.**
+
+| | `Framing` | `SetupCheck` |
+|---|---|---|
+| asks | is this frame fiction? | may a set *start*? |
+| bet | lenient — rejecting a real frame drops a rep | strict — starting on invented legs costs a whole set |
+| torso fraction | 0.40 | 0.32 |
+| also demands | — | one genuinely observed leg |
+
+- A frame `Framing` rejects yields a **null depth angle**, not a special case —
+  the "no reading" path `maxMissingFrames` already handles, so it needed no new
+  state. The gate lives in `PoseFrame.squatDepthAngle`, not the ViewModel: it is a
+  rule, not wiring.
+- **The arm that actually works is the bounds test**, not a threshold: hip, knee
+  and ankle must be above the confidence gate *and inside the image*, because ML
+  Kit reports coordinates past the edge — which is what feet cut off by the bottom
+  of the frame look like numerically. `MAX_TORSO_FRACTION = 0.32` turns out to be
+  nearly unreachable and is a backstop for a phone propped low and angled up.
+- **No `TOO_FAR` arm.** A real failure mode, but no too-far case has been recorded
+  and a guessed lower bound would block real users.
+- **Feet do not move during a squat** — hips and head come down, so torso fraction
+  *falls* rather than rises. A `SetupCheck` that passes while standing therefore
+  holds for the whole rep, and form cues can safely be gated on it.
+
+**An abandoned descent is a two-frame trigger**: one frame below `standingExit`
+then one above `standingEnter`, with no duration and no minimum depth. Walking
+clears that trivially, so the walk back to the phone can fire "all the way down"
+at the moment the user is finished. **Measured before acting, and the measurement
+said don't** — it does not fire in normal use, and the data is filterable at read
+time, unlike the tempo split.
+[Numbers](docs/decisions.md#abandoned-descents).
+
+**Known limitation:** arms held forward occlude the legs at the bottom of a rep,
+worst front-on, so leg landmarks start being inferred — which will corrupt
+heel-lift and shin rules. This is confidence degrading *within* a rep, so
+`SetupCheck` cannot see it. The back camera at 0.5x remains the answer for small
+rooms.
+
+**From Milestone 1 footage:** 45° is the best angle (depth plus both knees
+resolved); pure side view infers far-side limbs, so use near-side joints only.
 
 ## Testing & CI
 
