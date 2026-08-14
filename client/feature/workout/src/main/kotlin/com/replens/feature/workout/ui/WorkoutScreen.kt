@@ -30,6 +30,7 @@ import com.replens.core.model.RepPhase
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.ZoomRange
+import com.replens.core.ui.ObserveAsEvents
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.components.PoseOverlay
 import com.replens.feature.workout.ui.components.RepCounter
@@ -37,11 +38,20 @@ import com.replens.feature.workout.ui.components.SessionControls
 import com.replens.feature.workout.ui.components.ZoomControl
 
 @Composable
-internal fun WorkoutRoot(modifier: Modifier = Modifier) {
+internal fun WorkoutRoot(
+    navigateToSummary: (workoutId: Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val viewModel: WorkoutViewModel = hiltViewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val surfaceRequest by viewModel.surfaceRequests.collectAsStateWithLifecycle()
+
+    ObserveAsEvents(viewModel.events) { event ->
+        when (event) {
+            is WorkoutEvent.NavigateToSummary -> navigateToSummary(event.workoutId)
+        }
+    }
 
     // No `by` on purpose: keeping the State box lets the overlay read the frame at
     // draw time. Unwrapping it here would recompose this screen 30 times a second.

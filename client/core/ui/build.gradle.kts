@@ -17,5 +17,10 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.annotation)
 
+    api(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
     testImplementation(libs.junit)
 }

@@ -13,6 +13,7 @@ import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.ui.UiText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,6 +72,12 @@ internal class FakeWorkoutRepository : WorkoutRepository {
 
     val recorded = mutableListOf<Recorded>()
 
+    /**
+     * Held open to keep a write in flight, so a test can press Done before the
+     * workout id exists. Null means the write completes as soon as it is called.
+     */
+    var inFlight: CompletableDeferred<Unit>? = null
+
     override suspend fun recordSet(
         exercise: Exercise,
         startedAt: Instant,
@@ -89,10 +96,16 @@ internal class FakeWorkoutRepository : WorkoutRepository {
             deepestAbandonedAngle = deepestAbandonedAngle,
             reps = reps,
         )
-        return recorded.size.toLong()
+        inFlight?.await()
+        return WORKOUT_ID
     }
 
     override suspend fun workout(id: Long): Workout? = null
+
+    companion object {
+        /** Deliberately not 1: a set count standing in for a workout id would pass. */
+        const val WORKOUT_ID = 7L
+    }
 }
 
 internal class FakeClock(var instant: Instant) : Clock {

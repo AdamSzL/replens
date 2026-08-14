@@ -59,7 +59,7 @@ private fun RepLensNavDisplay() {
             rememberViewModelStoreNavEntryDecorator(),
         ),
         entryProvider = entryProvider {
-            workoutEntries()
+            workoutEntries(backStack)
         },
     )
 }

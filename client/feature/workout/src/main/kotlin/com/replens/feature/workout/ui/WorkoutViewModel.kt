@@ -22,10 +22,12 @@ import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -54,6 +56,9 @@ internal class WorkoutViewModel @Inject constructor(
     val poseFrame: StateFlow<PoseFrame?>
         field = MutableStateFlow(null)
 
+    private val eventChannel = Channel<WorkoutEvent>(Channel.BUFFERED)
+    val events = eventChannel.receiveAsFlow()
+
     private val smoother = PoseSmoother()
     // Shared so the counter and the depth grading cannot disagree about the bottom.
     private val repConfig = SquatRepConfig()
@@ -78,6 +83,14 @@ internal class WorkoutViewModel @Inject constructor(
     private var lastFrameMillis = 0L
 
     private var cameraJob: Job? = null
+
+    /**
+     * The write [finishSet] started, and its result. Done can be pressed before it
+     * lands, so [doneWithSet] waits on the job rather than reading the id and
+     * hoping. Both are null after a set that wrote nothing.
+     */
+    private var recordJob: Job? = null
+    private var recordedWorkoutId: Long? = null
 
     init {
         viewModelScope.launch {
@@ -113,7 +126,7 @@ internal class WorkoutViewModel @Inject constructor(
             WorkoutAction.StartClicked, WorkoutAction.GoAgainClicked -> startSet()
             WorkoutAction.CancelClicked -> cancelSet()
             WorkoutAction.FinishClicked -> finishSet()
-            WorkoutAction.DoneClicked -> dismissSummary()
+            WorkoutAction.DoneClicked -> doneWithSet()
         }
     }
 
@@ -127,6 +140,11 @@ internal class WorkoutViewModel @Inject constructor(
         reps.clear()
         abandoned.clear()
         setStart = null
+        // A new set makes the previous write irrelevant. Cleared here rather than
+        // in finishSet, which returns early when there is nothing to write and
+        // would otherwise leave the last set's workout to be navigated to.
+        recordJob = null
+        recordedWorkoutId = null
         state.update {
             it.copy(
                 session = setSession.start(),
@@ -161,8 +179,8 @@ internal class WorkoutViewModel @Inject constructor(
         val deepestAbandonedAngle = abandoned.minOfOrNull(AbandonedDescent::deepestAngle)
         val repsAtDepth = state.value.repsAtDepth
 
-        viewModelScope.launch {
-            repository.recordSet(
+        recordJob = viewModelScope.launch {
+            recordedWorkoutId = repository.recordSet(
                 exercise = Exercise.SQUAT,
                 startedAt = start.at,
                 endedAt = endedAt,
@@ -171,6 +189,25 @@ internal class WorkoutViewModel @Inject constructor(
                 deepestAbandonedAngle = deepestAbandonedAngle,
                 reps = recorded,
             )
+        }
+    }
+
+    /**
+     * Leaves the set behind and shows what it landed in. A set that wrote nothing
+     * has no workout to show, so Done just clears the card — silence is right
+     * there, since navigating to an empty summary would be worse than staying.
+     */
+    private fun doneWithSet() {
+        val job = recordJob
+        dismissSummary()
+        if (job == null) return
+        viewModelScope.launch {
+            // join, not await: a failed write leaves the id null and Done degrades
+            // to a plain dismiss, rather than this coroutine inheriting the failure.
+            job.join()
+            recordedWorkoutId?.let {
+                eventChannel.send(WorkoutEvent.NavigateToSummary(it))
+            }
         }
     }
 
