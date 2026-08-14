@@ -33,6 +33,12 @@ enum class RepPhase {
  * arbitrary origin, which would make a stored rep and a live one mean different
  * things by the same field name.
  *
+ * [descent] and [ascent] split at the **deepest frame**, not at a threshold
+ * crossing. Splitting at the counting threshold measured a fixed angular window
+ * on the way down and everything else on the way up, so a deeper rep reported a
+ * longer [ascent] at identical tempo — depth leaking into the one metric whose
+ * job is tempo.
+ *
  * [index] is 1-based, so it is the number a user is told. Carried on the rep
  * rather than left to list position because the round trip has to survive one:
  * re-deriving it on write would make "the list is complete and in order" a silent

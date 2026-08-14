@@ -9,6 +9,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val FRAME_INTERVAL_MILLIS = 33L
 private const val STANDING_ANGLE = 175f
@@ -249,6 +250,26 @@ class SquatRepCounterTest {
         val rep = session.completed.single()
         assertTrue("descent should take time", rep.descent > Duration.ZERO)
         assertTrue("ascent should take time", rep.ascent > Duration.ZERO)
+    }
+
+    /**
+     * The timings split at the turnaround, so they say how fast the rep was and
+     * not how far it went. Splitting at the counting threshold instead measured a
+     * fixed 45-degree window as the descent and everything else as the ascent —
+     * on device the ratio was 3.7-4.9x for reps to 60 degrees against 1.8-1.9x
+     * for reps to 102, at the same tempo.
+     */
+    @Test
+    fun `depth does not inflate the timings`() {
+        val deep = Session().feed(standing() + squat(bottomAngle = 60f) + standing())
+        val shallow = Session().feed(standing() + squat(bottomAngle = 105f) + standing())
+
+        val deepRep = deep.completed.single()
+        val shallowRep = shallow.completed.single()
+        assertTrue(
+            "deep ${deepRep.ascent} against shallow ${shallowRep.ascent}",
+            (deepRep.ascent - shallowRep.ascent).absoluteValue < 100.milliseconds,
+        )
     }
 
     @Test

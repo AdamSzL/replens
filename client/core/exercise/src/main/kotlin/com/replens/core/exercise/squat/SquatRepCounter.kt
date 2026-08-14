@@ -85,8 +85,8 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
     private var standingConfirmed = false
 
     private var repStartedAtMillis: Long? = null
-    private var bottomAtMillis: Long? = null
     private var deepestAngle: Float = Float.MAX_VALUE
+    private var deepestAtMillis: Long = 0L
     private var missingFrames = 0
 
     /**
@@ -103,8 +103,11 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
         }
         missingFrames = 0
 
-        if (repStartedAtMillis != null) {
-            deepestAngle = minOf(deepestAngle, depthAngle)
+        // Strictly less, so a plateau at the bottom keeps the frame the lifter
+        // first reached it on — the turnaround, not the end of a pause.
+        if (repStartedAtMillis != null && depthAngle < deepestAngle) {
+            deepestAngle = depthAngle
+            deepestAtMillis = timestampMillis
         }
 
         var completed: Rep? = null
@@ -116,14 +119,12 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
                     phase = RepPhase.DESCENDING
                     repStartedAtMillis = timestampMillis
                     deepestAngle = depthAngle
+                    deepestAtMillis = timestampMillis
                 }
             }
 
             RepPhase.DESCENDING -> when {
-                depthAngle < config.bottomEnterAngle -> {
-                    phase = RepPhase.BOTTOM
-                    bottomAtMillis = timestampMillis
-                }
+                depthAngle < config.bottomEnterAngle -> phase = RepPhase.BOTTOM
                 // Came back up without reaching depth: not a rep, but worth
                 // reporting — it is the only evidence the user is trying.
                 depthAngle >= config.standingEnterAngle -> {
@@ -173,11 +174,11 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
 
     private fun completeRep(timestampMillis: Long): Rep? {
         val startedAt = repStartedAtMillis
-        val bottomAt = bottomAtMillis
         val deepest = deepestAngle
+        val deepestAt = deepestAtMillis
         clearRepInProgress()
 
-        if (startedAt == null || bottomAt == null) return null
+        if (startedAt == null) return null
         // A full down-and-up faster than a person can move is a noise spike.
         if (timestampMillis - startedAt < config.minRepDurationMillis) return null
 
@@ -185,8 +186,8 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
         return Rep(
             index = repCount,
             deepestAngle = deepest,
-            descent = (bottomAt - startedAt).milliseconds,
-            ascent = (timestampMillis - bottomAt).milliseconds,
+            descent = (deepestAt - startedAt).milliseconds,
+            ascent = (timestampMillis - deepestAt).milliseconds,
         )
     }
 
@@ -203,8 +204,8 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
 
     private fun clearRepInProgress() {
         repStartedAtMillis = null
-        bottomAtMillis = null
         deepestAngle = Float.MAX_VALUE
+        deepestAtMillis = 0L
     }
 }
 
