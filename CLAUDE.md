@@ -940,12 +940,57 @@ directory move — cheaper than a module, same legibility.
 should not know Room exists, and it is the same lie as `zoomStops = emptyList()`
 meaning two things. A nullable id would be honest but would make every history
 call site unwrap a value that is always present after a read. Instead **recording
-a set does not go through these types**: the repository is handed what the set
-produced (`exercise`, the two `Instant`s, `repsAtDepth`, and the `Rep` /
-`AbandonedDescent` lists) and derives `repCount`, `abandonedCount` and
-`deepestAbandonedAngle` from the lists, so nothing has to be kept in sync by
-hand. `repsAtDepth` is the one value the caller must supply, because grading
-depth needs `SquatRepConfig` and that is the feature's knowledge.
+a set does not go through these types**: `recordSet`'s parameters are exactly
+`ExerciseSet`'s fields **minus `id`**, and that one difference is the whole reason
+it is a parameter list rather than that type. A wrapper type would earn its keep
+if the payload were held or passed through layers; it is constructed and consumed
+in one expression, so it would only add a name.
+
+**The repository derives what it is handed the source for, and takes what it is
+not.** `repCount` is derived from `reps`, which are passed anyway because they are
+rows. `abandonedCount` and `deepestAbandonedAngle` are passed, because abandoned
+descents are **not** rows and there is nothing here to recompute them from — the
+same asymmetry `ExerciseSet` itself has, and it exists exactly where the schema is
+lossy. `repsAtDepth` is passed for a different reason: grading depth needs
+`SquatRepConfig`, which is the feature's knowledge.
+
+### Primary keys: autoincrement is a hold, not a default
+
+**The decision to make, and when: *does the sync API accept client-supplied
+ids?*** Answer it when sync is **designed**, before it is written, alongside the
+anonymous→account path. Answering it settles the keys:
+
+- **Yes** → switch to client-generated UUIDs (`kotlin.uuid.Uuid`, now in the
+  stdlib — verify its stability the way `kotlin.time.Instant` was). `serverId`
+  disappears, push becomes an idempotent upsert, and claiming a guest's history is
+  the server attaching a `userId` to rows that already have global identity.
+  Locally it also removes the `id`-shaped awkwardness: `recordSet` stops needing a
+  return value because the caller already knows the id, `WorkoutDao`'s
+  `set`/`reps` callbacks collapse into plain parameters (they exist *only* because
+  each id is unknown until the insert above returns), and write and read models
+  become the same type.
+- **No** → keep `serverId` and the mapping, and autoincrement was right all along.
+
+**Why not now:** the app ships at milestone 5, *after* the backend at milestone 4,
+so until release the entire population of this schema is one phone. Switching keys
+stays a wipe rather than a data migration right up to the moment it ships.
+Adopting UUIDs today would mean committing to a sync design that does not exist
+yet. Note `isDirty` and `updatedAt` stay either way — they are about what to push
+and how to resolve conflicts, not about identity. Nothing orders by `id` already
+(reps by `rep_index`, sets and workouts by their `Instant`s), which was decided for
+sync reasons and happens to keep this door open.
+
+Collisions are not a consideration: 122 random bits, and a colliding insert would
+be rejected by the primary key rather than corrupt anything. The real risk is a
+non-cryptographic random source.
+
+**Measured 2026-08-14, because it decides a tempting shortcut:** Room's
+`autoGenerate` treats **0** — and only 0 — as not-set. An entity inserted with
+`id = -1` stores `-1` as the actual primary key, and the *second* such insert
+fails. So a `-1` sentinel on the domain model would need the mapper to translate
+it to 0, and forgetting that would not fail a compile or the first set of a
+session — it would fail the second. As it stands no mapper forwards an id at all,
+so the question does not arise.
 
 **The three summary numbers get three different treatments on `ExerciseSet`, and
 the differences are the design.** `repCount` is a derived property (`reps.size`)
