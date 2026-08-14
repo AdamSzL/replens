@@ -195,7 +195,7 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :core:posemath      Point, joint angles, torso size, normalized distances, line
                     deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
                     domain-free (no thresholds, no exercise names). 55 tests.
-:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 86 tests.
+:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 87 tests.
                       …exercise/       Framing, FormFault, SetupCheck,
                                        SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
@@ -841,6 +841,52 @@ If they are still unread when history and stats ship, that is evidence to drop
 them — deleting a column nothing reads is a far easier call than adding one you
 wish you had.
 
+**They split at the deepest frame, and the first device data is why** (2026-08-14).
+The original split was at threshold crossings: `descent` ran from `standingExit`
+(160°) to `bottomEnter` (115°), and `ascent` from there to `standingEnter` (168°).
+That made `descent` a fixed 45° window — a genuine speed measure — while `ascent`
+absorbed everything else, including the bottom half of the descent and the
+turnaround. So its length tracked **depth**, not tempo: the first seven real reps
+measured ascent/descent at **3.7–4.9x at ~60°** against **1.8–1.9x at ~102°**, at
+the same cadence. Depth leaking into the one metric whose job is tempo would have
+made *"your descent slowed 40%"* report reps that merely went deeper.
+Splitting at the minimum-angle frame instead is threshold-independent, keeps the
+sum (and therefore rep duration, time under tension and rest) identical, and cost
+three lines — `SquatRepCounter` already tracked the minimum, only its timestamp
+was thrown away. `bottomAtMillis` disappeared with it.
+Confirmed on device the same day: two continuous reps in one set, **20° apart in
+depth** (39.8° and 60.2°), split 608/608 and 509/541 — ratios of 1.00 and 1.06,
+where the old rule would have charged the deeper one a much longer ascent for
+distance alone.
+Two residual biases, both accepted: the rep still *starts* at the 160° crossing
+rather than at first movement, so a fast descent starts measuring ~8° late; and it
+ends at 168°, so the window is lopsided by the hysteresis band. Both apply equally
+to every rep, so comparisons between reps hold — comparisons against anything
+external do not.
+
+**The known weakness is a pause at the bottom, and it is not fixable by picking
+first-or-last minimum.** During a hold the angle wobbles ±0.5–1°, so exactly one
+frame is lowest and it sits at a **random position inside the pause** — first and
+last are the same frame once the signal is real. Measured 2026-08-14: three reps
+done continuously split at ratios 1.21/1.33/1.37 (13% spread), while three the
+lifter paused on split at 0.76/1.09/0.55 (**98%**). Well-defined for a continuous
+rep, arbitrary for a paused one.
+The robust version treats the bottom as a **band** rather than a point — frames
+within ~3° of the minimum, `descent` ending at the first and `ascent` starting
+after the last — which makes the pause a third duration, keeps the sum equal to
+the rep, and is a real metric in its own right. **Deliberately not built**, on the
+primary-key argument: until release the whole population of this schema is one
+phone, so this stays a wipe rather than a migration, and designing a three-phase
+tempo metric with no reader is the mistake the landmark stream lost on.
+It is also **not a device question** — a lifter cannot feel where 160° is, so no
+amount of careful squatting validates it. The tool is a fixture: one recorded clip
+with a deliberate pause gives the angle trace, and where the minimum lands is then
+something to read off a plot. Another reason to widen the CSVs.
+**This is why the fix could not wait for a reader.** The turnaround timestamp is
+not stored, so data written under the old split cannot be recomposed into the new
+one — exactly the argument that kept the columns in the first place, applied to
+their definition.
+
 | | domain | entity | column |
 |---|---|---|---|
 | rep timings | `Duration` | `Long` | INTEGER millis |
@@ -1448,15 +1494,49 @@ distribution and build cache.
   does not move either. Fixable in two lines now that the engine owns the
   announcer (`announcer.reset()` on a deliberate re-emission), but that is a guess
   until it has annoyed somebody.
-- **Milestone 3, persistence: the write path is done** (2026-08-14), **not yet
-  seen on device.** `:core:database` (Room 3), `:core:data` (repository, mappers,
-  the 60-minute gap rule) and the `:feature:workout` wiring all exist, so finishing
-  a set stores it. What is not built: any screen that reads it back — `workout(id)`
-  has no caller, and `workouts()` does not exist because its shape is the history
-  screen's question to answer.
-- **Next:** confirm on device that a set survives killing the app, then the
-  workout summary screen (which brings Nav 3), then `:feature:history`.
-  236 unit tests.
+- **An abandoned descent is a two-frame trigger, and walking clears it.** One
+  frame below `standingExit` (160°) then one above `standingEnter` (168°) — no
+  duration, no minimum depth, nothing like the full sweep plus
+  `minRepDurationMillis` a counted rep must earn. So the walk back to the phone
+  can fire "all the way down" at the moment the user is finished, observed
+  2026-08-14 at 159.2°, which is 0.8° past the threshold and not a squat attempt
+  by any reading.
+  **Measured before acting, and the measurement said don't:** across five sets,
+  the three normal ones scored 1, 0 and 0 abandoned descents while two sets of
+  deliberately walking about scored 9 and 4. It does not fire in normal use.
+  What decides it is that **this data is filterable at read time** — calibration
+  asks "how deep did the last 20 attempts get", and `deepestAbandonedAngle < 150`
+  is a `WHERE` clause applied whenever that feature is designed, against rows that
+  kept everything. Exactly the opposite of the tempo split above, where the
+  turnaround timestamp is genuinely unrecoverable and inaction lost it forever.
+  Same shape of question, opposite answer, for a reason worth reusing.
+  A 150° report gate would not have been enough anyway: the walking sets reached
+  145.9°, inside it. The escalation if it ever annoys is **gating form cues on
+  `SetupCheck`**, which costs no new threshold at all — and is safe mid-rep, since
+  torso fraction falls during a squat.
+- **Milestone 3, persistence: validated on device 2026-08-14.** `:core:database`
+  (Room 3), `:core:data` (repository, mappers, the 60-minute gap rule) and the
+  `:feature:workout` wiring all exist, and a set now survives being read back out
+  of the file. Confirmed against real sets: sets attach to one workout under the
+  gap rule with `endedAt` and `isDirty` tracking each write, `repCount` matches
+  the rep rows, `repsAtDepth` matches a recomputation, `rep_index` is 1-based per
+  set, foreign keys are clean, and the timestamps are real epoch millis rather
+  than a frame clock leaking through. The shallow arm fired on real reps for the
+  first time — two at 101.7° and 104.4° counted and graded as not-at-depth.
+  **The case worth having tested is the second process:** a set recorded after a
+  force-stop and relaunch attached to a workout written by the *previous* process,
+  10 minutes earlier, so the gap rule reads committed data rather than only its
+  own. Cancel and a Finish with no movement each wrote nothing, as designed.
+  What is not built: any screen that reads it back — `workout(id)` has no caller,
+  and `workouts()` does not exist because its shape is the history screen's
+  question to answer.
+  **`BundledSQLiteDriver` means Android Studio's Database Inspector may show
+  nothing** — it hooks framework SQLite connections, and this driver compiles its
+  own. Pull the file instead (`adb exec-out run-as com.replens.app cat
+  databases/replens.db`), taking `-wal` and `-shm` too or recent writes are
+  missing. It also leaves a `replens.db.lck` beside them, which a wipe must delete.
+- **Next:** the workout summary screen (which brings Nav 3), then
+  `:feature:history`. 237 unit tests.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
   and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is
