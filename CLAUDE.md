@@ -91,7 +91,7 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
 ### Toolchain gotchas (non-obvious)
 
 - Versions in `client/gradle/libs.versions.toml`. minSdk 26, Java/Kotlin 21
-  (daemon JVM pinned in `gradle-daemon-jvm.properties`).
+  (daemon JVM pinned in `client/gradle/gradle-daemon-jvm.properties`).
 - **AGP 9 built-in Kotlin:** modules must NOT apply `org.jetbrains.kotlin.android`
   (KGP refuses). The Kotlin version is raised by declaring
   `alias(libs.plugins.kotlin.android) apply false` in the root build file —
@@ -1169,9 +1169,19 @@ alpha; host-side, so CI-friendly unlike instrumented tests. Gotchas: renaming a
 `@PreviewTest` orphans its reference image, it's memory-hungry, and reference PNGs
 are committed. If it works out, enable it in a convention plugin.
 
-**GitHub Actions** — `assembleDebug`, `assembleRelease` (catches R8 breakage),
-unit tests, and screenshot validation once it exists. Cache the Gradle
-distribution and build cache.
+**GitHub Actions** — `.github/workflows/client.yml`, one job running
+`./gradlew test assembleRelease` on pushes to `master` and on every PR.
+
+`assembleDebug` is deliberately absent: `test` already compiles the debug main
+source sets, and `assembleRelease` does everything debug packaging would plus R8
+and resource shrinking. **What that catches is R8 *configuration* breakage** —
+`Missing class …`, the usual result of a library with incomplete consumer rules —
+**not** R8 stripping bugs, which are silent until runtime and would need an
+instrumented test on a release build.
+
+Docs-only changes are skipped via `paths-ignore`, and `concurrency` cancels
+superseded runs. Both are safe only while no branch protection requires a check
+to have run. Screenshot validation joins this job once it exists.
 
 - **`WorkoutViewModel` is tested end to end now** (2026-08-14, 20 tests across
   `WorkoutViewModelTest` and `WorkoutCameraTest`), against a fake

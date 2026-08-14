@@ -1,0 +1,54 @@
+name: Client
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+    branches: [master]
+    paths-ignore: ['**.md', 'docs/**']
+
+# A new push to the same branch cancels the run it supersedes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # The Gradle build lives in client/, not the repository root — there is
+        # deliberately no root settings.gradle.kts.
+        working-directory: client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Satisfies client/gradle/gradle-daemon-jvm.properties (toolchainVersion=21).
+      # Without it Gradle provisions its own JDK from foojay on every cold run.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: client
+
+      # One invocation so Gradle can parallelize. `test` already compiles the
+      # debug main source sets, and assembleRelease does everything assembleDebug
+      # would plus R8 and resource shrinking — so neither is worth its own step.
+      - name: Test and build
+        run: ./gradlew test assembleRelease --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: client/**/build/reports/tests/
+          retention-days: 7
