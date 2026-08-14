@@ -71,13 +71,23 @@ interface WorkoutDao {
      * One transaction, like [recordSet]: a workout with no sets, or a set without
      * its reps, must never be reachable — the counts on [SetEntity] are
      * denormalized, so a partial write is a row that lies.
+     *
+     * Returns the workout id because this is the only call that can name it: the
+     * row is created inside the transaction, and asking [mostRecentWorkout]
+     * afterwards answers a different question that merely happens to agree.
+     * [recordSet] returns nothing for the mirror-image reason — its caller passed
+     * the workout in.
      */
     @Transaction
     suspend fun recordFirstSet(
         workout: WorkoutEntity,
         set: (workoutId: Long) -> SetEntity,
         reps: (setId: Long) -> List<RepEntity>,
-    ): Long = insertSetAndReps(set(insert(workout)), reps)
+    ): Long {
+        val workoutId = insert(workout)
+        insertSetAndReps(set(workoutId), reps)
+        return workoutId
+    }
 
     /**
      * A set joining a workout that is already open, moving that workout's end to
@@ -88,17 +98,15 @@ interface WorkoutDao {
      * gap that decides it is a product rule and this is a schema.
      */
     @Transaction
-    suspend fun recordSet(set: SetEntity, reps: (setId: Long) -> List<RepEntity>): Long {
+    suspend fun recordSet(set: SetEntity, reps: (setId: Long) -> List<RepEntity>) {
         touchWorkout(set.workoutId, endedAt = set.endedAt, updatedAt = set.updatedAt)
-        return insertSetAndReps(set, reps)
+        insertSetAndReps(set, reps)
     }
 
     private suspend fun insertSetAndReps(
         set: SetEntity,
         reps: (setId: Long) -> List<RepEntity>,
-    ): Long {
-        val setId = insert(set)
-        insert(reps(setId))
-        return setId
+    ) {
+        insert(reps(insert(set)))
     }
 }

@@ -58,19 +58,19 @@ internal class WorkoutRepositoryImpl @Inject constructor(
         }
         val repRows = { setId: Long -> reps.map { it.toEntity(setId) } }
 
-        return if (inProgress != null) {
+        if (inProgress != null) {
             dao.recordSet(set(inProgress.id), repRows)
-        } else {
-            dao.recordFirstSet(
-                workout = WorkoutEntity(
-                    startedAt = startedAt.toEpochMilliseconds(),
-                    endedAt = endedAt.toEpochMilliseconds(),
-                    updatedAt = endedAt.toEpochMilliseconds(),
-                ),
-                set = set,
-                reps = repRows,
-            )
+            return inProgress.id
         }
+        return dao.recordFirstSet(
+            workout = WorkoutEntity(
+                startedAt = startedAt.toEpochMilliseconds(),
+                endedAt = endedAt.toEpochMilliseconds(),
+                updatedAt = endedAt.toEpochMilliseconds(),
+            ),
+            set = set,
+            reps = repRows,
+        )
     }
 
     override suspend fun workout(id: Long): Workout? {

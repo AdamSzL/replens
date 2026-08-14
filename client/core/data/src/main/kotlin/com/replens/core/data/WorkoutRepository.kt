@@ -9,7 +9,12 @@ interface WorkoutRepository {
 
     /**
      * Stores a finished set, attaching it to the workout in progress or opening a
-     * new one, and returns its id.
+     * new one, and returns **the workout's** id — the set's is not returned
+     * because nothing asks for a set on its own.
+     *
+     * The workout is what the summary screen is about, and it is the id the caller
+     * cannot work out for itself: whether this set opened a workout or joined one
+     * is decided in here, by the gap rule.
      *
      * These are exactly [com.replens.core.model.ExerciseSet]'s fields minus its
      * `id`, which the database assigns — that one difference is the only reason
