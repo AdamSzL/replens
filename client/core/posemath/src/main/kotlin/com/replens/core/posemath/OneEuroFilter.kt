@@ -69,10 +69,9 @@ class OneEuroFilter(
 
     companion object {
         /**
-         * Starting points from the paper, **not yet tuned against real footage**
-         * (see the Milestone 2 plan). Tune minCutoff first with beta at 0 until
-         * jitter at rest is acceptable, then raise beta until fast reps stop
-         * lagging.
+         * Starting points from the paper, **not yet tuned against real
+         * footage**. Tune minCutoff first with beta at 0 until jitter at rest is
+         * acceptable, then raise beta until fast reps stop lagging.
          */
         const val DEFAULT_MIN_CUTOFF = 1f
         const val DEFAULT_BETA = 0.5f
