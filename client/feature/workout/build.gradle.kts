@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.replens.android.library)
     alias(libs.plugins.replens.android.compose)
     alias(libs.plugins.replens.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -16,6 +17,9 @@ dependencies {
     implementation(projects.core.pose)
     implementation(projects.core.posemath)
     implementation(projects.core.ui)
+
+    api(libs.androidx.navigation3.runtime)
+    implementation(libs.kotlinx.serialization.core)
 
     implementation(libs.androidx.camera.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

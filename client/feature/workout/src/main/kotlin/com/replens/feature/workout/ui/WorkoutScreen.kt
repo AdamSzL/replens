@@ -36,9 +36,8 @@ import com.replens.feature.workout.ui.components.RepCounter
 import com.replens.feature.workout.ui.components.SessionControls
 import com.replens.feature.workout.ui.components.ZoomControl
 
-/** Public only until Navigation 3 lands and `navigation/` calls it instead. */
 @Composable
-fun WorkoutRoot(modifier: Modifier = Modifier) {
+internal fun WorkoutRoot(modifier: Modifier = Modifier) {
     val viewModel: WorkoutViewModel = hiltViewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsStateWithLifecycle()
