@@ -40,15 +40,55 @@ interface WorkoutDao {
     @Query("SELECT * FROM reps WHERE setId = :setId ORDER BY rep_index")
     suspend fun repsFor(setId: Long): List<RepEntity>
 
+    /**
+     * Every rep in a workout, so reading one costs two queries rather than one per
+     * set. Ordered by set first, so the caller can group without sorting.
+     */
+    @Query(
+        """
+        SELECT * FROM reps
+        WHERE setId IN (SELECT id FROM sets WHERE workoutId = :workoutId)
+        ORDER BY setId, rep_index
+        """,
+    )
+    suspend fun repsForWorkout(workoutId: Long): List<RepEntity>
+
     @Query("DELETE FROM workouts WHERE id = :id")
     suspend fun deleteWorkout(id: Long)
 
     /**
-     * One transaction, so a set never exists without its reps — the counts on
-     * [SetEntity] are denormalized and a partial write would make them lies.
+     * The set that opens a workout. [set] is a lambda because the workout's id
+     * does not exist until it is inserted.
+     *
+     * One transaction, like [recordSet]: a workout with no sets, or a set without
+     * its reps, must never be reachable — the counts on [SetEntity] are
+     * denormalized, so a partial write is a row that lies.
      */
     @Transaction
-    suspend fun insertSetWithReps(set: SetEntity, reps: (Long) -> List<RepEntity>): Long {
+    suspend fun recordFirstSet(
+        workout: WorkoutEntity,
+        set: (workoutId: Long) -> SetEntity,
+        reps: (setId: Long) -> List<RepEntity>,
+    ): Long = insertSetAndReps(set(insert(workout)), reps)
+
+    /**
+     * A set joining a workout that is already open, moving that workout's end to
+     * this set's. Read off [set] rather than passed separately, so the workout
+     * cannot end at a different moment than the set that ended it.
+     *
+     * Whether a set opens a workout or joins one is the caller's decision — the
+     * gap that decides it is a product rule and this is a schema.
+     */
+    @Transaction
+    suspend fun recordSet(set: SetEntity, reps: (setId: Long) -> List<RepEntity>): Long {
+        touchWorkout(set.workoutId, endedAt = set.endedAt, updatedAt = set.updatedAt)
+        return insertSetAndReps(set, reps)
+    }
+
+    private suspend fun insertSetAndReps(
+        set: SetEntity,
+        reps: (setId: Long) -> List<RepEntity>,
+    ): Long {
         val setId = insert(set)
         insert(reps(setId))
         return setId

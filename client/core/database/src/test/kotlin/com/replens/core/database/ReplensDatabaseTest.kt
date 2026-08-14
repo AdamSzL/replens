@@ -36,8 +36,11 @@ class ReplensDatabaseTest {
     @After
     fun tearDown() = db.close()
 
+    private fun workout(startedAt: Long = 0L, endedAt: Long = 0L) =
+        WorkoutEntity(startedAt = startedAt, endedAt = endedAt, updatedAt = endedAt)
+
     private suspend fun insertWorkout(startedAt: Long = 0L, endedAt: Long = 0L) =
-        dao.insert(WorkoutEntity(startedAt = startedAt, endedAt = endedAt, updatedAt = endedAt))
+        dao.insert(workout(startedAt = startedAt, endedAt = endedAt))
 
     private fun set(workoutId: Long, repCount: Int = 3) = SetEntity(
         workoutId = workoutId,
@@ -61,11 +64,13 @@ class ReplensDatabaseTest {
 
     @Test
     fun `a workout, its sets and their reps round-trip`() = runTest {
-        val workoutId = insertWorkout(startedAt = 1_000L, endedAt = 31_000L)
-        val setId = dao.insertSetWithReps(set(workoutId)) { id ->
-            List(3) { rep(id, index = it + 1, deepestAngle = 80f + it) }
-        }
+        val setId = dao.recordFirstSet(
+            workout = workout(startedAt = 1_000L, endedAt = 31_000L),
+            set = ::set,
+            reps = { id -> List(3) { rep(id, index = it + 1, deepestAngle = 80f + it) } },
+        )
 
+        val workoutId = dao.mostRecentWorkout()!!.id
         val sets = dao.setsFor(workoutId)
         assertEquals(1, sets.size)
         assertEquals("SQUAT", sets.single().exercise)
@@ -77,17 +82,52 @@ class ReplensDatabaseTest {
     }
 
     /**
+     * Which of the two happens is the caller's decision — the gap that decides it
+     * is a product rule — so both arms are pinned here rather than assumed.
+     */
+    @Test
+    fun `each first set opens its own workout`() = runTest {
+        dao.recordFirstSet(workout(startedAt = 1_000L, endedAt = 31_000L), ::set) { listOf(rep(it, 1)) }
+        dao.recordFirstSet(workout(startedAt = 9_000L, endedAt = 39_000L), ::set) { listOf(rep(it, 1)) }
+
+        assertEquals(2, dao.workouts().first().size)
+    }
+
+    @Test
+    fun `a joining set extends its workout rather than opening one`() = runTest {
+        val workoutId = insertWorkout(startedAt = 0L, endedAt = 10_000L)
+
+        dao.recordSet(set(workoutId).copy(endedAt = 50_000L, updatedAt = 50_000L)) { listOf(rep(it, 1)) }
+
+        val workouts = dao.workouts().first()
+        assertEquals(1, workouts.size)
+        assertEquals(50_000L, workouts.single().endedAt)
+        assertEquals(1, dao.setsFor(workoutId).size)
+    }
+
+    /**
      * Reps are ordered by their own index rather than by insertion, because once
      * sync reassigns local ids the primary key stops being a reliable sequence.
      */
     @Test
     fun `reps come back in rep order, not insertion order`() = runTest {
-        val workoutId = insertWorkout()
-        val setId = dao.insertSetWithReps(set(workoutId)) { id ->
-            listOf(rep(id, index = 3), rep(id, index = 1), rep(id, index = 2))
+        val setId = dao.recordFirstSet(workout(), ::set) {
+            listOf(rep(it, index = 3), rep(it, index = 1), rep(it, index = 2))
         }
 
         assertEquals(listOf(1, 2, 3), dao.repsFor(setId).map(RepEntity::index))
+    }
+
+    /** Two queries per workout instead of one per set is the whole point of it. */
+    @Test
+    fun `a workout's reps come back in one query, set by set`() = runTest {
+        val workoutId = insertWorkout()
+        val first = dao.recordSet(set(workoutId)) { listOf(rep(it, 1), rep(it, 2)) }
+        val second = dao.recordSet(set(workoutId)) { listOf(rep(it, 1)) }
+
+        val reps = dao.repsForWorkout(workoutId)
+        assertEquals(listOf(first, first, second), reps.map(RepEntity::setId))
+        assertEquals(listOf(1, 2, 1), reps.map(RepEntity::index))
     }
 
     /**
@@ -96,29 +136,29 @@ class ReplensDatabaseTest {
      */
     @Test
     fun `deleting a workout takes its sets and reps with it`() = runTest {
-        val workoutId = insertWorkout()
-        val setId = dao.insertSetWithReps(set(workoutId)) { id -> listOf(rep(id, index = 1)) }
+        val setId = dao.recordFirstSet(workout(), ::set) { listOf(rep(it, index = 1)) }
+        val workoutId = dao.mostRecentWorkout()!!.id
 
-        db.workoutDao().deleteWorkout(workoutId)
+        dao.deleteWorkout(workoutId)
 
         assertTrue(dao.setsFor(workoutId).isEmpty())
         assertTrue(dao.repsFor(setId).isEmpty())
     }
 
     /**
-     * The denormalized counts on a set are only true if its reps landed with it,
-     * so a half-written set would be a row that lies about itself.
+     * All three tables or none. A set whose reps are missing lies about itself,
+     * since [SetEntity.repCount] is denormalized, and a workout with no sets is a
+     * history row with nothing in it.
      */
     @Test
-    fun `a set is not written when its reps fail`() = runTest {
-        val workoutId = insertWorkout()
-
+    fun `nothing is written when the reps fail`() = runTest {
         val result = runCatching {
-            dao.insertSetWithReps(set(workoutId)) { error("reps could not be built") }
+            dao.recordFirstSet(workout(), ::set) { error("reps could not be built") }
         }
 
         assertTrue(result.isFailure)
-        assertTrue(dao.setsFor(workoutId).isEmpty())
+        assertTrue(dao.workouts().first().isEmpty())
+        assertNull(dao.mostRecentWorkout())
     }
 
     @Test
