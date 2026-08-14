@@ -9,9 +9,8 @@ import com.replens.core.model.PoseFrame
 import com.replens.core.posemath.Point
 import com.replens.core.posemath.angleDegrees
 import com.replens.core.posemath.angleFromVerticalDegrees
-import com.replens.core.posemath.midHip
-import com.replens.core.posemath.midShoulder
 import com.replens.core.posemath.point
+import com.replens.core.posemath.torsoLeanDegrees
 
 /**
  * Everything one frame contributes to squat analysis, reduced to scalars.
@@ -72,7 +71,7 @@ fun BodyPose.squatSignals(
         rightKneeAngle = right,
         depthAngle = mean(left, right),
         femurInclination = femurInclination(minLikelihood),
-        torsoLeanDegrees = torsoLean(),
+        torsoLeanDegrees = torsoLeanDegrees(),
     )
 }
 
@@ -136,12 +135,6 @@ private fun BodyPose.segmentFromVertical(
     val start = confidentPoint(from, minLikelihood) ?: return null
     val end = confidentPoint(to, minLikelihood) ?: return null
     return angleFromVerticalDegrees(start, end)
-}
-
-private fun BodyPose.torsoLean(): Float? {
-    val hip = midHip() ?: return null
-    val shoulder = midShoulder() ?: return null
-    return angleFromVerticalDegrees(hip, shoulder)
 }
 
 private fun mean(a: Float?, b: Float?): Float? = when {

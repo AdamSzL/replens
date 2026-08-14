@@ -948,6 +948,27 @@ skipped rather than resolved when a class file is read (the same mechanism as
 arriving transitively through room-runtime, which is exactly the "works only via
 someone else's transitive graph" trap under *Dependency rules*. `-core`, not the
 `-android` artifact `:core:pose` uses: nothing here wants a Main dispatcher.
+`:core:data` declared the same `api` and had **no coroutine type in any
+signature**; removed 2026-08-14. It returns when `workouts()` reaches the
+repository.
+
+**A DAO is the typed interface to a schema, not application logic, and that
+changes what counts as speculative.** A table you can insert into but never list
+is an incomplete interface, so `workouts()` having no production caller is a
+statement about the app being half-built rather than about the method being a
+guess — and four write-path tests read their results through it, so removing it
+would mean inventing a worse-named replacement. Where the line actually falls:
+- **`repsFor(setId)` was deleted** (2026-08-14) because it is a strict *subset*
+  of `repsForWorkout`, which orders by `setId, rep_index` and returns identical
+  rows for one set. That is duplication, not early API, and two overlapping
+  queries make every call site a choice with no right answer.
+- **`deleteWorkout` was kept and is genuinely test-only.** It is the only lever
+  the cascade test can pull, and `onDelete = CASCADE` is free to keep and needs a
+  migration to add, so leaving it declared-but-unverified is the worse trade. It
+  is probably not what deletion will eventually call either: a hard delete on a
+  synced row returns on the next pull, so that wants a tombstone.
+The general rule: **keep an unused query when it is an obvious operation on the
+table, delete it when it is a narrower spelling of one that already exists.**
 
 **Now in Android's `core:database` looks different for reasons that don't
 transfer.** It `api`s `core:model` because it maps *inside* the database module
@@ -1537,7 +1558,7 @@ distribution and build cache.
   databases/replens.db`), taking `-wal` and `-shm` too or recent writes are
   missing. It also leaves a `replens.db.lck` beside them, which a wipe must delete.
 - **Next:** the workout summary screen (which brings Nav 3), then
-  `:feature:history`. 237 unit tests.
+  `:feature:history`. 236 unit tests.
 - **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
   and Navigation 3 (one screen, nothing to navigate to — it lands with
   the post-workout summary). The **set summary card is not that screen**: a card is

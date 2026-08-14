@@ -60,13 +60,8 @@ data class Rep(
  * someone doing quarter-squats gets no reps *and* no explanation, which is
  * indistinguishable from the app being broken. [deepestAngle] is also the
  * evidence per-user calibration needs — it is how far this body actually goes.
- *
- * One duration, not two: there is no bottom to split it at.
  */
-data class AbandonedDescent(
-    val deepestAngle: Float,
-    val total: Duration,
-)
+data class AbandonedDescent(val deepestAngle: Float)
 
 /** Result of feeding one frame to a rep counter. */
 data class RepUpdate(

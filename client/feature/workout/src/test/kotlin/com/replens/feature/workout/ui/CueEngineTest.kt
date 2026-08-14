@@ -44,10 +44,7 @@ private val shallowRep = completed(deepestAngle = config.bottomEnterAngle)
 
 private val bailedOut = RepUpdate(
     phase = RepPhase.STANDING,
-    abandonedDescent = AbandonedDescent(
-        deepestAngle = 140f,
-        total = 800.milliseconds,
-    ),
+    abandonedDescent = AbandonedDescent(deepestAngle = 140f),
 )
 
 class CueEngineTest {

@@ -40,9 +40,6 @@ interface WorkoutDao {
     @Query("SELECT * FROM sets WHERE workoutId = :workoutId ORDER BY startedAt")
     suspend fun setsFor(workoutId: Long): List<SetEntity>
 
-    @Query("SELECT * FROM reps WHERE setId = :setId ORDER BY rep_index")
-    suspend fun repsFor(setId: Long): List<RepEntity>
-
     /**
      * Every rep in a workout, so reading one costs two queries rather than one per
      * set. Ordered by set first, so the caller can group without sorting.
@@ -56,6 +53,14 @@ interface WorkoutDao {
     )
     suspend fun repsForWorkout(workoutId: Long): List<RepEntity>
 
+    /**
+     * Nothing in the app deletes yet; this is the only lever the cascade test can
+     * pull, and `onDelete = CASCADE` is a schema guarantee that is free to keep
+     * and needs a migration to add. Kept deliberately rather than left unverified.
+     *
+     * It is probably **not** what deletion will eventually call: a hard delete on
+     * a synced row comes back on the next pull, so that will want a tombstone.
+     */
     @Query("DELETE FROM workouts WHERE id = :id")
     suspend fun deleteWorkout(id: Long)
 

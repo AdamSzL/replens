@@ -53,9 +53,6 @@ internal class FakeWorkoutDao : WorkoutDao {
     override suspend fun setsFor(workoutId: Long): List<SetEntity> =
         setRows.filter { it.workoutId == workoutId }.sortedBy(SetEntity::startedAt)
 
-    override suspend fun repsFor(setId: Long): List<RepEntity> =
-        repRows.filter { it.setId == setId }.sortedBy(RepEntity::index)
-
     override suspend fun repsForWorkout(workoutId: Long): List<RepEntity> {
         val setIds = setRows.filter { it.workoutId == workoutId }.map(SetEntity::id).toSet()
         return repRows

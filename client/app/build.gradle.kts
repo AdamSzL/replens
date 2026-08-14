@@ -11,8 +11,6 @@ android {
         applicationId = "com.replens.app"
         versionCode = 1
         versionName = "1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -34,9 +32,4 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(projects.core.designsystem)
     implementation(projects.feature.workout)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

@@ -80,7 +80,7 @@ class ReplensDatabaseTest {
         assertEquals("SQUAT", sets.single().exercise)
         assertEquals(128f, sets.single().deepestAbandonedAngle!!, 0.001f)
 
-        val reps = dao.repsFor(setId)
+        val reps = dao.repsForWorkout(workoutId)
         assertEquals(listOf(1, 2, 3), reps.map(RepEntity::index))
         assertEquals(listOf(80f, 81f, 82f), reps.map(RepEntity::deepestAngle))
     }
@@ -115,11 +115,12 @@ class ReplensDatabaseTest {
      */
     @Test
     fun `reps come back in rep order, not insertion order`() = runTest {
-        val setId = dao.recordFirstSet(workout(), ::set) {
+        dao.recordFirstSet(workout(), ::set) {
             listOf(rep(it, index = 3), rep(it, index = 1), rep(it, index = 2))
         }
+        val workoutId = dao.mostRecentWorkout()!!.id
 
-        assertEquals(listOf(1, 2, 3), dao.repsFor(setId).map(RepEntity::index))
+        assertEquals(listOf(1, 2, 3), dao.repsForWorkout(workoutId).map(RepEntity::index))
     }
 
     /** Two queries per workout instead of one per set is the whole point of it. */
@@ -140,13 +141,13 @@ class ReplensDatabaseTest {
      */
     @Test
     fun `deleting a workout takes its sets and reps with it`() = runTest {
-        val setId = dao.recordFirstSet(workout(), ::set) { listOf(rep(it, index = 1)) }
+        dao.recordFirstSet(workout(), ::set) { listOf(rep(it, index = 1)) }
         val workoutId = dao.mostRecentWorkout()!!.id
 
         dao.deleteWorkout(workoutId)
 
         assertTrue(dao.setsFor(workoutId).isEmpty())
-        assertTrue(dao.repsFor(setId).isEmpty())
+        assertTrue(dao.repsForWorkout(workoutId).isEmpty())
     }
 
     /**

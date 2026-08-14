@@ -9,7 +9,6 @@ android {
 
 dependencies {
     api(projects.core.model)
-    api(libs.kotlinx.coroutines.core)
 
     implementation(projects.core.database)
 

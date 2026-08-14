@@ -14,8 +14,6 @@ data class BodyPose(
 
     operator fun get(type: LandmarkType): Landmark? = landmarks[type]
 
-    fun isEmpty(): Boolean = landmarks.isEmpty()
-
     companion object {
         val Empty = BodyPose(emptyMap())
     }

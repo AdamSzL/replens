@@ -128,7 +128,7 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
                 // Came back up without reaching depth: not a rep, but worth
                 // reporting — it is the only evidence the user is trying.
                 depthAngle >= config.standingEnterAngle -> {
-                    abandoned = abandonDescent(timestampMillis)
+                    abandoned = abandonDescent()
                     phase = RepPhase.STANDING
                 }
             }
@@ -161,15 +161,12 @@ class SquatRepCounter(private val config: SquatRepConfig = SquatRepConfig()) {
      * Only the deliberate turn-around reports one. Losing tracking does not: the
      * lifter may still be at the bottom, and "deeper" would be a guess.
      */
-    private fun abandonDescent(timestampMillis: Long): AbandonedDescent? {
+    private fun abandonDescent(): AbandonedDescent? {
         val startedAt = repStartedAtMillis
         val deepest = deepestAngle
         clearRepInProgress()
         if (startedAt == null) return null
-        return AbandonedDescent(
-            deepestAngle = deepest,
-            total = (timestampMillis - startedAt).milliseconds,
-        )
+        return AbandonedDescent(deepestAngle = deepest)
     }
 
     private fun completeRep(timestampMillis: Long): Rep? {

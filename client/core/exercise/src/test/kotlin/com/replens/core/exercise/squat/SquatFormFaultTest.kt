@@ -27,10 +27,7 @@ private fun completed(deepestAngle: Float): RepUpdate {
 private fun abandoned(deepestAngle: Float): RepUpdate {
     return RepUpdate(
         phase = RepPhase.STANDING,
-        abandonedDescent = AbandonedDescent(
-            deepestAngle = deepestAngle,
-            total = 800.milliseconds,
-        ),
+        abandonedDescent = AbandonedDescent(deepestAngle = deepestAngle),
     )
 }
 
