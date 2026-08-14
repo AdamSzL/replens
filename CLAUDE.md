@@ -173,13 +173,14 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :feature:workout    …workout.ui/            the five files (no Event yet), plus
                                             CueEngine (what to say), CueAnnouncer
                                             (whether to say it again) and
-                                            CameraSelection (which lens to open on)
+                                            CameraSelection (which lens to open
+                                            on, which zoom stops to offer)
                     …workout.ui.mapper/     SessionCue + FormCue: domain state ->
                                             UiText, drawn and spoken from one source
                     …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
-                    59 tests.
+                    63 tests.
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
@@ -1716,6 +1717,17 @@ The empty set returning null is the load-bearing case: nothing is selected, so
 lens the device does not have. It moves the day a second consumer appears — a
 settings screen with a default-camera preference — and even then it lands with
 that preference, not in `:core:pose`.
+
+**`ZoomRange.stops` was the same rule, missed** (moved 2026-08-14, found by a
+codebase pass). Which ratios to *offer* — the widest lens, 1x, and 2x only if the
+camera reaches it — is a judgement about framing a whole body, not a fact the
+lens reports, so it sat in `:core:pose` for exactly the reason `preferred` does
+not. `ZoomRange` itself stays: min and max are what the device says. The two now
+share one file, `CameraSelection.kt`, whose header states the rule once instead
+of each property re-deriving it.
+**The generalization: `:core:pose` may answer "what can this device do?" and
+never "which of it do we want?"** Anything shaped like the second belongs to
+whoever is doing the wanting.
 
 The ordering is a handshake, not a bootstrap problem: `poseFrames` resolves the
 provider and publishes `options.facings` **before** it waits on a facing, so the

@@ -30,7 +30,6 @@ import com.replens.core.model.RepPhase
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.ZoomRange
-import com.replens.core.pose.stops
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.components.PoseOverlay
 import com.replens.feature.workout.ui.components.RepCounter
