@@ -19,12 +19,14 @@ class WorkoutRepositoryTest {
 
     private val noon = Instant.fromEpochMilliseconds(12 * 60 * 60 * 1000L)
 
-    private fun rep(index: Int, deepestAngle: Float = 90f) = Rep(
-        index = index,
-        deepestAngle = deepestAngle,
-        descent = 900.milliseconds,
-        ascent = 700.milliseconds,
-    )
+    private fun rep(index: Int, deepestAngle: Float = 90f): Rep {
+        return Rep(
+            index = index,
+            deepestAngle = deepestAngle,
+            descent = 900.milliseconds,
+            ascent = 700.milliseconds,
+        )
+    }
 
     private suspend fun record(
         startedAt: Instant,

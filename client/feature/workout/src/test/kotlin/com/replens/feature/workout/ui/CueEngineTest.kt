@@ -27,15 +27,17 @@ private fun count(repCount: Int) = UiText.Resource(R.string.workout_cue_rep, rep
 /** Most frames: the counter is watching, nothing has happened. */
 private val nothing = RepUpdate(RepPhase.DESCENDING)
 
-private fun completed(deepestAngle: Float) = RepUpdate(
-    phase = RepPhase.STANDING,
-    completedRep = Rep(
-        index = 1,
-        deepestAngle = deepestAngle,
-        descent = 500.milliseconds,
-        ascent = 500.milliseconds,
-    ),
-)
+private fun completed(deepestAngle: Float): RepUpdate {
+    return RepUpdate(
+        phase = RepPhase.STANDING,
+        completedRep = Rep(
+            index = 1,
+            deepestAngle = deepestAngle,
+            descent = 500.milliseconds,
+            ascent = 500.milliseconds,
+        ),
+    )
+}
 
 private val deepRep = completed(deepestAngle = 70f)
 private val shallowRep = completed(deepestAngle = config.bottomEnterAngle)

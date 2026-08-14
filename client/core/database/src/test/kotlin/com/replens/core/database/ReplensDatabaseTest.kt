@@ -42,25 +42,29 @@ class ReplensDatabaseTest {
     private suspend fun insertWorkout(startedAt: Long = 0L, endedAt: Long = 0L) =
         dao.insert(workout(startedAt = startedAt, endedAt = endedAt))
 
-    private fun set(workoutId: Long, repCount: Int = 3) = SetEntity(
-        workoutId = workoutId,
-        exercise = "SQUAT",
-        startedAt = 0L,
-        endedAt = 30_000L,
-        repCount = repCount,
-        repsAtDepth = 2,
-        abandonedCount = 1,
-        deepestAbandonedAngle = 128f,
-        updatedAt = 30_000L,
-    )
+    private fun set(workoutId: Long, repCount: Int = 3): SetEntity {
+        return SetEntity(
+            workoutId = workoutId,
+            exercise = "SQUAT",
+            startedAt = 0L,
+            endedAt = 30_000L,
+            repCount = repCount,
+            repsAtDepth = 2,
+            abandonedCount = 1,
+            deepestAbandonedAngle = 128f,
+            updatedAt = 30_000L,
+        )
+    }
 
-    private fun rep(setId: Long, index: Int, deepestAngle: Float = 90f) = RepEntity(
-        setId = setId,
-        index = index,
-        deepestAngle = deepestAngle,
-        descentMillis = 900L,
-        ascentMillis = 700L,
-    )
+    private fun rep(setId: Long, index: Int, deepestAngle: Float = 90f): RepEntity {
+        return RepEntity(
+            setId = setId,
+            index = index,
+            deepestAngle = deepestAngle,
+            descentMillis = 900L,
+            ascentMillis = 700L,
+        )
+    }
 
     @Test
     fun `a workout, its sets and their reps round-trip`() = runTest {

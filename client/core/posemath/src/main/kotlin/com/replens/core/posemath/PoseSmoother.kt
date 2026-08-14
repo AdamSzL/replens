@@ -60,10 +60,12 @@ class PoseSmoother(
         lastTimestampMillis = null
     }
 
-    private fun newFilters() = CoordinateFilters(
-        x = OneEuroFilter(minCutoff, beta, derivativeCutoff),
-        y = OneEuroFilter(minCutoff, beta, derivativeCutoff),
-    )
+    private fun newFilters(): CoordinateFilters {
+        return CoordinateFilters(
+            x = OneEuroFilter(minCutoff, beta, derivativeCutoff),
+            y = OneEuroFilter(minCutoff, beta, derivativeCutoff),
+        )
+    }
 
     /**
      * z is passed through untouched — it is relative depth, far less accurate

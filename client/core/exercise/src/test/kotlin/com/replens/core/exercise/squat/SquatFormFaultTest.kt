@@ -12,23 +12,27 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private val config = SquatRepConfig()
 
-private fun completed(deepestAngle: Float) = RepUpdate(
-    phase = RepPhase.STANDING,
-    completedRep = Rep(
-        index = 1,
-        deepestAngle = deepestAngle,
-        descent = 500.milliseconds,
-        ascent = 500.milliseconds,
-    ),
-)
+private fun completed(deepestAngle: Float): RepUpdate {
+    return RepUpdate(
+        phase = RepPhase.STANDING,
+        completedRep = Rep(
+            index = 1,
+            deepestAngle = deepestAngle,
+            descent = 500.milliseconds,
+            ascent = 500.milliseconds,
+        ),
+    )
+}
 
-private fun abandoned(deepestAngle: Float) = RepUpdate(
-    phase = RepPhase.STANDING,
-    abandonedDescent = AbandonedDescent(
-        deepestAngle = deepestAngle,
-        total = 800.milliseconds,
-    ),
-)
+private fun abandoned(deepestAngle: Float): RepUpdate {
+    return RepUpdate(
+        phase = RepPhase.STANDING,
+        abandonedDescent = AbandonedDescent(
+            deepestAngle = deepestAngle,
+            total = 800.milliseconds,
+        ),
+    )
+}
 
 class SquatFormFaultTest {
 

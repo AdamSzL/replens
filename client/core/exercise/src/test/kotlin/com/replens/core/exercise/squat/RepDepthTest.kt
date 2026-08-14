@@ -8,12 +8,14 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private val config = SquatRepConfig()
 
-private fun rep(deepestAngle: Float) = Rep(
-    index = 1,
-    deepestAngle = deepestAngle,
-    descent = 500.milliseconds,
-    ascent = 500.milliseconds,
-)
+private fun rep(deepestAngle: Float): Rep {
+    return Rep(
+        index = 1,
+        deepestAngle = deepestAngle,
+        descent = 500.milliseconds,
+        ascent = 500.milliseconds,
+    )
+}
 
 class RepDepthTest {
 

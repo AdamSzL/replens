@@ -108,15 +108,17 @@ private const val FRAMES_PER_SECOND = 30
 /** `squats_5_deep__00001.jpg` — clip name, separator, frame number. */
 private const val CLIP_SEPARATOR = "__"
 
-private fun SquatSignals.toCsvRow(index: Int): String = listOf(
-    index.toString(),
-    timestampMillis.toString(),
-    depthAngle.csv(),
-    leftKneeAngle.csv(),
-    rightKneeAngle.csv(),
-    femurInclination.csv(),
-    torsoLeanDegrees.csv(),
-).joinToString(",")
+private fun SquatSignals.toCsvRow(index: Int): String {
+    return listOf(
+        index.toString(),
+        timestampMillis.toString(),
+        depthAngle.csv(),
+        leftKneeAngle.csv(),
+        rightKneeAngle.csv(),
+        femurInclination.csv(),
+        torsoLeanDegrees.csv(),
+    ).joinToString(",")
+}
 
 /**
  * Empty for null — "no confident reading", which a 0 would misrepresent.

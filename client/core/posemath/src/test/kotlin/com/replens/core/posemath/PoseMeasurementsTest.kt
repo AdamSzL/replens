@@ -18,14 +18,16 @@ private fun poseOf(vararg landmarks: Landmark) = BodyPose(landmarks.toList())
  * A standing figure, y growing downwards: shoulders at y=100, hips at y=200,
  * knees at y=300, ankles at y=400. Torso size is therefore exactly 100.
  */
-private fun standingPose(scale: Float = 1f, offsetX: Float = 0f) = poseOf(
-    landmark(LandmarkType.LEFT_SHOULDER, (40f + offsetX) * scale, 100f * scale),
-    landmark(LandmarkType.RIGHT_SHOULDER, (-40f + offsetX) * scale, 100f * scale),
-    landmark(LandmarkType.LEFT_HIP, (20f + offsetX) * scale, 200f * scale),
-    landmark(LandmarkType.RIGHT_HIP, (-20f + offsetX) * scale, 200f * scale),
-    landmark(LandmarkType.LEFT_KNEE, (20f + offsetX) * scale, 300f * scale),
-    landmark(LandmarkType.LEFT_ANKLE, (20f + offsetX) * scale, 400f * scale),
-)
+private fun standingPose(scale: Float = 1f, offsetX: Float = 0f): BodyPose {
+    return poseOf(
+        landmark(LandmarkType.LEFT_SHOULDER, (40f + offsetX) * scale, 100f * scale),
+        landmark(LandmarkType.RIGHT_SHOULDER, (-40f + offsetX) * scale, 100f * scale),
+        landmark(LandmarkType.LEFT_HIP, (20f + offsetX) * scale, 200f * scale),
+        landmark(LandmarkType.RIGHT_HIP, (-20f + offsetX) * scale, 200f * scale),
+        landmark(LandmarkType.LEFT_KNEE, (20f + offsetX) * scale, 300f * scale),
+        landmark(LandmarkType.LEFT_ANKLE, (20f + offsetX) * scale, 400f * scale),
+    )
+}
 
 class PoseMeasurementsTest {
 
@@ -142,15 +144,17 @@ class PoseMeasurementsTest {
 
     @Test
     fun `a caving knee deviates, and the amount is scale invariant`() {
-        fun poseWithKneeInset(scale: Float) = poseOf(
-            landmark(LandmarkType.LEFT_SHOULDER, 40f * scale, 100f * scale),
-            landmark(LandmarkType.RIGHT_SHOULDER, -40f * scale, 100f * scale),
-            landmark(LandmarkType.LEFT_HIP, 20f * scale, 200f * scale),
-            landmark(LandmarkType.RIGHT_HIP, -20f * scale, 200f * scale),
-            // Knee pulled 25px inwards from the hip->ankle line.
-            landmark(LandmarkType.LEFT_KNEE, -5f * scale, 300f * scale),
-            landmark(LandmarkType.LEFT_ANKLE, 20f * scale, 400f * scale),
-        )
+        fun poseWithKneeInset(scale: Float): BodyPose {
+            return poseOf(
+                landmark(LandmarkType.LEFT_SHOULDER, 40f * scale, 100f * scale),
+                landmark(LandmarkType.RIGHT_SHOULDER, -40f * scale, 100f * scale),
+                landmark(LandmarkType.LEFT_HIP, 20f * scale, 200f * scale),
+                landmark(LandmarkType.RIGHT_HIP, -20f * scale, 200f * scale),
+                // Knee pulled 25px inwards from the hip->ankle line.
+                landmark(LandmarkType.LEFT_KNEE, -5f * scale, 300f * scale),
+                landmark(LandmarkType.LEFT_ANKLE, 20f * scale, 400f * scale),
+            )
+        }
 
         val near = poseWithKneeInset(1f).deviationFromLineNormalized(
             LandmarkType.LEFT_KNEE, LandmarkType.LEFT_HIP, LandmarkType.LEFT_ANKLE,

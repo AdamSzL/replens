@@ -1715,6 +1715,14 @@ degrade with bad lighting, clothing and angles, so UX must guide phone placement
   `Foo(a = 1, b = 2)` becomes four lines. Applies to function and composable
   calls; modifier arguments (`.padding(horizontal = …, vertical = …)`) and
   annotations stay inline.
+- **No expression body when the body carries a multi-line argument list.** Write
+  a block body with `return` and an explicit return type instead — `= Rep(`
+  followed by four named arguments and a `)` puts the declaration, the `=` and
+  the arguments at three different indent levels, and hides the return type
+  behind inference. `= when (this) { … }` and `= runTest { … }` are unaffected:
+  their body is already a block, so `{ return when … }` would only add a line
+  and an indent level. Swept across the codebase 2026-08-14; the split was 13
+  argument-list bodies rewritten, 8 `when` bodies left alone.
 - **Comments are for what the code can't say.** A comment that restates the
   signature (`/** What the user did. */`, `/** Zoom stops. */`) is noise —
   delete it. Worth writing: why a number is that number, why an ordering or a

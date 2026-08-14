@@ -64,12 +64,13 @@ fun PoseFrame.setupCheck(
  * One leg is enough — filming at 45 degrees occludes the far side by design, and
  * `squatSignals` already measures depth from whichever legs survive.
  */
-private fun PoseFrame.hasUsableLeg(minLikelihood: Float): Boolean =
-    isLegObserved(
-        LandmarkType.LEFT_HIP, LandmarkType.LEFT_KNEE, LandmarkType.LEFT_ANKLE, minLikelihood,
-    ) || isLegObserved(
-        LandmarkType.RIGHT_HIP, LandmarkType.RIGHT_KNEE, LandmarkType.RIGHT_ANKLE, minLikelihood,
-    )
+private fun PoseFrame.hasUsableLeg(minLikelihood: Float): Boolean {
+    return isLegObserved(
+            LandmarkType.LEFT_HIP, LandmarkType.LEFT_KNEE, LandmarkType.LEFT_ANKLE, minLikelihood,
+        ) || isLegObserved(
+            LandmarkType.RIGHT_HIP, LandmarkType.RIGHT_KNEE, LandmarkType.RIGHT_ANKLE, minLikelihood,
+        )
+}
 
 private fun PoseFrame.isLegObserved(
     hip: LandmarkType,

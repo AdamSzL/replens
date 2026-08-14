@@ -15,19 +15,21 @@ private fun landmark(type: LandmarkType, x: Float, y: Float) =
     Landmark(type = type, x = x, y = y, z = 0f, inFrameLikelihood = 1f)
 
 /** Shoulders and hips only — [torsoFraction] needs nothing else. */
-private fun frameWithTorso(heightPx: Float, shoulderY: Float = 100f) = PoseFrame(
-    pose = BodyPose(
-        listOf(
-            landmark(LandmarkType.LEFT_SHOULDER, 260f, shoulderY),
-            landmark(LandmarkType.RIGHT_SHOULDER, 220f, shoulderY),
-            landmark(LandmarkType.LEFT_HIP, 260f, shoulderY + heightPx),
-            landmark(LandmarkType.RIGHT_HIP, 220f, shoulderY + heightPx),
-        )
-    ),
-    sourceWidth = FRAME_WIDTH,
-    sourceHeight = FRAME_HEIGHT,
-    timestampMillis = 0L,
-)
+private fun frameWithTorso(heightPx: Float, shoulderY: Float = 100f): PoseFrame {
+    return PoseFrame(
+        pose = BodyPose(
+            listOf(
+                landmark(LandmarkType.LEFT_SHOULDER, 260f, shoulderY),
+                landmark(LandmarkType.RIGHT_SHOULDER, 220f, shoulderY),
+                landmark(LandmarkType.LEFT_HIP, 260f, shoulderY + heightPx),
+                landmark(LandmarkType.RIGHT_HIP, 220f, shoulderY + heightPx),
+            )
+        ),
+        sourceWidth = FRAME_WIDTH,
+        sourceHeight = FRAME_HEIGHT,
+        timestampMillis = 0L,
+    )
+}
 
 class FramingTest {
 
