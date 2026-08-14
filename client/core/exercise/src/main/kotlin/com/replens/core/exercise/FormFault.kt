@@ -1,5 +1,9 @@
 package com.replens.core.exercise
 
+import com.replens.core.model.Rep
+import com.replens.core.model.RepPhase
+import com.replens.core.model.RepUpdate
+
 /**
  * Something worth correcting, named rather than worded — the words are chosen in
  * the feature module, because this module is pure Kotlin and `UiText` is Android.

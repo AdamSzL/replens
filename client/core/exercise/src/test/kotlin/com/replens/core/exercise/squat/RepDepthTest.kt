@@ -1,6 +1,6 @@
 package com.replens.core.exercise.squat
 
-import com.replens.core.exercise.Rep
+import com.replens.core.model.Rep
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test

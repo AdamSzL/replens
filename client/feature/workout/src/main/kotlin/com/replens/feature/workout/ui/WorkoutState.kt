@@ -1,7 +1,7 @@
 package com.replens.feature.workout.ui
 
-import com.replens.core.exercise.RepPhase
 import com.replens.core.exercise.SessionState
+import com.replens.core.model.RepPhase
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 

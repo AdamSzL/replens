@@ -5,8 +5,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.replens.core.audio.Speaker
-import com.replens.core.exercise.Rep
-import com.replens.core.exercise.RepPhase
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetSession
 import com.replens.core.exercise.setupCheck
@@ -15,6 +13,8 @@ import com.replens.core.exercise.squat.SquatRepCounter
 import com.replens.core.exercise.squat.isAtDepth
 import com.replens.core.exercise.squat.squatDepthAngle
 import com.replens.core.model.PoseFrame
+import com.replens.core.model.Rep
+import com.replens.core.model.RepPhase
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import dagger.hilt.android.lifecycle.HiltViewModel

@@ -1,4 +1,4 @@
-package com.replens.core.exercise
+package com.replens.core.model
 
 import kotlin.time.Instant
 

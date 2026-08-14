@@ -1,6 +1,6 @@
 package com.replens.core.exercise.squat
 
-import com.replens.core.exercise.Rep
+import com.replens.core.model.Rep
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import kotlin.math.roundToInt

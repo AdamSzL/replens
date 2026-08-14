@@ -1,12 +1,12 @@
 package com.replens.feature.workout.ui
 
-import com.replens.core.exercise.AbandonedDescent
-import com.replens.core.exercise.Rep
-import com.replens.core.exercise.RepPhase
-import com.replens.core.exercise.RepUpdate
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetupCheck
 import com.replens.core.exercise.squat.SquatRepConfig
+import com.replens.core.model.AbandonedDescent
+import com.replens.core.model.Rep
+import com.replens.core.model.RepPhase
+import com.replens.core.model.RepUpdate
 import com.replens.core.ui.UiText
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.mapper.message

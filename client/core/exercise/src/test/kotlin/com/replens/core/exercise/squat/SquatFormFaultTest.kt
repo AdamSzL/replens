@@ -1,10 +1,10 @@
 package com.replens.core.exercise.squat
 
-import com.replens.core.exercise.AbandonedDescent
 import com.replens.core.exercise.FormFault
-import com.replens.core.exercise.Rep
-import com.replens.core.exercise.RepPhase
-import com.replens.core.exercise.RepUpdate
+import com.replens.core.model.AbandonedDescent
+import com.replens.core.model.Rep
+import com.replens.core.model.RepPhase
+import com.replens.core.model.RepUpdate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

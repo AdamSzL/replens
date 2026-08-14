@@ -189,13 +189,15 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
                       …component.button/ Primary, OverlayPrimary,
                                          OverlaySecondary, OverlayIcon
-:core:model         Landmark, LandmarkType, BodyPose, PoseFrame. Pure Kotlin.
+:core:model         Landmark, LandmarkType, BodyPose, PoseFrame; Rep, RepPhase,
+                    RepUpdate, AbandonedDescent; Exercise, ExerciseSet, Workout.
+                    Pure Kotlin, no dependencies at all.
 :core:posemath      Point, joint angles, torso size, normalized distances, line
                     deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
                     domain-free (no thresholds, no exercise names). 55 tests.
 :core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 86 tests.
-                      …exercise/       Rep, RepPhase, RepUpdate, Framing, FormFault,
-                                       SetupCheck, SessionState, SetSession
+                      …exercise/       Framing, FormFault, SetupCheck,
+                                       SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
 ```
 
@@ -907,11 +909,26 @@ would be `:core:database` splitting.
 
 ### Where these live
 
-`Workout` and `ExerciseSet` go in **`:core:exercise`** beside `Rep` and
-`SetSession` — pure Kotlin, same vocabulary, and `Rep` is already there, so
-putting them in `:core:model` would force a dependency in the wrong direction.
-It widens that module's charter slightly from "exercise knowledge" to "exercise
-vocabulary and knowledge", which is the smaller cost.
+`Workout`, `ExerciseSet` and `Exercise` go in **`:core:model`**, and `Rep.kt`
+moved there with them (2026-08-14). An earlier version of this file put them in
+`:core:exercise` on the grounds that `:core:model` would then need a dependency
+"in the wrong direction" — **that was wrong**, and only true if `Rep` stayed
+behind. `ExerciseSet` holds `List<Rep>`, so the two move together, and
+`:core:exercise` already depends on `:core:model`; no cycle exists.
+
+**The module's charter is the admission test: pure data, no thresholds, no
+behavior, no dependencies.** `Landmark` and `Workout` both pass it; `SetupCheck`
+fails (carries `MAX_TORSO_FRACTION`) and `SetSession` fails (behavior), which is
+why those stay in `:core:exercise` along with `squat/`. Stated as a rule, the
+module cannot drift into meaning "misc types".
+
+**Not split into pose models and workout models**, tempting as the two groups
+look: `:core:exercise` needs `BodyPose` *and* `Rep`, and `:feature:workout` needs
+`PoseFrame` *and* `RepPhase`, so the halves already meet in two modules and would
+be declared together nearly everywhere. There is no consumer that must not see
+the other half, and the pose half is four dependency-free data classes. If the
+flat package ever feels mixed, `pose/` and `workout/` sub-packages are a
+directory move — cheaper than a module, same legibility.
 
 **`Workout` and `ExerciseSet` are read models, so `id` is always real.** No
 `id: Long = 0` — that is Room's `autoGenerate` sentinel leaking into a type that

@@ -11,7 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.theme.RepLensTheme
-import com.replens.core.exercise.RepPhase
+import com.replens.core.model.RepPhase
 
 /** The phase line is a debug affordance; it goes when cues become events. */
 @Composable

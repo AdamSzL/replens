@@ -1,13 +1,12 @@
-package com.replens.core.exercise
+package com.replens.core.model
 
 import kotlin.time.Duration
 
 /**
- * Vocabulary shared by every exercise, kept out of the per-exercise packages
- * (`…exercise.squat`, and whatever follows) so those never need to depend on
- * each other.
+ * Vocabulary shared by every exercise, so no per-exercise package ever needs to
+ * depend on another.
  *
- * Whether this genuinely generalises is **not yet established** — one exercise is
+ * Whether this genuinely generalizes is **not yet established** — one exercise is
  * not enough evidence. Push-ups and curls plausibly reuse the same four phases,
  * but that gets decided when the second one is written, not now.
  */
