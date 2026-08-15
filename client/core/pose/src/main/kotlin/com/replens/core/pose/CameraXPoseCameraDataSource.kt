@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -73,7 +74,7 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
         field = MutableStateFlow(null)
 
     override fun poseFrames(
-        lifecycleOwner: LifecycleOwner,
+        lifecycleOwners: Flow<LifecycleOwner?>,
         facings: Flow<CameraFacing>,
         zoomRatios: Flow<Float>,
     ): Flow<PoseFrame> = callbackFlow {
@@ -103,21 +104,39 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
         analysis.setAnalyzer(analysisExecutor) { imageProxy ->
             analyzeFrame(imageProxy, detector, analysisExecutor) { frame -> trySend(frame) }
         }
-        // A lens change rebinds the same use cases rather than restarting the flow:
-        // the detector and its loaded model are none of CameraX's business.
-        // collectLatest cancels the previous camera's observers on the next facing.
-        // Must run on the main thread — that is what the flowOn below is for.
-        // Deduplicated here, not by the caller: rebinding is this function's cost,
-        // so what counts as a change is its call. A repeat would tear the camera
-        // down for nothing, silently.
+        // What the camera should be bound to. One target rather than two inputs
+        // because a rebind is a rebind either way: a returning screen brings a
+        // different LifecycleOwner, and the one it replaced is destroyed, which
+        // bindToLifecycle rejects outright.
+        val binding = combine(lifecycleOwners, facings) { owner, facing ->
+            owner?.let { it to facing }
+        }
         launch {
-            facings.distinctUntilChanged().collectLatest { facing ->
+            // Deduplicated here, not by the caller: rebinding is this function's
+            // cost, so what counts as a change is its call. A repeat would tear the
+            // camera down for nothing, silently. The same use cases are rebound
+            // rather than the flow restarting — the detector and its loaded model
+            // are none of CameraX's business — and all of this must run on the main
+            // thread, which is what the flowOn below is for.
+            binding.distinctUntilChanged().collectLatest { target ->
                 // Back to "unknown", not the previous lens's range: the new one has
                 // its own, and offering a stop it can't reach fails silently.
                 options.value = CameraOptions(availableFacings)
                 provider.unbind(preview, analysis)
+                if (target == null) {
+                    // Cleared only when the *consumer* is gone. A viewfinder that
+                    // is still on screen keeps showing its last frame across a
+                    // rebind, so clearing here too blanks the preview for the
+                    // ~300 ms a lens change takes — measured, not guessed.
+                    // A returning screen brings a new viewfinder instead, and
+                    // handing that one a request the last one declined renders
+                    // black permanently.
+                    surfaceRequests.value = null
+                    return@collectLatest
+                }
+                val (owner, facing) = target
                 val camera = provider.bindToLifecycle(
-                    lifecycleOwner,
+                    owner,
                     facing.selector,
                     preview,
                     analysis,

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,8 +57,12 @@ internal fun WorkoutRoot(
     // draw time. Unwrapping it here would recompose this screen 30 times a second.
     val poseFrame = viewModel.poseFrame.collectAsStateWithLifecycle()
 
-    LaunchedEffect(lifecycleOwner) {
-        viewModel.startCamera(lifecycleOwner)
+    // Disposable, not Launched: leaving this screen for the summary keeps the
+    // ViewModel alive on the back stack, so nothing else would ever give the
+    // camera back.
+    DisposableEffect(lifecycleOwner) {
+        viewModel.onAction(WorkoutAction.ScreenAttached(lifecycleOwner))
+        onDispose { viewModel.onAction(WorkoutAction.ScreenDetached) }
     }
 
     WorkoutScreen(

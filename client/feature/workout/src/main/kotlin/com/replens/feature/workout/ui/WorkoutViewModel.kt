@@ -85,6 +85,14 @@ internal class WorkoutViewModel @Inject constructor(
     private var cameraJob: Job? = null
 
     /**
+     * Whose lifecycle the camera follows, and null while no screen is showing.
+     * A field rather than a parameter captured once, because returning to this
+     * screen brings a *new* owner — the previous one was destroyed with its
+     * composition, and CameraX refuses to bind to a destroyed lifecycle.
+     */
+    private val lifecycleOwners = MutableStateFlow<LifecycleOwner?>(null)
+
+    /**
      * The write [finishSet] started, and its result. Done can be pressed before it
      * lands, so [doneWithSet] waits on the job rather than reading the id and
      * hoping. Both are null after a set that wrote nothing.
@@ -106,21 +114,10 @@ internal class WorkoutViewModel @Inject constructor(
         }
     }
 
-    fun startCamera(lifecycleOwner: LifecycleOwner) {
-        if (cameraJob?.isActive == true) return
-        cameraJob = viewModelScope.launch {
-            // Driven from state, so what the camera does can't drift from what the
-            // screen shows.
-            poseCamera.poseFrames(
-                lifecycleOwner = lifecycleOwner,
-                facings = state.mapNotNull { it.cameraFacing },
-                zoomRatios = state.map { it.zoomRatio },
-            ).collect(::onFrame)
-        }
-    }
-
     fun onAction(action: WorkoutAction) {
         when (action) {
+            is WorkoutAction.ScreenAttached -> startCamera(action.lifecycleOwner)
+            WorkoutAction.ScreenDetached -> releaseCamera()
             is WorkoutAction.ZoomSelected -> selectZoom(action.ratio)
             WorkoutAction.CameraFlipClicked -> flipCamera()
             WorkoutAction.StartClicked, WorkoutAction.GoAgainClicked -> startSet()
@@ -128,6 +125,32 @@ internal class WorkoutViewModel @Inject constructor(
             WorkoutAction.FinishClicked -> finishSet()
             WorkoutAction.DoneClicked -> doneWithSet()
         }
+    }
+
+    private fun startCamera(lifecycleOwner: LifecycleOwner) {
+        lifecycleOwners.value = lifecycleOwner
+        if (cameraJob?.isActive == true) return
+        cameraJob = viewModelScope.launch {
+            // Driven from state, so what the camera does can't drift from what the
+            // screen shows.
+            poseCamera.poseFrames(
+                lifecycleOwners = lifecycleOwners,
+                facings = state.mapNotNull { it.cameraFacing },
+                zoomRatios = state.map { it.zoomRatio },
+            ).collect(::onFrame)
+        }
+    }
+
+    /**
+     * The stream is left collecting on purpose: cancelling it would close the ML
+     * Kit detector, and reloading that model is a visible stall on a path taken
+     * once per workout.
+     */
+    private fun releaseCamera() {
+        lifecycleOwners.value = null
+        // The last pose is now arbitrarily old; leaving it would draw a skeleton
+        // from a different room until the first frame after rebinding.
+        poseFrame.value = null
     }
 
     private fun selectZoom(ratio: Float) {

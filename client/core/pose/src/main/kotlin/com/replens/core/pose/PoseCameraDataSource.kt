@@ -22,9 +22,16 @@ interface PoseCameraDataSource {
      * [facings] is awaited *after* [options] first publishes, so a caller can
      * resolve a lens that exists before anything binds. A fake must keep that
      * order or it will describe a handshake the real camera does not perform.
+     *
+     * [lifecycleOwners] is a flow because **the owner is not stable for the life
+     * of the stream**. Under Navigation 3 each entry gets its own, destroyed when
+     * its content leaves composition and replaced by a new instance when it comes
+     * back — so a screen returning from elsewhere hands over a different owner,
+     * and binding to the old one throws. Null means no screen is showing: the
+     * camera is released, and the detector is kept for the return.
      */
     fun poseFrames(
-        lifecycleOwner: LifecycleOwner,
+        lifecycleOwners: Flow<LifecycleOwner?>,
         facings: Flow<CameraFacing>,
         zoomRatios: Flow<Float>,
     ): Flow<PoseFrame>

@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -38,15 +40,31 @@ internal class FakePoseCameraDataSource : PoseCameraDataSource {
 
     val frames = MutableSharedFlow<PoseFrame>(extraBufferCapacity = 256)
 
+    /** The owner currently bound, so a test can see a rebind onto a new one. */
+    var boundTo: LifecycleOwner? = null
+        private set
+
     override fun poseFrames(
-        lifecycleOwner: LifecycleOwner,
+        lifecycleOwners: Flow<LifecycleOwner?>,
         facings: Flow<CameraFacing>,
         zoomRatios: Flow<Float>,
-    ): Flow<PoseFrame> = frames
+    ): Flow<PoseFrame> = channelFlow {
+        launch { lifecycleOwners.collect { boundTo = it } }
+        // Frames stop while unbound rather than the stream ending — modeled here
+        // because that difference is the whole reason the owner is a flow.
+        frames.collect { if (boundTo != null) send(it) }
+    }
 }
 
-/** The fake camera never binds, so nothing may read this. */
-internal val NoLifecycleOwner = object : LifecycleOwner {
+/**
+ * A distinct owner per call, because that is what a real return produces:
+ * Navigation 3 destroys an entry's owner along with its composition and builds a
+ * new one on the way back. Reusing one instance would hide the rebind the camera
+ * has to perform.
+ *
+ * The fake camera never binds, so nothing may read the lifecycle itself.
+ */
+internal fun screenLifecycleOwner(): LifecycleOwner = object : LifecycleOwner {
     override val lifecycle: Lifecycle get() = error("the fake camera does not bind")
 }
 

@@ -92,7 +92,7 @@ class WorkoutViewModelTest {
     }
 
     private fun start() {
-        viewModel.startCamera(NoLifecycleOwner)
+        viewModel.onAction(WorkoutAction.ScreenAttached(screenLifecycleOwner()))
         viewModel.onAction(WorkoutAction.StartClicked)
     }
 
@@ -291,7 +291,7 @@ class WorkoutViewModelTest {
      */
     @Test
     fun `movement before the set starts is not counted`() = runTest {
-        viewModel.startCamera(NoLifecycleOwner)
+        viewModel.onAction(WorkoutAction.ScreenAttached(screenLifecycleOwner()))
         rep()
         rep()
 
