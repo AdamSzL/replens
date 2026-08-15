@@ -118,11 +118,14 @@ private fun snapUp(angle: Float): Float = ceil(angle / AXIS_STEP) * AXIS_STEP
 private fun snapDown(angle: Float): Float = floor(angle / AXIS_STEP) * AXIS_STEP
 
 private fun Workout.setRows(): List<SetRowUiModel> {
+    // Naming the same exercise on every row of a squat session is repetition, not
+    // information. It comes back on its own the first time a workout mixes two.
+    val mixed = sets.distinctBy { it.exercise }.size > 1
     return sets.mapIndexed { position, set ->
         SetRowUiModel(
             id = set.id,
             index = position + 1,
-            exercise = set.exercise.toUiText(),
+            exercise = set.exercise.toUiText().takeIf { mixed },
             repCount = set.repCount,
             repsAtDepth = set.repsAtDepth,
             duration = (set.endedAt - set.startedAt).toUiText(),

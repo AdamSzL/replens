@@ -15,7 +15,8 @@ import com.replens.core.text.UiText
 internal data class SetRowUiModel(
     val id: Long,
     val index: Int,
-    val exercise: UiText,
+    /** Null when every set in the workout is the same exercise: repeating it says nothing. */
+    val exercise: UiText?,
     val repCount: Int,
     val repsAtDepth: Int,
     val duration: UiText,

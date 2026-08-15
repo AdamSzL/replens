@@ -83,6 +83,22 @@ class WorkoutSummaryTest {
         assertEquals(listOf(7L, 9L), rows.map { it.id })
     }
 
+    /**
+     * The mixed case cannot be written yet — there is one exercise — so this pins
+     * the half that is reachable, and the row will name it as soon as there are two.
+     */
+    @Test
+    fun `a workout of one exercise does not name it on every set`() {
+        val workout = workout(
+            set(startedAt = EPOCH, angles = listOf(90f)),
+            set(startedAt = EPOCH + 4.minutes, angles = listOf(90f)),
+        )
+
+        val rows = workout.toSummaryState(now).sets
+
+        assertEquals(listOf(null, null), rows.map { it.exercise })
+    }
+
     /** The line is the counter's, whatever the data does around it. */
     @Test
     fun `the threshold comes from the counter's config`() {

@@ -156,7 +156,7 @@ private val previewState = WorkoutSummaryState.Loaded(
         SetRowUiModel(
             id = 1,
             index = 1,
-            exercise = UiText.Resource(R.string.exercise_squat),
+            exercise = null,
             repCount = 12,
             repsAtDepth = 10,
             duration = UiText.Resource(R.string.duration_seconds, 48),
@@ -166,7 +166,7 @@ private val previewState = WorkoutSummaryState.Loaded(
         SetRowUiModel(
             id = 2,
             index = 2,
-            exercise = UiText.Resource(R.string.exercise_squat),
+            exercise = null,
             repCount = 10,
             repsAtDepth = 7,
             duration = UiText.Resource(R.string.duration_seconds, 44),
@@ -176,7 +176,7 @@ private val previewState = WorkoutSummaryState.Loaded(
         SetRowUiModel(
             id = 3,
             index = 3,
-            exercise = UiText.Resource(R.string.exercise_squat),
+            exercise = null,
             repCount = 8,
             repsAtDepth = 4,
             duration = UiText.Resource(R.string.duration_seconds, 39),
