@@ -1,6 +1,6 @@
 package com.replens.feature.history.ui.model
 
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 
 /**
  * The headline: what the whole session came to.

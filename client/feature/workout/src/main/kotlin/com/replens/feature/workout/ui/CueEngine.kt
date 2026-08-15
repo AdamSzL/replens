@@ -5,7 +5,7 @@ import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.squat.SquatRepConfig
 import com.replens.core.exercise.squat.squatFormFault
 import com.replens.core.model.RepUpdate
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 import com.replens.feature.workout.ui.mapper.spokenCue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds

@@ -7,7 +7,7 @@ import com.replens.core.model.AbandonedDescent
 import com.replens.core.model.Rep
 import com.replens.core.model.RepPhase
 import com.replens.core.model.RepUpdate
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.mapper.message
 import org.junit.Assert.assertEquals

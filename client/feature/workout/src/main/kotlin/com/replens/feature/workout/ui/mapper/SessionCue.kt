@@ -2,7 +2,7 @@ package com.replens.feature.workout.ui.mapper
 
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetupCheck
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.model.SpokenCue
 import kotlin.time.Duration.Companion.seconds

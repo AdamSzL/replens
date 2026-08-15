@@ -13,6 +13,7 @@ dependencies {
     implementation(projects.core.data)
     implementation(projects.core.designsystem)
     implementation(projects.core.exercise)
+    implementation(projects.core.text)
     implementation(projects.core.ui)
 
     api(libs.androidx.navigation3.runtime)

@@ -16,6 +16,7 @@ dependencies {
     implementation(projects.core.exercise)
     implementation(projects.core.pose)
     implementation(projects.core.posemath)
+    implementation(projects.core.text)
     implementation(projects.core.ui)
 
     api(libs.androidx.navigation3.runtime)

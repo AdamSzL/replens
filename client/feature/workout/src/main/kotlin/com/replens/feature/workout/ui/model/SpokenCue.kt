@@ -1,6 +1,6 @@
 package com.replens.feature.workout.ui.model
 
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 import kotlin.time.Duration
 
 /**

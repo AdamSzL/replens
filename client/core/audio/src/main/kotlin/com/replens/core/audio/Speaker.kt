@@ -1,6 +1,6 @@
 package com.replens.core.audio
 
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 
 /**
  * Speaks a short coaching cue, or says nothing at all.

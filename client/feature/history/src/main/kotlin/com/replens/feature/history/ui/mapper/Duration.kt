@@ -1,6 +1,6 @@
 package com.replens.feature.history.ui.mapper
 
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 import com.replens.feature.history.R
 import kotlin.time.Duration
 

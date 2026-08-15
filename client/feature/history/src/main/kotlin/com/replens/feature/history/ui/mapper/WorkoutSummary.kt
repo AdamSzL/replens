@@ -4,7 +4,7 @@ import com.replens.core.data.WORKOUT_GAP
 import com.replens.core.exercise.squat.SquatRepConfig
 import com.replens.core.model.Exercise
 import com.replens.core.model.Workout
-import com.replens.core.ui.UiText
+import com.replens.core.text.UiText
 import com.replens.feature.history.R
 import com.replens.feature.history.ui.WorkoutSummaryState
 import com.replens.feature.history.ui.model.DepthChartSetUiModel

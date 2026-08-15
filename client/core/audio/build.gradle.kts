@@ -8,6 +8,5 @@ android {
 }
 
 dependencies {
-    // Speaker takes a UiText, so it is part of the API.
-    api(projects.core.ui)
+    api(projects.core.text)
 }

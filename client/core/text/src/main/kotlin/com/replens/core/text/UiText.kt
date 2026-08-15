@@ -1,12 +1,8 @@
-package com.replens.core.ui
+package com.replens.core.text
 
 import android.content.Context
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.ui.platform.LocalContext
 
 /**
  * Text a ViewModel or mapper **chooses between**, carried unresolved so that the
@@ -17,18 +13,31 @@ import androidx.compose.ui.platform.LocalContext
  * the composable can name it directly. Server-provided and user-entered content
  * is a plain `String` for the same reason: nothing is being chosen.
  *
- * There are two resolvers on purpose. [asString] with a [Context] is what speech
- * uses — the TTS engine negotiates its own locale and may not get the app's, so
- * the spoken text has to be resolved against the locale the voice actually got,
- * or a Polish phrase comes out of an English voice.
+ * There are two resolvers on purpose, and they live in different modules. This
+ * one takes a [Context] and is what speech uses — the TTS engine negotiates its
+ * own locale and may not get the app's, so the spoken text has to be resolved
+ * against the locale the voice actually got, or a Polish phrase comes out of an
+ * English voice. The `@Composable` one is in `:core:ui`, which is the whole
+ * reason this type does not live there: a module with no Compose could otherwise
+ * call it, compile clean, and throw `NoSuchMethodError` at runtime.
+ *
+ * **No `@Immutable`**, because that would mean a Compose dependency here and put
+ * the two resolvers back in one module. It costs nothing: under strong skipping
+ * the annotation only selects identity comparison over `equals`, and `equals` is
+ * what this type gets right on purpose — see the `List`-not-`Array` rule below.
+ * If skipping ever measurably matters, the Compose stability configuration file
+ * covers it without a dependency.
  */
-@Immutable
 sealed interface UiText {
 
-    @Immutable
+    fun asString(context: Context): String = when (this) {
+        is Raw -> value
+        is Resource -> context.getString(id, *args.toTypedArray())
+        is Plural -> context.resources.getQuantityString(id, quantity, *args.toTypedArray())
+    }
+
     data class Raw(val value: String) : UiText
 
-    @Immutable
     data class Resource(
         @StringRes val id: Int,
         val args: List<Any> = emptyList(),
@@ -44,7 +53,6 @@ sealed interface UiText {
      * text contains a number. Polish has four forms (one/few/many/other), so
      * testing in English alone will not surface a mistake here.
      */
-    @Immutable
     data class Plural(
         @PluralsRes val id: Int,
         val quantity: Int,
@@ -57,12 +65,3 @@ sealed interface UiText {
     }
 }
 
-fun UiText.asString(context: Context): String = when (this) {
-    is UiText.Raw -> value
-    is UiText.Resource -> context.getString(id, *args.toTypedArray())
-    is UiText.Plural -> context.resources.getQuantityString(id, quantity, *args.toTypedArray())
-}
-
-@Composable
-@ReadOnlyComposable
-fun UiText.asString(): String = asString(LocalContext.current)
