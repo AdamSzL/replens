@@ -59,12 +59,12 @@ private fun SetRow(
         ) {
             Text(
                 text = set.exercise?.let { heading + " · " + it.asString() } ?: heading,
-                style = RepLensTheme.typography.label,
+                style = RepLensTheme.typography.heading,
                 color = RepLensTheme.colors.onSurface,
             )
             Text(
                 text = set.duration.asString(),
-                style = RepLensTheme.typography.label,
+                style = RepLensTheme.typography.body,
                 color = RepLensTheme.colors.onSurfaceMuted,
             )
         }
