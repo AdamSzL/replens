@@ -7,6 +7,7 @@ import com.replens.feature.history.ui.mapper.EPOCH
 import com.replens.feature.history.ui.mapper.set
 import com.replens.feature.history.ui.mapper.workout
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -68,6 +69,15 @@ class WorkoutSummaryViewModelTest {
         repository.readInFlight?.complete(Unit)
 
         assertTrue(viewModel.state.value is WorkoutSummaryState.Loaded)
+    }
+
+    @Test
+    fun `back asks to navigate back`() = runTest {
+        val viewModel = viewModel()
+
+        viewModel.onAction(WorkoutSummaryAction.BackClicked)
+
+        assertEquals(WorkoutSummaryEvent.NavigateBack, viewModel.events.first())
     }
 
     /**

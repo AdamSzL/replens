@@ -8,8 +8,10 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
@@ -28,10 +30,25 @@ internal class WorkoutSummaryViewModel @AssistedInject constructor(
     val state: StateFlow<WorkoutSummaryState>
         field = MutableStateFlow<WorkoutSummaryState>(WorkoutSummaryState.Loading)
 
+    private val eventChannel = Channel<WorkoutSummaryEvent>(Channel.BUFFERED)
+    val events = eventChannel.receiveAsFlow()
+
     init {
         viewModelScope.launch {
             val workout = repository.workout(workoutId)
             state.value = workout?.toSummaryState(clock.now()) ?: WorkoutSummaryState.NotFound
+        }
+    }
+
+    fun onAction(action: WorkoutSummaryAction) {
+        when (action) {
+            WorkoutSummaryAction.BackClicked -> navigateBack()
+        }
+    }
+
+    private fun navigateBack() {
+        viewModelScope.launch {
+            eventChannel.send(WorkoutSummaryEvent.NavigateBack)
         }
     }
 }

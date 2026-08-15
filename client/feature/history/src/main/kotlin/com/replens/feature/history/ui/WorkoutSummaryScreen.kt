@@ -20,9 +20,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import com.replens.core.designsystem.component.appbar.RepLensTopAppBar
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
+import com.replens.core.ui.ObserveAsEvents
 import com.replens.core.ui.ScreenStateCrossfade
 import com.replens.feature.history.R
 import com.replens.feature.history.ui.components.DepthChart
@@ -45,9 +47,15 @@ internal fun WorkoutSummaryRoot(
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    ObserveAsEvents(viewModel.events) { event ->
+        when (event) {
+            WorkoutSummaryEvent.NavigateBack -> onBack()
+        }
+    }
+
     WorkoutSummaryScreen(
         state = state,
-        onBack = onBack,
+        onAction = viewModel::onAction,
         modifier = modifier,
     )
 }
@@ -55,7 +63,7 @@ internal fun WorkoutSummaryRoot(
 @Composable
 private fun WorkoutSummaryScreen(
     state: WorkoutSummaryState,
-    onBack: () -> Unit,
+    onAction: (WorkoutSummaryAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -65,7 +73,9 @@ private fun WorkoutSummaryScreen(
     ) {
         RepLensTopAppBar(
             title = stringResource(R.string.workout_summary_title),
-            onBack = onBack,
+            onBack = dropUnlessResumed {
+                onAction(WorkoutSummaryAction.BackClicked)
+            },
             backContentDescription = stringResource(R.string.workout_summary_back),
         )
         ScreenStateCrossfade(
@@ -190,7 +200,7 @@ private val previewState = WorkoutSummaryState.Loaded(
 @Composable
 private fun WorkoutSummaryScreenLightThemePreview() {
     RepLensTheme(darkTheme = false) {
-        WorkoutSummaryScreen(state = previewState, onBack = {})
+        WorkoutSummaryScreen(state = previewState, onAction = {})
     }
 }
 
@@ -198,7 +208,7 @@ private fun WorkoutSummaryScreenLightThemePreview() {
 @Composable
 private fun WorkoutSummaryScreenDarkThemePreview() {
     RepLensTheme(darkTheme = true) {
-        WorkoutSummaryScreen(state = previewState, onBack = {})
+        WorkoutSummaryScreen(state = previewState, onAction = {})
     }
 }
 
@@ -206,7 +216,7 @@ private fun WorkoutSummaryScreenDarkThemePreview() {
 @Composable
 private fun WorkoutSummaryNotFoundPreview() {
     RepLensTheme {
-        WorkoutSummaryScreen(state = WorkoutSummaryState.NotFound, onBack = {})
+        WorkoutSummaryScreen(state = WorkoutSummaryState.NotFound, onAction = {})
     }
 }
 
@@ -215,6 +225,6 @@ private fun WorkoutSummaryNotFoundPreview() {
 @Composable
 private fun WorkoutSummaryScreenLargeFontPreview() {
     RepLensTheme(darkTheme = true) {
-        WorkoutSummaryScreen(state = previewState, onBack = {})
+        WorkoutSummaryScreen(state = previewState, onAction = {})
     }
 }
