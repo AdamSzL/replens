@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Abbreviated units on purpose, so none of these need a plural: "s", "min"
+      and "h" do not inflect, in English or in Polish. Spelling them out would
+      turn three strings into three plurals with four forms each, to say the
+      same thing in more space than a summary row has.
+    -->
+    <string name="duration_seconds">%1$d s</string>
+    <string name="duration_minutes">%1$d min</string>
+    <string name="duration_hours">%1$d h %2$02d min</string>
+
+    <string name="exercise_squat">Squat</string>
+
+</resources>
