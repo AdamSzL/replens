@@ -160,6 +160,26 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
   surface — it clips against the card and sits under the thumb — so let the
   selection drive a line below the plot, where the legend already is.
 
+- **The workout summary against a second exercise.** Audited 2026-08-16, and the
+  screen turns out to be narrower-shaped than it looks: rep counts, at-depth
+  counts, set counts and durations are all exercise-agnostic arithmetic, and the
+  set list is a chronological log that already names the exercise when a workout
+  mixes two. **Grouping that list by exercise would be the wrong fix** — it
+  reorders history and breaks supersets.
+  The one thing that does not generalize is the **y-axis**: 95° of knee and 90° of
+  elbow cannot share a scale, and the threshold, the label and the direction are
+  per-exercise. So `depthChart: DepthChartUiModel?` becomes one chart per
+  exercise, each titled, `null` for an exercise with no angle metric — which the
+  current nullable already models. A mapper change plus a title field; the Canvas
+  does not move.
+  Two questions only exercise #2 answers, so they are not guessed at now:
+  whether `repsAtDepth` is squat vocabulary (if push-up depth and curl range are
+  the same idea it is `repsAtFullRange` and the schema gets a free rename while
+  the population is one phone; if they are not, the totals card loses its middle
+  line and quality goes per-exercise), and whether one angle per rep is even the
+  right shape — probably yes for push-ups and curls, both elbow, which is two of
+  the three the scope guard allows.
+
 ## Reference
 
 - Test footage lives outside the repo in `~/replens-recordings/`.
