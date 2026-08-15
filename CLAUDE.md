@@ -144,23 +144,21 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                     back stack and every cross-feature edge.
 :feature:workout    …workout.navigation/    WorkoutRoute + workoutEntries — the
                                             module's whole public surface
-                    …workout.ui/            the five files (no Event yet), plus
-                                            CueEngine (what to say), CueAnnouncer
-                                            (whether to say it again) and
-                                            CameraSelection (which lens to open
-                                            on, which zoom stops to offer)
+                    …workout.ui/            the five files, plus CueEngine (what
+                                            to say), CueAnnouncer (whether to say
+                                            it again) and CameraSelection (which
+                                            lens to open on, which zoom stops to
+                                            offer)
                     …workout.ui.mapper/     SessionCue + FormCue: domain state ->
                                             UiText, drawn and spoken from one source
                     …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
-                    63 tests.
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
                     focus. Silence is a legal outcome, never an error.
-:core:ui            UiText and its two resolvers. 8 tests. ObserveAsEvents lands
-                    when something is actually one-shot.
+:core:ui            UiText and its two resolvers, plus ObserveAsEvents.
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
                       …component.button/ Primary, OverlayPrimary,
                                          OverlaySecondary, OverlayIcon
@@ -169,16 +167,16 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                     Pure Kotlin, no dependencies at all.
 :core:posemath      Point, joint angles, torso size, normalized distances, line
                     deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
-                    domain-free (no thresholds, no exercise names). 55 tests.
-:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 87 tests.
+                    domain-free (no thresholds, no exercise names).
+:core:exercise      Exercise knowledge and thresholds. Pure Kotlin.
                       …exercise/       Framing, FormFault, SetupCheck,
                                        SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
 :core:database      Room 3: entities, WorkoutDao, ReplensDatabase (internal).
-                    Tested on the JVM against BundledSQLiteDriver. 12 tests.
+                    Tested on the JVM against BundledSQLiteDriver.
                       …dao/  …di/  …entity/
 :core:data          WorkoutRepository + impl, the entity mappers, WORKOUT_GAP.
-                    The only module speaking both vocabularies. 11 tests.
+                    The only module speaking both vocabularies.
                       …mapper/  …di/
 ```
 
@@ -430,6 +428,11 @@ speaks only domain models, wrapped in `Result`.
 
 - **Actions are past tense** — `StartClicked`, `PermissionGranted`. No `On`
   prefix, so non-click actions read consistently.
+- **`onAction` is the ViewModel's only entry point** — no `viewModel.doThing()`
+  from a composable, even for lifecycle wiring. `ScreenAttached(lifecycleOwner)`
+  / `ScreenDetached` is what that costs: an action carrying a framework object,
+  which is the right trade because the alternative is a second, undocumented way
+  in. Named for *composition*, not visibility — backgrounding fires neither.
 - **Events are imperative** — `NavigateToSummary`.
 - `<Feature>Screen.kt` holds exactly two composables: `<Feature>Root` (internal —
   collects state, hosts `ObserveAsEvents`, maps events to navigation callbacks;
@@ -568,7 +571,7 @@ or a lambda capturing changing state goes stale.
 
 ### Navigation (Navigation 3)
 
-Built 2026-08-15 on stable `navigation3-runtime`/`-ui` **1.1.6**.
+Built 2026-08-15 on the **stable** `navigation3-runtime`/`-ui` artifacts.
 `lifecycle-viewmodel-navigation3` rides the lifecycle version, not nav3's.
 `adaptive-navigation3` is **not** a dependency: it is list-detail and
 supporting-pane layouts for tablets, and this is a full-screen camera.
@@ -615,12 +618,21 @@ fun EntryProviderScope<NavKey>.workoutEntries() {
   `rememberSaveableStateHolderNavEntryDecorator()` *and*
   `rememberViewModelStoreNavEntryDecorator()`. Dropping the first silently loses
   per-entry `rememberSaveable`; dropping the second is the ViewModel scoping bug
-  under *Toolchain gotchas*. There is no defaults list to append to in 1.1.6.
+  under *Toolchain gotchas*. There is no defaults list to append to.
 - **Google's multibinding recipe (`@IntoSet EntryProviderInstaller`) was rejected.**
   Hilt constructs the installer, so cross-feature lambdas can't be passed — which
   pushes you to a shared routes module or the api/impl split. Its payoff is
   unavailable anyway: a bottom bar means `:app` names all top-level routes
   regardless. Reversible in ~10 lines per feature if dynamic features ever appear.
+- **Never capture a `LifecycleOwner`.** Each entry gets its own, destroyed with
+  its composition and replaced by a *new instance* on the way back, while the
+  ViewModel survives — so the camera stayed bound to a destroyed owner and the
+  preview was black forever. Anything long-lived that binds to one takes a
+  `Flow<LifecycleOwner?>`; null is "no screen showing". That null is also the
+  only moment to clear a `SurfaceRequest`: a viewfinder still on screen keeps its
+  last frame across a rebind, so clearing on a mere lens flip blanks it for
+  ~300 ms (measured), while a returning screen brings a new viewfinder that can
+  never fulfill the old request.
 - Wrap navigation clicks in `dropUnlessResumed { }`.
 
 **Bottom navigation and a login flow change nothing here.** Multiple back stacks
@@ -634,8 +646,8 @@ val state: StateFlow<WorkoutState>
     field = MutableStateFlow(WorkoutState())
 ```
 
-Verified on Kotlin 2.4.10: no flag, no experimental warning, and encapsulation
-confirmed empirically (an external `vm.state.value = …` fails to compile).
+Verified: no flag, no experimental warning, and encapsulation confirmed
+empirically (an external `vm.state.value = …` fails to compile).
 `state.update { }` resolves fine inside the class — the name is
 `MutableStateFlow` there and `StateFlow` only to the outside. The one real
 difference from `_state`: `asStateFlow()` returned a distinct read-only wrapper,
@@ -713,8 +725,8 @@ reps            id, setId (FK, indexed, cascade)       ← Rep / RepEntity
 | rep timings | `Duration` | `Long` | INTEGER millis |
 | set/workout times | `Instant` | `Long` | INTEGER epoch millis |
 
-**Both are `kotlin.time`** — `Instant` and `Clock` are stdlib and stable on Kotlin
-2.4.10 (verified: no opt-in, no warning). `java.time` and `kotlinx-datetime` were
+**Both are `kotlin.time`** — `Instant` and `Clock` are stdlib and stable
+(verified: no opt-in, no warning). `java.time` and `kotlinx-datetime` were
 both rejected: `Instant - Instant` yields a `kotlin.time.Duration` directly, which
 is exactly where the gap rule lives, and `java.time` would put two `Duration` types
 in one module. [Comparison](docs/decisions.md#time-types).
