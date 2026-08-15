@@ -36,7 +36,7 @@ fun RepLensTopAppBar(
         )
         Text(
             text = title,
-            style = RepLensTheme.typography.label,
+            style = RepLensTheme.typography.heading,
             color = RepLensTheme.colors.onBackground,
             modifier = Modifier.padding(start = 4.dp),
         )

@@ -270,10 +270,14 @@ M3's five button variants encode Material's emphasis hierarchy rather than ours.
   detector, so do not add a floor "to be safe".**
 - **Wrap every M3 component before first use.** `IconButton` was the last leak; it
   read `IconButtonDefaults`, hence `OverlayIconButton`.
-- **Typography named for the job, not the size** — `display`, `title`, `body`,
-  `label`. `Title28` becomes a lie the moment the size changes or an accessibility
-  setting scales it. Four sizes, two weights; `display` sets `tnum` so the rep
-  counter does not reflow as it passes 9.
+- **Typography named for the job, not the size** — `display`, `title`, `heading`,
+  `body`, `label`. `Title28` becomes a lie the moment the size changes or an
+  accessibility setting scales it. Five sizes, two weights; `display` sets `tnum`
+  so the rep counter does not reflow as it passes 9. **`title` and `heading` are
+  told apart by reading distance, not by size**: `title` is what a camera cue
+  needs at three meters, `heading` names a screen or a section in your hand.
+  `heading` was added when the top app bar found the gap — 20sp against
+  Material's 22, because ours is SemiBold where `titleLarge` is Medium.
 - **Montserrat, subset by `tools/subset-fonts.sh`** to Latin + Polish.
 
 **No spacing, sizing or radius tokens — plain `.dp` at call sites.** Color varies
