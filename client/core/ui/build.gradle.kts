@@ -9,6 +9,7 @@ android {
 
 dependencies {
     api(projects.core.text)
+    api(libs.androidx.compose.animation)
     api(libs.androidx.compose.runtime)
     api(libs.androidx.compose.ui)
     api(libs.kotlinx.coroutines.core)

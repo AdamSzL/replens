@@ -13,4 +13,28 @@
 
     <string name="exercise_squat">Squat</string>
 
+    <string name="workout_summary_title">Workout</string>
+    <string name="workout_summary_back">Back</string>
+    <string name="workout_summary_not_found">This workout is no longer here.</string>
+
+    <plurals name="workout_summary_reps">
+        <item quantity="one">rep</item>
+        <item quantity="other">reps</item>
+    </plurals>
+    <plurals name="workout_summary_set_count">
+        <item quantity="one">%1$d set</item>
+        <item quantity="other">%1$d sets</item>
+    </plurals>
+    <string name="workout_summary_depth">%1$d of %2$d reached depth</string>
+    <!-- Present tense: within the gap another set still joins this workout. -->
+    <string name="workout_summary_still_open">Start another set within the hour and it joins this session.</string>
+
+    <string name="workout_summary_set_number">Set %1$d</string>
+    <string name="workout_summary_set_reps">%1$d reps · %2$d at depth</string>
+    <string name="workout_summary_rest">%1$s rest</string>
+    <plurals name="workout_summary_abandoned">
+        <item quantity="one">%1$d descent stopped short</item>
+        <item quantity="other">%1$d descents stopped short</item>
+    </plurals>
+
 </resources>

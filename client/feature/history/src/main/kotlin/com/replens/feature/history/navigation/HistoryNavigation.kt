@@ -8,8 +8,13 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class WorkoutSummaryRoute(val workoutId: Long) : NavKey
 
-fun EntryProviderScope<NavKey>.historyEntries() {
+fun EntryProviderScope<NavKey>.historyEntries(
+    onBack: () -> Unit,
+) {
     entry<WorkoutSummaryRoute> { key ->
-        WorkoutSummaryRoot(workoutId = key.workoutId)
+        WorkoutSummaryRoot(
+            workoutId = key.workoutId,
+            onBack = onBack,
+        )
     }
 }

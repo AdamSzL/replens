@@ -66,7 +66,9 @@ private fun RepLensNavDisplay() {
                     backStack.add(WorkoutSummaryRoute(it))
                 }
             )
-            historyEntries()
+            historyEntries(
+                onBack = { backStack.removeLastOrNull() }
+            )
         },
     )
 }
