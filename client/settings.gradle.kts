@@ -36,5 +36,6 @@ include(":core:ui")
 include(":core:data")
 include(":core:database")
 include(":core:exercise")
+include(":feature:history")
 include(":feature:workout")
  

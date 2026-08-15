@@ -1,4 +1,4 @@
-package com.replens.feature.workout.ui.summary
+package com.replens.feature.history.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
