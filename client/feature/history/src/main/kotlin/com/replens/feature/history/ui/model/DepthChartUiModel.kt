@@ -1,5 +1,7 @@
 package com.replens.feature.history.ui.model
 
+import com.replens.core.text.UiText
+
 /**
  * One mark per rep, plotted against a marked depth threshold.
  *
@@ -27,6 +29,8 @@ package com.replens.feature.history.ui.model
  */
 internal data class DepthChartUiModel(
     val sets: List<DepthChartSetUiModel>,
+    /** What TalkBack reads instead of the plot; the marks are not semantics nodes. */
+    val description: UiText,
     val topAngle: Float,
     val floorAngle: Float,
     val thresholdAngle: Float,

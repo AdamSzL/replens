@@ -146,6 +146,19 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
 - Parked for the library convention plugin when they earn their keep:
   `resourcePrefix`, default `testInstrumentationRunner`, `animationsDisabled`,
   `disableUnnecessaryAndroidTests`.
+- **Tapping a mark on the depth chart.** The touch target is not the problem it
+  looks like: hit-test the *nearest* mark to the tap's x rather than the 10dp
+  circle, so every point in the plot belongs to exactly one rep and spacing stops
+  mattering. `markGroups()` already has the positions. Three things it decides:
+  what the readout says (a raw `62.7°` is developer-facing — the interior/flexion
+  trap means it tells a lifter nothing, so it wants framing against parallel or
+  against the session); that it is **the first reader for `Rep.descent` and
+  `Rep.ascent`**, which are stored today on the "unrecoverable after the fact"
+  argument and would show tempo per rep, more interesting than depth per rep
+  since depth is already the y-axis; and that `DepthChartSetUiModel` grows past
+  bare floats to carry rep identity and timings. A popup is probably the wrong
+  surface — it clips against the card and sits under the thumb — so let the
+  selection drive a line below the plot, where the legend already is.
 
 ## Reference
 

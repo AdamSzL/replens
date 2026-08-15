@@ -25,9 +25,12 @@ import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
 import com.replens.core.ui.ScreenStateCrossfade
 import com.replens.feature.history.R
+import com.replens.feature.history.ui.components.DepthChart
 import com.replens.feature.history.ui.components.SessionTotals
 import com.replens.feature.history.ui.components.SetList
 import com.replens.feature.history.ui.components.StillOpenNote
+import com.replens.feature.history.ui.model.DepthChartSetUiModel
+import com.replens.feature.history.ui.model.DepthChartUiModel
 import com.replens.feature.history.ui.model.SessionTotalsUiModel
 import com.replens.feature.history.ui.model.SetRowUiModel
 
@@ -96,6 +99,11 @@ private fun LoadedWorkout(
         SessionTotals(
             totals = state.totals,
         )
+        state.depthChart?.let { chart ->
+            DepthChart(
+                chart = chart,
+            )
+        }
         SetList(
             sets = state.sets,
         )
@@ -133,7 +141,17 @@ private val previewState = WorkoutSummaryState.Loaded(
         duration = UiText.Resource(R.string.duration_minutes, 24),
         isOpen = true,
     ),
-    depthChart = null,
+    depthChart = DepthChartUiModel(
+        description = UiText.Raw("Depth of each rep across 3 sets"),
+        sets = listOf(
+            DepthChartSetUiModel(listOf(88f, 91f, 87f)),
+            DepthChartSetUiModel(listOf(92f, 96f)),
+            DepthChartSetUiModel(listOf(94f, 99f, 104f)),
+        ),
+        topAngle = 110f,
+        floorAngle = 82f,
+        thresholdAngle = 95f,
+    ),
     sets = listOf(
         SetRowUiModel(
             id = 1,
@@ -189,5 +207,14 @@ private fun WorkoutSummaryScreenDarkThemePreview() {
 private fun WorkoutSummaryNotFoundPreview() {
     RepLensTheme {
         WorkoutSummaryScreen(state = WorkoutSummaryState.NotFound, onBack = {})
+    }
+}
+
+/** Everything on the page at 200% font scale, cards and rows included. */
+@Preview(fontScale = 2f)
+@Composable
+private fun WorkoutSummaryScreenLargeFontPreview() {
+    RepLensTheme(darkTheme = true) {
+        WorkoutSummaryScreen(state = previewState, onBack = {})
     }
 }

@@ -83,43 +83,99 @@ class WorkoutSummaryTest {
         assertEquals(listOf(7L, 9L), rows.map { it.id })
     }
 
-    /**
-     * The axis is the counter's, so two sessions can be compared by eye. Asserted
-     * against a config that shares no number with the default, or this would pass
-     * against angles that were hardcoded here.
-     */
+    /** The line is the counter's, whatever the data does around it. */
     @Test
-    fun `the axis comes from the counter's thresholds`() {
-        val config = SquatRepConfig(bottomEnterAngle = 110f, goodDepthAngle = 88f)
+    fun `the threshold comes from the counter's config`() {
+        val config = SquatRepConfig(goodDepthAngle = 88f)
         val workout = workout(set(startedAt = EPOCH, angles = listOf(90f)))
 
         val chart = workout.toSummaryState(now, config).depthChart!!
 
-        assertEquals(110f, chart.topAngle, 0f)
         assertEquals(88f, chart.thresholdAngle, 0f)
     }
 
+    /**
+     * The author's own reps land at 50-73 degrees, which is what killed the fixed
+     * floor: it was dragged to the deepest rep anyway and left the plot empty.
+     */
     @Test
-    fun `a shallow session keeps the standard floor`() {
+    fun `the axis fits the session, padded and snapped`() {
+        val workout = workout(set(startedAt = EPOCH, angles = listOf(50.8f, 73f)))
+
+        val chart = workout.toSummaryState(now).depthChart!!
+
+        assertEquals(45f, chart.floorAngle, 0f)
+        assertEquals(100f, chart.topAngle, 0f)
+    }
+
+    /**
+     * Snapping is the whole reason two of your own sessions still line up: an axis
+     * fitted exactly would put the same rep at a different height every time. It
+     * buys steps, not equality — sessions either side of a boundary still differ.
+     */
+    @Test
+    fun `sessions inside the same step share an axis`() {
+        val monday = workout(set(startedAt = EPOCH, angles = listOf(61f, 72f)))
+        val tuesday = workout(set(startedAt = EPOCH, angles = listOf(62f, 73f)))
+
+        val first = monday.toSummaryState(now).depthChart!!
+        val second = tuesday.toSummaryState(now).depthChart!!
+
+        assertEquals(first.floorAngle, second.floorAngle, 0f)
+        assertEquals(first.topAngle, second.topAngle, 0f)
+    }
+
+    /**
+     * Every rep shallower than the line: the floor has to drop below the threshold
+     * so it is drawn where it is, rather than clamped onto the bottom edge.
+     */
+    @Test
+    fun `a session shallower than the threshold keeps the line inside the axis`() {
         val workout = workout(set(startedAt = EPOCH, angles = listOf(112f, 105f)))
 
         val chart = workout.toSummaryState(now).depthChart!!
 
-        assertEquals(75f, chart.floorAngle, 0f)
+        assertEquals(120f, chart.topAngle, 0f)
+        assertEquals(90f, chart.floorAngle, 0f)
+        assertTrue(chart.floorAngle < chart.thresholdAngle)
     }
 
     /**
-     * A floor, not a clamp: reps below it extend the axis. Clamping would pile the
-     * best reps of the session onto the bottom edge, which is exactly where the
-     * chart has something to say.
+     * Positions rather than degrees, and nothing the totals card already said —
+     * that card is announced first.
      */
     @Test
-    fun `a deeper rep than the floor extends the axis`() {
-        val workout = workout(set(startedAt = EPOCH, angles = listOf(90f, 62f)))
+    fun `the chart describes itself by where the extremes happened`() {
+        val workout = workout(
+            set(startedAt = EPOCH, angles = listOf(88f, 91f)),
+            set(startedAt = EPOCH + 4.minutes, angles = listOf(72f, 96f)),
+        )
 
         val chart = workout.toSummaryState(now).depthChart!!
 
-        assertEquals(62f, chart.floorAngle, 0f)
+        val expected = UiText.Plural(R.plurals.workout_summary_chart_sets, 2, 2, 2, 2)
+        assertEquals(expected, chart.description)
+    }
+
+    /** One set has no set to name, so the reps are what can be pointed at. */
+    @Test
+    fun `a single set is described by rep position`() {
+        val workout = workout(set(startedAt = EPOCH, angles = listOf(88f, 72f, 91f)))
+
+        val chart = workout.toSummaryState(now).depthChart!!
+
+        val expected = UiText.Resource(R.string.workout_summary_chart_one_set, 2, 3)
+        assertEquals(expected, chart.description)
+    }
+
+    /** One rep has no spread, so there is nothing to locate. */
+    @Test
+    fun `a single rep is described without extremes`() {
+        val workout = workout(set(startedAt = EPOCH, angles = listOf(88f)))
+
+        val chart = workout.toSummaryState(now).depthChart!!
+
+        assertEquals(UiText.Resource(R.string.workout_summary_chart_single_rep), chart.description)
     }
 
     @Test
