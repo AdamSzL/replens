@@ -475,6 +475,12 @@ DTO -> domain -> UI, plus Room entities and navigation arguments. Domain models
 stay free of `@Serializable`; routes are separate `NavKey` types with round-trip
 mappers.
 
+**UiModels are named `<Thing>UiModel`** and live in `ui/model/`. **One per
+component, never one per screen** — the whole-screen model is the `State` class,
+so a screen is a `State` holding primitives plus a UiModel for each card or
+section that has its own composable. `SpokenCue` is not an exception: it is the
+message between `CueEngine` and `CueAnnouncer`, not screen state.
+
 **Introduce a UiModel when the UI needs formatted or derived data, or when the
 domain model carries fields the UI must not see.** A raw geometry stream is
 neither — `PoseFrame` reaches the `Canvas` as a domain model, because mapping
@@ -1451,6 +1457,13 @@ Milestones, progress and the backlog live in `docs/status.md`.
   `Foo(a = 1, b = 2)` becomes four lines. Applies to function and composable
   calls; modifier arguments (`.padding(horizontal = …, vertical = …)`) and
   annotations stay inline.
+- **A parameter of function type, or a named argument whose value is a
+  multi-line lambda, gets its own line even when it is the only one.** Count is
+  the wrong test here: `(workoutId: Long) -> Unit` brings its own parens and
+  arrow, so inline it the declaration's parens stop reading as the parameter
+  list, and a lambda argument puts the closing `)` on the same line as its `}`.
+  **Trailing lambdas are exempt** — they are outside the parens, so
+  `entry<WorkoutRoute> { … }` stays as it is.
 - **No expression body when the body carries a multi-line argument list.** Write
   a block body with `return` and an explicit return type instead — `= Rep(`
   followed by four named arguments and a `)` puts the declaration, the `=` and
