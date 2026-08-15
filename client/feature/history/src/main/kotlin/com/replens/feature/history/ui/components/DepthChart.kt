@@ -36,9 +36,6 @@ private val MarkRadius = 5.dp
 /** Between the plot and the set numbers under it. */
 private val LabelGap = 4.dp
 
-/** Blank columns between sets, in marks. Enough to read as a break, not a gap. */
-private const val SET_GAP = 1.6f
-
 @Composable
 internal fun DepthChart(
     chart: DepthChartUiModel,
@@ -157,23 +154,6 @@ private fun ThresholdLegend(
             style = RepLensTheme.typography.label,
             color = color,
         )
-    }
-}
-
-private data class Mark(val column: Float, val angle: Float)
-
-/**
- * Reps in mark units, spending [SET_GAP] blank columns at each set boundary, so
- * the same layout holds at any width. Kept grouped because the set numbers are
- * drawn under the middle of each group.
- */
-private fun DepthChartUiModel.markGroups(): List<List<Mark>> {
-    var column = 0f
-    return sets.mapIndexed { index, set ->
-        if (index > 0) column += SET_GAP
-        set.angles.map { angle ->
-            Mark(column = column, angle = angle).also { column += 1f }
-        }
     }
 }
 

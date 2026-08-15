@@ -6,7 +6,7 @@ import com.replens.feature.history.ui.model.DepthChartUiModel
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-class DepthChartAxisTest {
+class DepthChartLayoutTest {
 
     private val chart = DepthChartUiModel(
         sets = listOf(DepthChartSetUiModel(listOf(90f))),
@@ -15,6 +15,35 @@ class DepthChartAxisTest {
         floorAngle = 75f,
         thresholdAngle = 95f,
     )
+
+    private fun chartOf(vararg sets: List<Float>): DepthChartUiModel {
+        return chart.copy(sets = sets.map { DepthChartSetUiModel(it) })
+    }
+
+    @Test
+    fun `reps in a set take one column each`() {
+        val groups = chartOf(listOf(90f, 91f, 92f)).markGroups()
+
+        assertEquals(listOf(0f, 1f, 2f), groups.single().map { it.column })
+    }
+
+    /** Before the first set there is no boundary to mark, so no gap is spent. */
+    @Test
+    fun `a gap falls between sets, never before the first`() {
+        val groups = chartOf(listOf(90f, 91f), listOf(92f)).markGroups()
+
+        assertEquals(listOf(0f, 1f), groups[0].map { it.column })
+        assertEquals(listOf(3.6f), groups[1].map { it.column })
+    }
+
+    /** The grouping is what the set numbers are drawn under, so it has to survive. */
+    @Test
+    fun `marks keep the sets they arrived in`() {
+        val groups = chartOf(listOf(90f, 91f), listOf(92f, 93f, 94f)).markGroups()
+
+        assertEquals(listOf(2, 3), groups.map { it.size })
+        assertEquals(listOf(92f, 93f, 94f), groups[1].map { it.angle })
+    }
 
     @Test
     fun `the ceiling is the top of the plot`() {
