@@ -311,6 +311,18 @@ every id has exactly one reference, making a later rename trivial. Turn the
 parked `resourcePrefix` on when a collision-prone generic name appears
 (`ic_close`, `ic_settings`), not before.
 
+**The same hold applies to strings in feature modules, and it now has a live
+candidate.** `:feature:history` owns `duration_seconds` / `duration_minutes` /
+`duration_hours` — names a stats or history-list screen would plausibly reach for
+too, and a second module defining one silently wins for both, with no error and
+no warning. Prefixing was tried and reverted: **one module cannot collide with
+itself**, so today it buys nothing and costs a prefix on every call site.
+The trigger is the *second* module defining a `duration_*` string. At that point
+prefix both and set `resourcePrefix` per module so it is enforced rather than
+remembered — and note the likelier resolution is that the duration formatter
+moves to `:core:ui` and takes its strings with it, leaving one definition and
+nothing to collide.
+
 ### Haptics
 
 **The rule: only where the phone is in your hand *and* the buzz says something
