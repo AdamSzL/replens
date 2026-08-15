@@ -109,24 +109,25 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
   `hiltViewModel()` additionally needs `rememberViewModelStoreNavEntryDecorator()`
   in `NavDisplay(entryDecorators = …)`, or every destination shares the Activity's
   `ViewModelStore` — a silent scoping bug, not a compile error.
-- **Compose stays `implementation` in `:core:ui`, and the composable overload is a
-  landmine because of it.** Catalog Compose entries are version-less (the BOM
-  supplies versions), so `api`-ing one exports a dependency that non-UI consumers
-  cannot resolve — `:core:audio` has no BOM and failed with
-  `Could not find androidx.compose.runtime:runtime:`. `implementation` is correct
-  here because `UiText` has **no Compose types in any signature**; `@Immutable` and
-  `@Composable` are annotations, and unresolvable annotations are silently skipped
-  when reading a class file. The day a Compose *type* enters a signature, `api`
-  becomes mandatory and non-UI modules can no longer depend on it.
-  The cost, **verified 2026-08-09**: a module without the Compose plugin can call
-  `UiText.asString()` (the `@Composable` one) and it **compiles with no error or
-  warning**, then throws
-  `NoSuchMethodError: UiTextKt.asString(UiText)` at runtime. The Compose plugin
-  rewrites the JVM signature to `asString(UiText, Composer, int)`, but Kotlin
-  resolves calls from `@Metadata`, which still describes the *source* signature —
-  and the `@Composable` annotation that would give it away is exactly the thing
-  being skipped. A Java caller would be safe: `javac` reads the class file, not the
-  metadata. **From a non-Compose module, use the `Context` overload.**
+- **Catalog Compose entries are version-less** (the BOM supplies versions), so
+  `api`-ing one exports a dependency that non-UI consumers cannot resolve —
+  `:core:audio` has no BOM and failed with
+  `Could not find androidx.compose.runtime:runtime:`. This is why a module that
+  non-UI code depends on must not put a Compose *type* in a signature, and why
+  `UiText` lives in `:core:text` rather than `:core:ui` (see *Model layers*).
+- **The `@Composable`-overload landmine, verified 2026-08-09 and now fixed by
+  construction rather than by discipline.** A module without the Compose plugin
+  could call the `@Composable` `UiText.asString()`, **compile with no error or
+  warning**, and throw `NoSuchMethodError: UiTextKt.asString(UiText)` at runtime:
+  the Compose plugin rewrites the JVM signature to
+  `asString(UiText, Composer, int)`, but Kotlin resolves calls from `@Metadata`,
+  which still describes the *source* signature — and the `@Composable` annotation
+  that would give it away is skipped when an unresolvable annotation is read from
+  a class file. (A Java caller is safe; `javac` reads the class file, not the
+  metadata.) The two resolvers now live in different modules, so a non-Compose
+  consumer cannot see the composable one at all. **The general rule survives the
+  fix: a `@Composable` extension on a type that non-Compose code also uses must
+  not sit in the same module as the type.**
 - The Compose BOM is declared twice on purpose (`implementation` +
   `androidTestImplementation`); the IDE's duplicate warning is a false positive.
 - Release runs R8 + resource shrinking; verify `assembleRelease` when adding
@@ -158,7 +159,11 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
                     focus. Silence is a legal outcome, never an error.
-:core:ui            UiText and its two resolvers, plus ObserveAsEvents.
+:core:text          UiText, its Context resolver, and future
+                    <domain> -> UiText formatters. No Compose at all.
+:core:ui            The Compose utilities: ObserveAsEvents and the
+                    @Composable UiText.asString().
+:core:testing       MainDispatcherRule, FakeClock, FakeWorkoutRepository.
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
                       …component.button/ Primary, OverlayPrimary,
                                          OverlaySecondary, OverlayIcon
@@ -524,13 +529,27 @@ type is already at the right altitude.
 ### UiText
 
 All user-facing text the ViewModel or a mapper **chooses between** is a `UiText`
-(`:core:ui`), resolved at render time — a `String` resolved in the ViewModel won't
-re-render on a locale change. Text that's always the same resource doesn't belong
-in state at all. Plain `String` only for server-provided or user-entered content.
+(`:core:text`), resolved at render time — a `String` resolved in the ViewModel
+won't re-render on a locale change. Text that's always the same resource doesn't
+belong in state at all. Plain `String` only for server-provided or user-entered
+content. **A parameter is not a choice**: a count is always the same plural
+resource, so it stays an `Int` and the composable names the resource. What earns
+a `UiText` is a *branch* — seconds against minutes against hours, one resource
+per enum value.
 
 Arms: `Raw(String)`, `Resource(@StringRes id, args: List<Any>)`,
-`Plural(@PluralsRes id, quantity, args)`. Two `asString()` extensions — a
-`@Composable @ReadOnlyComposable` one and one taking a `Context`.
+`Plural(@PluralsRes id, quantity, args)`. Two `asString()` extensions, and
+**they deliberately live in different modules**: the `Context` one beside the
+type in `:core:text`, the `@Composable @ReadOnlyComposable` one in `:core:ui`.
+That split is what makes the `NoSuchMethodError` under *Toolchain gotchas*
+impossible instead of merely documented — `:core:audio` speaks `UiText` and must
+never see a composable.
+
+**`UiText` carries no `@Immutable`**, which would mean a Compose dependency in
+`:core:text` and put the resolvers back together. Under strong skipping the
+annotation only picks identity comparison over `equals`, and `equals` is what
+this type gets right on purpose. The stability configuration file covers it if
+skipping ever measurably matters.
 
 **Args must be a `List`, not an `Array`, and the arms must be data classes.**
 `Array` equality is identity-based and `emptyArray()` allocates per construction,
