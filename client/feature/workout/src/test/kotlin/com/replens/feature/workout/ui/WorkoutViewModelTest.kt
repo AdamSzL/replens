@@ -2,6 +2,9 @@ package com.replens.feature.workout.ui
 
 import com.replens.core.exercise.SessionState
 import com.replens.core.model.Exercise
+import com.replens.core.testing.FakeClock
+import com.replens.core.testing.FakeWorkoutRepository
+import com.replens.core.testing.MainDispatcherRule
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -92,7 +95,7 @@ class WorkoutViewModelTest {
     }
 
     private fun start() {
-        viewModel.onAction(WorkoutAction.ScreenAttached(screenLifecycleOwner()))
+        viewModel.onAction(WorkoutAction.ScreenAttached(fakeScreenLifecycleOwner()))
         viewModel.onAction(WorkoutAction.StartClicked)
     }
 
@@ -131,7 +134,7 @@ class WorkoutViewModelTest {
     @Test
     fun `Done pressed before the write lands still navigates, once it has`() = runTest {
         val events = collectEvents()
-        repository.inFlight = CompletableDeferred()
+        repository.writeInFlight = CompletableDeferred()
         start()
         standUntilCountedIn()
         rep()
@@ -140,7 +143,7 @@ class WorkoutViewModelTest {
         viewModel.onAction(WorkoutAction.DoneClicked)
         assertTrue("navigated before the workout existed", events.isEmpty())
 
-        repository.inFlight?.complete(Unit)
+        repository.writeInFlight?.complete(Unit)
 
         val expected = WorkoutEvent.NavigateToSummary(FakeWorkoutRepository.WORKOUT_ID)
         assertEquals(listOf(expected), events)
@@ -291,7 +294,7 @@ class WorkoutViewModelTest {
      */
     @Test
     fun `movement before the set starts is not counted`() = runTest {
-        viewModel.onAction(WorkoutAction.ScreenAttached(screenLifecycleOwner()))
+        viewModel.onAction(WorkoutAction.ScreenAttached(fakeScreenLifecycleOwner()))
         rep()
         rep()
 
