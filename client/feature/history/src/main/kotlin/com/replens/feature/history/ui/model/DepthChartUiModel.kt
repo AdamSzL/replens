@@ -9,16 +9,17 @@ import com.replens.core.text.UiText
  * and untestable against anything, the threshold line needs the same mapping
  * anyway, and a mark that can be labeled has to keep its degrees.
  *
- * The axis comes from the counter's own thresholds rather than from the data, so
- * two sessions can be compared by eye instead of each being scaled to itself.
- * The exception is [floorAngle], which the data may push down — see below.
+ * The axis always contains [thresholdAngle] and both ends snap to a fixed step,
+ * so two sessions can be compared by eye instead of each being scaled to itself.
+ * Within that, a rep outside the range pushes the end it exceeds — see below.
  *
  * The thresholds are squat's. A second exercise makes this a chart per exercise
  * rather than per workout; there is one exercise, so there is nothing to select
  * between yet.
  *
- * @param topAngle the counting threshold. A descent that never crossed it was
- *   never a rep, so nothing can plot above the ceiling.
+ * @param topAngle the shallowest rep, or [thresholdAngle] when every rep beat it,
+ *   plus padding. **Not** the counting threshold, which is lenient by design and
+ *   would leave the top of the plot empty on any session worth looking at.
  * @param floorAngle where bodyweight squatters actually bottom out, **not** the
  *   deepest a human can go. Anchoring at true ATG is honest and unreadable: a
  *   session spans maybe 20 degrees, so most of the plot would go to a region
