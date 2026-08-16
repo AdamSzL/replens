@@ -21,9 +21,9 @@
         <item quantity="one">rep</item>
         <item quantity="other">reps</item>
     </plurals>
-    <plurals name="workout_summary_set_count">
-        <item quantity="one">%1$d set</item>
-        <item quantity="other">%1$d sets</item>
+    <plurals name="workout_summary_sets_duration">
+        <item quantity="one">%1$d set · %2$s</item>
+        <item quantity="other">%1$d sets · %2$s</item>
     </plurals>
     <!--
       Read by TalkBack in place of the plot. Deliberately without degrees: the
@@ -43,7 +43,13 @@
     <!-- Present tense: within the gap another set still joins this workout. -->
     <string name="workout_summary_still_open">Start another set within the hour and it joins this session.</string>
 
+    <!--
+      Two whole headings rather than one plus a joiner: the second spells the
+      number out again so a language that inflects it differently before a noun
+      can say so. Only a workout that mixed exercises reaches the second.
+    -->
     <string name="workout_summary_set_number">Set %1$d</string>
+    <string name="workout_summary_set_number_exercise">Set %1$d · %2$s</string>
     <plurals name="workout_summary_set_reps">
         <item quantity="one">%1$d rep · %2$d at depth</item>
         <item quantity="other">%1$d reps · %2$d at depth</item>

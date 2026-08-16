@@ -47,7 +47,15 @@ private fun SetRow(
     set: SetRowUiModel,
     modifier: Modifier = Modifier,
 ) {
-    val heading = stringResource(R.string.workout_summary_set_number, set.index)
+    val heading = set.exercise
+        ?.let {
+            stringResource(
+                R.string.workout_summary_set_number_exercise,
+                set.index,
+                it.asString(),
+            )
+        }
+        ?: stringResource(R.string.workout_summary_set_number, set.index)
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -58,7 +66,7 @@ private fun SetRow(
             verticalAlignment = Alignment.Bottom,
         ) {
             Text(
-                text = set.exercise?.let { heading + " · " + it.asString() } ?: heading,
+                text = heading,
                 style = RepLensTheme.typography.heading,
                 color = RepLensTheme.colors.onSurface,
             )

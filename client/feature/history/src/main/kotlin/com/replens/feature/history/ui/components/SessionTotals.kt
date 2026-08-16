@@ -58,10 +58,11 @@ internal fun SessionTotals(
             )
             Text(
                 text = pluralStringResource(
-                    R.plurals.workout_summary_set_count,
+                    R.plurals.workout_summary_sets_duration,
                     totals.setCount,
                     totals.setCount,
-                ) + " · " + totals.duration.asString(),
+                    totals.duration.asString(),
+                ),
                 style = RepLensTheme.typography.body,
                 color = RepLensTheme.colors.onSurfaceMuted,
             )
