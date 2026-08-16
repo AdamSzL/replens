@@ -4,7 +4,7 @@ Where RepLens actually is, what has been validated on a device, and what is next
 **This is the file that changes every session** — CLAUDE.md holds the rules, which
 should not churn just because a milestone landed.
 
-Last updated 2026-08-16.
+Last updated 2026-08-17.
 
 ## Milestones
 
@@ -112,9 +112,30 @@ Last updated 2026-08-16.
   dragging three UiModels down with it.
   **Known and deliberate:** the totals and the chart are squat-shaped in one
   respect only — the y-axis. See the backlog.
+- **Reviewed, and five fixes landed 2026-08-16/17.** Three passes over the summary
+  branch — Copilot CLI on the PR, a `DepthChart.kt` deep dive, and an ultrareview —
+  produced 16 findings between them; five were real.
+  The one actual defect: the depth chart **drops sets that reached no rep, then
+  numbered the survivors**, so a workout whose middle set was all abandoned
+  descents drew `1, 2` under a list reading Set 1, Set 2, Set 3 — and TalkBack said
+  the same wrong number. `DepthChartSetUiModel` carries the pre-filter position
+  now. The set *count* left the description entirely rather than being corrected to
+  2 or 3: the totals card is announced first and already carries it, which the
+  mapper's own KDoc had already said it must not repeat. That also deleted a plural.
+  The rest were smaller: the recorded workout id travels in a `Deferred` instead of
+  a field a new set could clear; two lines were assembled with `+ " · " +` and are
+  single format resources now (the rule is in CLAUDE.md); one KDoc named the
+  counting threshold where the code uses the scoring one.
+  **Two rejections worth not re-deriving, because a future pass will raise them
+  again.** A `LazyColumn` for the set list would *crash* — `LoadedWorkout` is a
+  `Column` with `verticalScroll`, and a nested lazy list throws on infinite height
+  constraints. And the summary screen has **no per-frame draw path**, so allocation
+  findings about its `Canvas` are false: `verticalScroll` translates a layer rather
+  than re-running draw lambdas, and `rememberTextMeasurer` caches internally. The
+  30 fps budget in CLAUDE.md is the pose pipeline, not this screen.
 - **Next:** the history *list* — the first screen with a `workouts()` query behind
   it, and the thing that makes the summary reachable from somewhere other than
-  finishing a set. 278 unit tests.
+  finishing a set. 279 unit tests.
 
 ## Roadmap
 

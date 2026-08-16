@@ -147,7 +147,7 @@ CameraX, ML Kit Pose Detection, kotlinx.serialization. AGP 9, minSdk 26, Java 21
 rather than Firebase, because building it is part of the point.
 → [why Ktor and not Spring Boot](docs/decisions.md#ktor-not-spring-boot)
 
-**Testing** — 278 unit tests, host-side. Rep counting is validated against eight
+**Testing** — 279 unit tests, host-side. Rep counting is validated against eight
 CSV fixtures generated from real recordings, each asserting one rep count.
 
 ## Repository layout

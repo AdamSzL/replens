@@ -583,6 +583,19 @@ needed. Keep `vararg` on companion factories so call sites stay ergonomic.
 to `listOf(quantity)` or `getQuantityString` throws. Polish (one/few/many/other)
 is why this matters and English-only testing won't catch it.
 
+**Never build a sentence with `+`.** One resource per line, with the pieces as
+args, because word order and the separator are the translator's decisions and
+`+ " · " +` takes both away. Two things this looked blocked on and is not: a
+**plural takes args past the quantity**, so a count joined to a duration is one
+plural (`%1$d sets · %2$s`) rather than a plural plus a joiner; and a piece that
+is itself a `UiText` resolves to a `String` first and goes in as `%s`. Where a
+fragment is optional, write **two whole sentences** and choose between them —
+`Set %1$d` and `Set %1$d · %2$s` — rather than one sentence plus a joiner, so a
+language that inflects the number before a noun can say so. A generic
+`%1$s · %2$s` joiner is the tempting wrong answer: it hands the translator two
+context-free fragments and is exactly the collision-prone name the
+`resourcePrefix` hold above is waiting for.
+
 The `Context` overload is what TTS calls, so one `UiText` drives both the on-screen
 cue and the spoken line, and the form-rule engine stays unit-testable.
 
@@ -614,6 +627,19 @@ shadows the marker and collides with `kotlin.Error` (a `Throwable`).
 differently** — login yes, workout sync no. Modeling per-call errors as a sealed
 interface with a `Network(NetworkError)` arm also removes the `wrapCommon`
 parameter the previous app's `safeApiCall` needed.
+
+**The rule covers Room, not just the network — and the repository does not follow
+it yet.** `recordSet` returns a bare `Long` and throws; `workout(id)` returns null
+for "no such row" and throws for anything else. So neither ViewModel has anywhere
+to put a failure, and what leaks out is decided by coroutine mechanics rather than
+by design: the summary's `init` launch crashes on a failed read, and the workout
+screen's `async` write surfaces only if Done is pressed — press *Go again* instead
+and the set is lost in silence.
+
+Fix it at the boundary once the UX is decided: a database `AppError` arm and
+`Result` returns. **Not with a `catch` in a ViewModel**, which converts a crash
+into silence and calls it handling — that was written during the PR #13 review and
+backed out, so it is the answer that occurs to you first.
 
 ### Events
 
