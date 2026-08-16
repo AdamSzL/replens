@@ -6,6 +6,7 @@ import com.replens.core.testing.FakeClock
 import com.replens.core.testing.FakeWorkoutRepository
 import com.replens.core.testing.MainDispatcherRule
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -105,6 +106,7 @@ class WorkoutViewModelTest {
      * plain launch would leave the events buffered and unread until the scheduler
      * next ran — and every assertion here is about the moment an event appears.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun TestScope.collectEvents(): List<WorkoutEvent> {
         val events = mutableListOf<WorkoutEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
