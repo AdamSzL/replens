@@ -21,7 +21,9 @@ import com.replens.core.model.RepPhase
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,12 +95,15 @@ internal class WorkoutViewModel @Inject constructor(
     private val lifecycleOwners = MutableStateFlow<LifecycleOwner?>(null)
 
     /**
-     * The write [finishSet] started, and its result. Done can be pressed before it
-     * lands, so [doneWithSet] waits on the job rather than reading the id and
-     * hoping. Both are null after a set that wrote nothing.
+     * The write [finishSet] started, carrying the workout id it produced. Done can
+     * be pressed before it lands, so [doneWithSet] waits on this rather than
+     * reading an id and hoping. Null after a set that wrote nothing.
+     *
+     * A [Deferred] rather than a job plus a field: [doneWithSet] captures this
+     * before suspending, so a set started while the write is in flight cannot
+     * change which id it resolves to.
      */
-    private var recordJob: Job? = null
-    private var recordedWorkoutId: Long? = null
+    private var recordJob: Deferred<Long>? = null
 
     init {
         viewModelScope.launch {
@@ -165,9 +170,9 @@ internal class WorkoutViewModel @Inject constructor(
         setStart = null
         // A new set makes the previous write irrelevant. Cleared here rather than
         // in finishSet, which returns early when there is nothing to write and
-        // would otherwise leave the last set's workout to be navigated to.
+        // would otherwise leave the last set's workout to be navigated to. The
+        // write itself is left to finish — the row is the user's data either way.
         recordJob = null
-        recordedWorkoutId = null
         state.update {
             it.copy(
                 session = setSession.start(),
@@ -202,8 +207,8 @@ internal class WorkoutViewModel @Inject constructor(
         val deepestAbandonedAngle = abandoned.minOfOrNull(AbandonedDescent::deepestAngle)
         val repsAtDepth = state.value.repsAtDepth
 
-        recordJob = viewModelScope.launch {
-            recordedWorkoutId = repository.recordSet(
+        recordJob = viewModelScope.async {
+            repository.recordSet(
                 exercise = Exercise.SQUAT,
                 startedAt = start.at,
                 endedAt = endedAt,
@@ -225,12 +230,7 @@ internal class WorkoutViewModel @Inject constructor(
         dismissSummary()
         if (job == null) return
         viewModelScope.launch {
-            // join, not await: a failed write leaves the id null and Done degrades
-            // to a plain dismiss, rather than this coroutine inheriting the failure.
-            job.join()
-            recordedWorkoutId?.let {
-                eventChannel.send(WorkoutEvent.NavigateToSummary(it))
-            }
+            eventChannel.send(WorkoutEvent.NavigateToSummary(job.await()))
         }
     }
 
