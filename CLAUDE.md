@@ -155,18 +155,31 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                     …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
+:feature:history    …history.navigation/    WorkoutSummaryRoute + historyEntries
+                    …history.ui/            the five files. No loading *phase* on
+                                            the workout screen, but there is one
+                                            here, so the state is a bare sealed
+                                            root: Loading / NotFound / Loaded
+                    …history.ui.mapper/     Workout -> the whole screen, plus
+                                            Duration -> UiText
+                    …history.ui.model/      SessionTotals, SetRow, DepthChart
+                    …history.ui.components/ SessionTotals, SetList, DepthChart
+                                            and DepthChartLayout, which is the
+                                            plot's arithmetic with no Canvas
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
                     focus. Silence is a legal outcome, never an error.
 :core:text          UiText, its Context resolver, and future
                     <domain> -> UiText formatters. No Compose at all.
-:core:ui            The Compose utilities: ObserveAsEvents and the
-                    @Composable UiText.asString().
+:core:ui            The Compose utilities: ObserveAsEvents, ScreenStateCrossfade
+                    and the @Composable UiText.asString().
 :core:testing       MainDispatcherRule, FakeClock, FakeWorkoutRepository.
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
+                      …component.appbar/ RepLensTopAppBar
                       …component.button/ Primary, OverlayPrimary,
-                                         OverlaySecondary, OverlayIcon
+                                         OverlaySecondary, OverlayIcon, RepLensIcon
+                      …component.card/   RepLensCard
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame; Rep, RepPhase,
                     RepUpdate, AbandonedDescent; Exercise, ExerciseSet, Workout.
                     Pure Kotlin, no dependencies at all.
@@ -185,7 +198,9 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                       …mapper/  …di/
 ```
 
-Planned, not built: `:core:network`, `:feature:{history,stats,leaderboard}`.
+Planned, not built: `:core:network`, `:feature:{stats,leaderboard}`. **`:feature:history`
+exists but holds only the workout summary** — the history *list* is the next screen,
+and `WorkoutDao` has no `workouts()` because its shape is that screen's question.
 
 ### Key decisions
 
@@ -207,10 +222,10 @@ Planned, not built: `:core:network`, `:feature:{history,stats,leaderboard}`.
   A per-feature convention, **not** a generic `BaseViewModel<S, A, E>` —
   inheritance-based MVI is where this pattern dies. Details in *Feature
   architecture*.
-- **Deferred until they have a job to do:** `WorkoutEvent` — nothing one-shot yet;
-  it lands with the navigation to the summary. Navigation 3 was deferred on the
-  same rule and **landed 2026-08-15** with the post-workout summary, which is what
-  gave it something to navigate to. The **set summary card is not that screen**: a
+- **Deferred until they have a job to do.** `WorkoutEvent` and Navigation 3 were
+  both parked on this rule and both **landed 2026-08-15/16** with the post-workout
+  summary, which is what gave them something to navigate to. The **set summary
+  card is not that screen**: a
   card is the *set* boundary, where you are still three meters away and want a
   number and "go again"; the screen is the *workout* boundary, where you have
   picked the phone up. Keep both.
@@ -512,8 +527,8 @@ overlay needs verbatim.
 not an invitation to add a layer. `SessionState` is the case: its arms *are* the
 screen's modes, so a UiModel would be a rename. **Stability is the weakest reason
 to wrap** — it produces a type whose only job is to carry `@Immutable`, and here
-it would not even remove the mechanism, since `CameraOptions` and `ZoomRange`
-still need the stability configuration file.
+it would not even remove the mechanism, since `CameraOptions` still needs
+`compose-stability.conf`.
 TTS was predicted to be the trigger that earned one, and **half of that prediction
 was right** (2026-08-10). `SetupCheck → stringResource` did have to leave the
 composable the moment the same line was both drawn and spoken: `stringResource`
@@ -542,18 +557,20 @@ a `UiText` is a *branch* — seconds against minutes against hours, one resource
 per enum value.
 
 Arms: `Raw(String)`, `Resource(@StringRes id, args: List<Any>)`,
-`Plural(@PluralsRes id, quantity, args)`. Two `asString()` extensions, and
-**they deliberately live in different modules**: the `Context` one beside the
-type in `:core:text`, the `@Composable @ReadOnlyComposable` one in `:core:ui`.
-That split is what makes the `NoSuchMethodError` under *Toolchain gotchas*
-impossible instead of merely documented — `:core:audio` speaks `UiText` and must
-never see a composable.
+`Plural(@PluralsRes id, quantity, args)`. Two `asString()` resolvers, and
+**they deliberately live in different modules**: the `Context` one is a member on
+the type in `:core:text`, the `@Composable @ReadOnlyComposable` one an extension
+in `:core:ui`. That split is what makes the `NoSuchMethodError` under *Toolchain
+gotchas* impossible instead of merely documented — `:core:audio` speaks `UiText`
+and must never see a composable.
 
 **`UiText` carries no `@Immutable`**, which would mean a Compose dependency in
-`:core:text` and put the resolvers back together. Under strong skipping the
-annotation only picks identity comparison over `equals`, and `equals` is what
-this type gets right on purpose. The stability configuration file covers it if
-skipping ever measurably matters.
+`:core:text` and put the resolvers back together. It is listed in
+`compose-stability.conf` instead, which is what that file is for. Not a
+formality: the compiler reported it `runtime` before, and since every UiModel on
+the summary screen holds one, `SessionTotalsUiModel`, `SetRowUiModel` and
+`SpokenCue` were all `runtime` with it. Verify claims like this with
+`reportsDestination` in the compose convention plugin rather than by reading.
 
 **Args must be a `List`, not an `Array`, and the arms must be data classes.**
 `Array` equality is identity-based and `emptyArray()` allocates per construction,

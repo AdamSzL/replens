@@ -4,7 +4,7 @@ Where RepLens actually is, what has been validated on a device, and what is next
 **This is the file that changes every session** — CLAUDE.md holds the rules, which
 should not churn just because a milestone landed.
 
-Last updated 2026-08-14.
+Last updated 2026-08-16.
 
 ## Milestones
 
@@ -91,9 +91,30 @@ Last updated 2026-08-14.
   and `workoutEntries()`, with `WorkoutRoot` internal. No `Navigator` object —
   `rememberNavBackStack` already survives process death, so the persistence
   gotcha CLAUDE.md had filed as "fix before release" never got built.
-- **Next:** the rest of the workout summary screen — `recordSet` returning the
-  workout id, `WorkoutEvent` + `ObserveAsEvents`, then the screen itself. Then
-  `:feature:history`. 236 unit tests.
+- **The workout summary screen: done and used on device 2026-08-16.** The first
+  screen that reads persistence back, and the first one built entirely from the
+  five-file convention — `:feature:history` now owns `WorkoutSummaryRoute`, and
+  `:app` wires `workoutEntries(navigateToSummary = …)` to it. It shows session
+  totals, a **depth chart plotting every rep against the parallel threshold**, and
+  a chronological set list with rest drawn as the gap between sets.
+  Three modules came out of building it, each for a reason worth keeping.
+  **`:core:text`** because `UiText` sitting in `:core:ui` made the
+  `@Composable`-overload landmine a matter of discipline; splitting the two
+  resolvers across modules makes it impossible instead. **`:core:testing`**
+  because `FakeWorkoutRepository`, `FakeClock` and `MainDispatcherRule` were
+  about to be copied into a second feature. **`:feature:history`** because the
+  summary is a workout-boundary screen, not a workout-screen mode.
+  Three things settled by measurement rather than taste: the chart's axis, after
+  the guessed floor of 75° turned out to be wrong (the author's reps land at
+  50–73°, so the axis fits and snaps to 5° now); `heading` at 20sp, added when
+  the top bar was found rendering a screen title at caption size; and `UiText` in
+  `compose-stability.conf`, which the compiler reported `runtime` and which was
+  dragging three UiModels down with it.
+  **Known and deliberate:** the totals and the chart are squat-shaped in one
+  respect only — the y-axis. See the backlog.
+- **Next:** the history *list* — the first screen with a `workouts()` query behind
+  it, and the thing that makes the summary reachable from somewhere other than
+  finishing a set. 278 unit tests.
 
 ## Roadmap
 
@@ -101,8 +122,8 @@ Last updated 2026-08-14.
 2. **The squat** — angles, smoothing, rep state machine, the whole voice channel
    and the first two form cues done; **the live geometric rules (valgus, forward
    lean, heel lift) are what remains, and they need footage before code**.
-3. **Local persistence & app shell** — Room history and the Nav 3 wiring done; the
-   summary, history and stats screens remain.
+3. **Local persistence & app shell** — Room history, the Nav 3 wiring and the
+   workout summary done; the history list and stats screens remain.
 4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
@@ -118,9 +139,9 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
 - **The completed `Rep`s are collected now** (2026-08-09), in a `reps` list the
   ViewModel clears on `startSet`, so `deepestAngle` and the descent/ascent timings
   survive the set. `repsAtDepth` is the first thing built on them and is spoken in
-  the set summary. This was the prerequisite for "depth 88%, up from 81%"; what is
-  still missing is somewhere to *persist* them, which arrives with history.
-  `repsAtDepth` is recomputed from the list every frame rather than incremented,
+  the set summary. This was the prerequisite for "depth 88%, up from 81%", and
+  since 2026-08-14 they are persisted as rows — which is what the summary's depth
+  chart reads. `repsAtDepth` is recomputed from the list every frame rather than incremented,
   so the list is the only thing that can be wrong — a derived value cannot drift
   the way a counter maintained in three places can.
 - **`:feature:workout` exposes exactly `WorkoutRoute` and `workoutEntries()`**;
