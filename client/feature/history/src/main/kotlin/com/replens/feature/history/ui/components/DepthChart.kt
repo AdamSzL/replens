@@ -104,7 +104,7 @@ internal fun DepthChart(
                             center = Offset(x(mark.column), y(mark.angle)),
                         )
                     }
-                    val number = measurer.measure("${index + 1}", labelStyle)
+                    val number = measurer.measure("${chart.sets[index].position}", labelStyle)
                     val center = (x(marks.first().column) + x(marks.last().column)) / 2f
                     drawText(
                         textLayoutResult = number,
@@ -170,7 +170,12 @@ private fun ChartPreview(
 private fun chartOf(vararg sets: List<Float>): DepthChartUiModel {
     val angles = sets.toList().flatten()
     return DepthChartUiModel(
-        sets = sets.map { DepthChartSetUiModel(it) },
+        sets = sets.mapIndexed { index, angles ->
+            DepthChartSetUiModel(
+                position = index + 1,
+                angles = angles,
+            )
+        },
         description = UiText.Raw("Depth of each rep"),
         topAngle = maxOf(angles.max(), 95f) + 5f,
         floorAngle = minOf(angles.min(), 95f) - 5f,

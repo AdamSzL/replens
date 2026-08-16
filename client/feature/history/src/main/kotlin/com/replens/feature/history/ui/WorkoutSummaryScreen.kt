@@ -152,11 +152,20 @@ private val previewState = WorkoutSummaryState.Loaded(
         isOpen = true,
     ),
     depthChart = DepthChartUiModel(
-        description = UiText.Raw("Depth of each rep across 3 sets"),
+        description = UiText.Raw("Depth of each rep. Deepest rep in set 1, shallowest in set 3."),
         sets = listOf(
-            DepthChartSetUiModel(listOf(88f, 91f, 87f)),
-            DepthChartSetUiModel(listOf(92f, 96f)),
-            DepthChartSetUiModel(listOf(94f, 99f, 104f)),
+            DepthChartSetUiModel(
+                position = 1,
+                angles = listOf(88f, 91f, 87f),
+            ),
+            DepthChartSetUiModel(
+                position = 2,
+                angles = listOf(92f, 96f),
+            ),
+            DepthChartSetUiModel(
+                position = 3,
+                angles = listOf(94f, 99f, 104f),
+            ),
         ),
         topAngle = 110f,
         floorAngle = 82f,

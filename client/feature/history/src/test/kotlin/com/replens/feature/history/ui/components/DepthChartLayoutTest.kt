@@ -9,7 +9,12 @@ import org.junit.Test
 class DepthChartLayoutTest {
 
     private val chart = DepthChartUiModel(
-        sets = listOf(DepthChartSetUiModel(listOf(90f))),
+        sets = listOf(
+            DepthChartSetUiModel(
+                position = 1,
+                angles = listOf(90f),
+            ),
+        ),
         description = UiText.Raw("unused: the axis is only arithmetic"),
         topAngle = 115f,
         floorAngle = 75f,
@@ -17,7 +22,14 @@ class DepthChartLayoutTest {
     )
 
     private fun chartOf(vararg sets: List<Float>): DepthChartUiModel {
-        return chart.copy(sets = sets.map { DepthChartSetUiModel(it) })
+        return chart.copy(
+            sets = sets.mapIndexed { index, angles ->
+                DepthChartSetUiModel(
+                    position = index + 1,
+                    angles = angles,
+                )
+            },
+        )
     }
 
     @Test

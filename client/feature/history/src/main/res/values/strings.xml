@@ -29,14 +29,12 @@
       Read by TalkBack in place of the plot. Deliberately without degrees: the
       interior-angle convention needs a paragraph to interpret, while a set number
       is something the listener can act on. It also must not repeat the totals
-      card, which is announced first.
+      card, which is announced first — which is why no set count appears here,
+      and why none of these needs a plural.
     -->
     <string name="workout_summary_chart_single_rep">Depth of one rep.</string>
     <string name="workout_summary_chart_one_set">Depth of each rep. Deepest on rep %1$d, shallowest on rep %2$d.</string>
-    <plurals name="workout_summary_chart_sets">
-        <item quantity="one">Depth of each rep across %1$d set. Deepest rep in set %2$d, shallowest in set %3$d.</item>
-        <item quantity="other">Depth of each rep across %1$d sets. Deepest rep in set %2$d, shallowest in set %3$d.</item>
-    </plurals>
+    <string name="workout_summary_chart_sets">Depth of each rep. Deepest rep in set %1$d, shallowest in set %2$d.</string>
 
     <string name="workout_summary_depth_threshold">Depth threshold · %1$d°</string>
     <string name="workout_summary_depth">%1$d of %2$d reached depth</string>

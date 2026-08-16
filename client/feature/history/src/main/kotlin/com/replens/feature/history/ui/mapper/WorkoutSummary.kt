@@ -67,9 +67,15 @@ private fun Workout.totals(now: Instant): SessionTotalsUiModel {
  * reports them — that is what `abandonedCount` is for.
  */
 private fun Workout.depthChart(config: SquatRepConfig): DepthChartUiModel? {
-    val series = sets
-        .filter { it.reps.isNotEmpty() }
-        .map { set -> DepthChartSetUiModel(set.reps.map { it.deepestAngle }) }
+    // Indexed before filtering, or a dropped set would renumber every set after it
+    // and the chart would disagree with the list underneath it.
+    val series = sets.mapIndexedNotNull { position, set ->
+        if (set.reps.isEmpty()) return@mapIndexedNotNull null
+        DepthChartSetUiModel(
+            position = position + 1,
+            angles = set.reps.map { it.deepestAngle },
+        )
+    }
     if (series.isEmpty()) return null
     val angles = series.flatMap { it.angles }
     return DepthChartUiModel(
@@ -104,12 +110,10 @@ private fun List<DepthChartSetUiModel>.description(): UiText {
             reps.indexOf(shallowest) + 1,
         )
     }
-    return UiText.Plural(
-        R.plurals.workout_summary_chart_sets,
-        size,
-        size,
-        indexOfFirst { deepest in it.angles } + 1,
-        indexOfFirst { shallowest in it.angles } + 1,
+    return UiText.Resource(
+        R.string.workout_summary_chart_sets,
+        first { deepest in it.angles }.position,
+        first { shallowest in it.angles }.position,
     )
 }
 

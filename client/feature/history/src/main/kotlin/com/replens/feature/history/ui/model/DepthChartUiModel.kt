@@ -41,5 +41,12 @@ internal data class DepthChartUiModel(
  * Reps stay grouped by the set they were done in, because the gap between sets is
  * what the eye reads the session's shape from. A `List<List<Float>>` would say
  * the same thing and name none of it.
+ *
+ * [position] is the set's number **in the workout**, not its index here: a set
+ * that reached no rep is dropped from the chart and still numbered in the list
+ * below it, so counting the groups would label the third set "2".
  */
-internal data class DepthChartSetUiModel(val angles: List<Float>)
+internal data class DepthChartSetUiModel(
+    val position: Int,
+    val angles: List<Float>,
+)

@@ -169,7 +169,7 @@ class WorkoutSummaryTest {
 
         val chart = workout.toSummaryState(now).depthChart!!
 
-        val expected = UiText.Plural(R.plurals.workout_summary_chart_sets, 2, 2, 2, 2)
+        val expected = UiText.Resource(R.string.workout_summary_chart_sets, 2, 2)
         assertEquals(expected, chart.description)
     }
 
@@ -241,5 +241,26 @@ class WorkoutSummaryTest {
 
         assertEquals(2, state.depthChart!!.sets.size)
         assertEquals(3, state.sets.size)
+        // The second plotted set is the list's third, and both have to say so.
+        assertEquals(listOf(1, 3), state.depthChart!!.sets.map { it.position })
+        assertEquals(listOf(1, 2, 3), state.sets.map { it.index })
+    }
+
+    /**
+     * The description names sets the listener can scroll to, so it has to survive
+     * the same filter the labels do.
+     */
+    @Test
+    fun `the description numbers sets as the list does`() {
+        val workout = workout(
+            set(startedAt = EPOCH, angles = listOf(90f)),
+            set(startedAt = EPOCH + 4.minutes, abandonedCount = 1),
+            set(startedAt = EPOCH + 8.minutes, angles = listOf(70f)),
+        )
+
+        val chart = workout.toSummaryState(now).depthChart!!
+
+        val expected = UiText.Resource(R.string.workout_summary_chart_sets, 3, 1)
+        assertEquals(expected, chart.description)
     }
 }
