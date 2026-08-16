@@ -47,6 +47,7 @@ internal fun DepthChart(
     val measurer = rememberTextMeasurer()
     // Laid out in marks, so spacing is decided before a width is known.
     val groups = chart.markGroups()
+    val lastColumn = groups.flatten().lastOrNull()?.column ?: 0f
     val description = chart.description.asString()
 
     RepLensCard(
@@ -78,7 +79,6 @@ internal fun DepthChart(
                 // rather than half outside it.
                 val plotHeight = plotBottom - 2 * radius
                 val plotWidth = size.width - 2 * radius
-                val lastColumn = groups.flatten().lastOrNull()?.column ?: 0f
 
                 fun y(angle: Float): Float = radius + chart.depthFraction(angle) * plotHeight
                 fun x(column: Float): Float = when {
