@@ -25,8 +25,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
 import com.replens.core.designsystem.theme.RepLensTheme
-import com.replens.feature.workout.ui.WorkoutRoot
+import com.replens.feature.history.navigation.WorkoutSummaryRoute
+import com.replens.feature.history.navigation.historyEntries
+import com.replens.feature.workout.navigation.WorkoutRoute
+import com.replens.feature.workout.navigation.workoutEntries
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -43,6 +51,29 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+private fun RepLensNavDisplay() {
+    val backStack = rememberNavBackStack(WorkoutRoute)
+
+    NavDisplay(
+        backStack = backStack,
+        entryDecorators = listOf(
+            rememberSaveableStateHolderNavEntryDecorator(),
+            rememberViewModelStoreNavEntryDecorator(),
+        ),
+        entryProvider = entryProvider {
+            workoutEntries(
+                navigateToSummary = {
+                    backStack.add(WorkoutSummaryRoute(it))
+                }
+            )
+            historyEntries(
+                onBack = { backStack.removeLastOrNull() }
+            )
+        },
+    )
+}
+
+@Composable
 private fun CameraPermissionGate() {
     val context = LocalContext.current
     var granted by remember {
@@ -56,7 +87,7 @@ private fun CameraPermissionGate() {
     ) { granted = it }
 
     if (granted) {
-        WorkoutRoot()
+        RepLensNavDisplay()
     } else {
         LaunchedEffect(Unit) { launcher.launch(Manifest.permission.CAMERA) }
         Column(

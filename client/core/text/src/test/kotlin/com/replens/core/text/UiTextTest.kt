@@ -1,4 +1,4 @@
-package com.replens.core.ui
+package com.replens.core.text
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals

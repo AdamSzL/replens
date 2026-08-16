@@ -9,8 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import com.replens.core.ui.UiText
-import com.replens.core.ui.asString
+import com.replens.core.text.UiText
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger

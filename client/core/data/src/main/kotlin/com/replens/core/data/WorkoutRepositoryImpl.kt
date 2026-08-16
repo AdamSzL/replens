@@ -10,19 +10,7 @@ import com.replens.core.model.Exercise
 import com.replens.core.model.Rep
 import com.replens.core.model.Workout
 import javax.inject.Inject
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
-
-/**
- * How long a workout may go quiet before the next set counts as a new one.
- *
- * The only alternative was a Finish button, and the common real behavior is
- * pressing nothing at all — you finish your last set, pick the phone up and close
- * the app — so any rule that depends on a press gets the usual case wrong. An
- * explicit finish stays available later as a flag that makes this rule skip a
- * workout; it is purely additive, and wants evidence first.
- */
-internal val WORKOUT_GAP = 60.minutes
 
 internal class WorkoutRepositoryImpl @Inject constructor(
     private val dao: WorkoutDao,
@@ -58,19 +46,19 @@ internal class WorkoutRepositoryImpl @Inject constructor(
         }
         val repRows = { setId: Long -> reps.map { it.toEntity(setId) } }
 
-        return if (inProgress != null) {
+        if (inProgress != null) {
             dao.recordSet(set(inProgress.id), repRows)
-        } else {
-            dao.recordFirstSet(
-                workout = WorkoutEntity(
-                    startedAt = startedAt.toEpochMilliseconds(),
-                    endedAt = endedAt.toEpochMilliseconds(),
-                    updatedAt = endedAt.toEpochMilliseconds(),
-                ),
-                set = set,
-                reps = repRows,
-            )
+            return inProgress.id
         }
+        return dao.recordFirstSet(
+            workout = WorkoutEntity(
+                startedAt = startedAt.toEpochMilliseconds(),
+                endedAt = endedAt.toEpochMilliseconds(),
+                updatedAt = endedAt.toEpochMilliseconds(),
+            ),
+            set = set,
+            reps = repRows,
+        )
     }
 
     override suspend fun workout(id: Long): Workout? {

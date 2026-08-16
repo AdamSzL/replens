@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      Abbreviated units on purpose, so none of these need a plural: "s", "min"
+      and "h" do not inflect, in English or in Polish. Spelling them out would
+      turn three strings into three plurals with four forms each, to say the
+      same thing in more space than a summary row has.
+    -->
+    <string name="duration_seconds">%1$d s</string>
+    <string name="duration_minutes">%1$d min</string>
+    <string name="duration_hours">%1$d h %2$02d min</string>
+
+    <string name="exercise_squat">Squat</string>
+
+    <string name="workout_summary_title">Workout</string>
+    <string name="workout_summary_back">Back</string>
+    <string name="workout_summary_not_found">This workout is no longer here.</string>
+
+    <plurals name="workout_summary_reps">
+        <item quantity="one">rep</item>
+        <item quantity="other">reps</item>
+    </plurals>
+    <plurals name="workout_summary_sets_duration">
+        <item quantity="one">%1$d set · %2$s</item>
+        <item quantity="other">%1$d sets · %2$s</item>
+    </plurals>
+    <!--
+      Read by TalkBack in place of the plot. Deliberately without degrees: the
+      interior-angle convention needs a paragraph to interpret, while a set number
+      is something the listener can act on. It also must not repeat the totals
+      card, which is announced first — which is why no set count appears here,
+      and why none of these needs a plural.
+    -->
+    <string name="workout_summary_chart_single_rep">Depth of one rep.</string>
+    <string name="workout_summary_chart_one_set">Depth of each rep. Deepest on rep %1$d, shallowest on rep %2$d.</string>
+    <string name="workout_summary_chart_sets">Depth of each rep. Deepest rep in set %1$d, shallowest in set %2$d.</string>
+
+    <string name="workout_summary_depth_threshold">Depth threshold · %1$d°</string>
+    <string name="workout_summary_depth">%1$d of %2$d reached depth</string>
+    <!-- Present tense: within the gap another set still joins this workout. -->
+    <string name="workout_summary_still_open">Start another set within the hour and it joins this session.</string>
+
+    <!--
+      Two whole headings rather than one plus a joiner: the second spells the
+      number out again so a language that inflects it differently before a noun
+      can say so. Only a workout that mixed exercises reaches the second.
+    -->
+    <string name="workout_summary_set_number">Set %1$d</string>
+    <string name="workout_summary_set_number_exercise">Set %1$d · %2$s</string>
+    <plurals name="workout_summary_set_reps">
+        <item quantity="one">%1$d rep · %2$d at depth</item>
+        <item quantity="other">%1$d reps · %2$d at depth</item>
+    </plurals>
+    <string name="workout_summary_rest">%1$s rest</string>
+    <plurals name="workout_summary_abandoned">
+        <item quantity="one">%1$d descent stopped short</item>
+        <item quantity="other">%1$d descents stopped short</item>
+    </plurals>
+
+</resources>

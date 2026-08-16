@@ -4,7 +4,7 @@ Where RepLens actually is, what has been validated on a device, and what is next
 **This is the file that changes every session** — CLAUDE.md holds the rules, which
 should not churn just because a milestone landed.
 
-Last updated 2026-08-14.
+Last updated 2026-08-16.
 
 ## Milestones
 
@@ -85,8 +85,36 @@ Last updated 2026-08-14.
   own. Pull the file instead (`adb exec-out run-as com.replens.app cat
   databases/replens.db`), taking `-wal` and `-shm` too or recent writes are
   missing. It also leaves a `replens.db.lck` beside them, which a wipe must delete.
-- **Next:** the workout summary screen (which brings Nav 3), then
-  `:feature:history`. 236 unit tests.
+- **Navigation 3 wired 2026-08-15** on stable 1.1.6, on branch
+  `feat/workout-summary`. One destination so far, so behavior is unchanged; what
+  it buys is that `:feature:workout` is now reachable only through `WorkoutRoute`
+  and `workoutEntries()`, with `WorkoutRoot` internal. No `Navigator` object —
+  `rememberNavBackStack` already survives process death, so the persistence
+  gotcha CLAUDE.md had filed as "fix before release" never got built.
+- **The workout summary screen: done and used on device 2026-08-16.** The first
+  screen that reads persistence back, and the first one built entirely from the
+  five-file convention — `:feature:history` now owns `WorkoutSummaryRoute`, and
+  `:app` wires `workoutEntries(navigateToSummary = …)` to it. It shows session
+  totals, a **depth chart plotting every rep against the parallel threshold**, and
+  a chronological set list with rest drawn as the gap between sets.
+  Three modules came out of building it, each for a reason worth keeping.
+  **`:core:text`** because `UiText` sitting in `:core:ui` made the
+  `@Composable`-overload landmine a matter of discipline; splitting the two
+  resolvers across modules makes it impossible instead. **`:core:testing`**
+  because `FakeWorkoutRepository`, `FakeClock` and `MainDispatcherRule` were
+  about to be copied into a second feature. **`:feature:history`** because the
+  summary is a workout-boundary screen, not a workout-screen mode.
+  Three things settled by measurement rather than taste: the chart's axis, after
+  the guessed floor of 75° turned out to be wrong (the author's reps land at
+  50–73°, so the axis fits and snaps to 5° now); `heading` at 20sp, added when
+  the top bar was found rendering a screen title at caption size; and `UiText` in
+  `compose-stability.conf`, which the compiler reported `runtime` and which was
+  dragging three UiModels down with it.
+  **Known and deliberate:** the totals and the chart are squat-shaped in one
+  respect only — the y-axis. See the backlog.
+- **Next:** the history *list* — the first screen with a `workouts()` query behind
+  it, and the thing that makes the summary reachable from somewhere other than
+  finishing a set. 278 unit tests.
 
 ## Roadmap
 
@@ -94,8 +122,8 @@ Last updated 2026-08-14.
 2. **The squat** — angles, smoothing, rep state machine, the whole voice channel
    and the first two form cues done; **the live geometric rules (valgus, forward
    lean, heel lift) are what remains, and they need footage before code**.
-3. **Local persistence & app shell** — Room history done; Nav 3 flows and the
-   stats screen remain.
+3. **Local persistence & app shell** — Room history, the Nav 3 wiring and the
+   workout summary done; the history list and stats screens remain.
 4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
@@ -111,15 +139,15 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
 - **The completed `Rep`s are collected now** (2026-08-09), in a `reps` list the
   ViewModel clears on `startSet`, so `deepestAngle` and the descent/ascent timings
   survive the set. `repsAtDepth` is the first thing built on them and is spoken in
-  the set summary. This was the prerequisite for "depth 88%, up from 81%"; what is
-  still missing is somewhere to *persist* them, which arrives with history.
-  `repsAtDepth` is recomputed from the list every frame rather than incremented,
+  the set summary. This was the prerequisite for "depth 88%, up from 81%", and
+  since 2026-08-14 they are persisted as rows — which is what the summary's depth
+  chart reads. `repsAtDepth` is recomputed from the list every frame rather than incremented,
   so the list is the only thing that can be wrong — a derived value cannot drift
   the way a counter maintained in three places can.
-- **`:feature:workout` exposes exactly `WorkoutRoot(modifier)`**; the ViewModel,
-  state and actions are `internal`, so `:core:pose` and `:core:exercise` are
-  `implementation`. Root itself becomes internal when `navigation/` exists — a
-  one-keyword change. The `RepPhase` text is a debug affordance; removing the
+- **`:feature:workout` exposes exactly `WorkoutRoute` and `workoutEntries()`**;
+  `WorkoutRoot`, the ViewModel, state and actions are all `internal`, so
+  `:core:pose` and `:core:exercise` are `implementation`. The `RepPhase` text is a
+  debug affordance; removing the
   `Text` alone won't cut recompositions, since `phase` living in `WorkoutState` is
   what drives them. The real cleanup is dropping it from state once cues are
   events.
@@ -139,6 +167,39 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
 - Parked for the library convention plugin when they earn their keep:
   `resourcePrefix`, default `testInstrumentationRunner`, `animationsDisabled`,
   `disableUnnecessaryAndroidTests`.
+- **Tapping a mark on the depth chart.** The touch target is not the problem it
+  looks like: hit-test the *nearest* mark to the tap's x rather than the 10dp
+  circle, so every point in the plot belongs to exactly one rep and spacing stops
+  mattering. `markGroups()` already has the positions. Three things it decides:
+  what the readout says (a raw `62.7°` is developer-facing — the interior/flexion
+  trap means it tells a lifter nothing, so it wants framing against parallel or
+  against the session); that it is **the first reader for `Rep.descent` and
+  `Rep.ascent`**, which are stored today on the "unrecoverable after the fact"
+  argument and would show tempo per rep, more interesting than depth per rep
+  since depth is already the y-axis; and that `DepthChartSetUiModel` grows past
+  bare floats to carry rep identity and timings. A popup is probably the wrong
+  surface — it clips against the card and sits under the thumb — so let the
+  selection drive a line below the plot, where the legend already is.
+
+- **The workout summary against a second exercise.** Audited 2026-08-16, and the
+  screen turns out to be narrower-shaped than it looks: rep counts, at-depth
+  counts, set counts and durations are all exercise-agnostic arithmetic, and the
+  set list is a chronological log that already names the exercise when a workout
+  mixes two. **Grouping that list by exercise would be the wrong fix** — it
+  reorders history and breaks supersets.
+  The one thing that does not generalize is the **y-axis**: 95° of knee and 90° of
+  elbow cannot share a scale, and the threshold, the label and the direction are
+  per-exercise. So `depthChart: DepthChartUiModel?` becomes one chart per
+  exercise, each titled, `null` for an exercise with no angle metric — which the
+  current nullable already models. A mapper change plus a title field; the Canvas
+  does not move.
+  Two questions only exercise #2 answers, so they are not guessed at now:
+  whether `repsAtDepth` is squat vocabulary (if push-up depth and curl range are
+  the same idea it is `repsAtFullRange` and the schema gets a free rename while
+  the population is one phone; if they are not, the totals card loses its middle
+  line and quality goes per-exercise), and whether one angle per rep is even the
+  right shape — probably yes for push-ups and curls, both elbow, which is two of
+  the three the scope guard allows.
 
 ## Reference
 

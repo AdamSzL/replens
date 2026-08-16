@@ -2,6 +2,15 @@ package com.replens.feature.workout.ui
 
 import com.replens.core.exercise.SessionState
 import com.replens.core.model.Exercise
+import com.replens.core.testing.FakeClock
+import com.replens.core.testing.FakeWorkoutRepository
+import com.replens.core.testing.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -87,8 +96,72 @@ class WorkoutViewModelTest {
     }
 
     private fun start() {
-        viewModel.startCamera(NoLifecycleOwner)
+        viewModel.onAction(WorkoutAction.ScreenAttached(fakeScreenLifecycleOwner()))
         viewModel.onAction(WorkoutAction.StartClicked)
+    }
+
+    /**
+     * Fills as events arrive, so a test can assert that none did. Unconfined
+     * explicitly: `backgroundScope` inherits runTest's *standard* dispatcher, so a
+     * plain launch would leave the events buffered and unread until the scheduler
+     * next ran — and every assertion here is about the moment an event appears.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun TestScope.collectEvents(): List<WorkoutEvent> {
+        val events = mutableListOf<WorkoutEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.events.toList(events)
+        }
+        return events
+    }
+
+    @Test
+    fun `Done navigates to the workout the set landed in`() = runTest {
+        val events = collectEvents()
+        start()
+        standUntilCountedIn()
+        rep()
+        viewModel.onAction(WorkoutAction.FinishClicked)
+
+        viewModel.onAction(WorkoutAction.DoneClicked)
+
+        val expected = WorkoutEvent.NavigateToSummary(FakeWorkoutRepository.WORKOUT_ID)
+        assertEquals(listOf(expected), events)
+    }
+
+    /**
+     * The write is what produces the id, and it is slower than a thumb. Without
+     * waiting on it, Done reads null and silently goes nowhere.
+     */
+    @Test
+    fun `Done pressed before the write lands still navigates, once it has`() = runTest {
+        val events = collectEvents()
+        repository.writeInFlight = CompletableDeferred()
+        start()
+        standUntilCountedIn()
+        rep()
+        viewModel.onAction(WorkoutAction.FinishClicked)
+
+        viewModel.onAction(WorkoutAction.DoneClicked)
+        assertTrue("navigated before the workout existed", events.isEmpty())
+
+        repository.writeInFlight?.complete(Unit)
+
+        val expected = WorkoutEvent.NavigateToSummary(FakeWorkoutRepository.WORKOUT_ID)
+        assertEquals(listOf(expected), events)
+    }
+
+    /** No reps and no abandoned descents means no workout to show. */
+    @Test
+    fun `Done after a set that wrote nothing stays on the camera`() = runTest {
+        val events = collectEvents()
+        start()
+        standUntilCountedIn()
+        viewModel.onAction(WorkoutAction.FinishClicked)
+
+        viewModel.onAction(WorkoutAction.DoneClicked)
+
+        assertTrue(events.isEmpty())
     }
 
     @Test
@@ -223,7 +296,7 @@ class WorkoutViewModelTest {
      */
     @Test
     fun `movement before the set starts is not counted`() = runTest {
-        viewModel.startCamera(NoLifecycleOwner)
+        viewModel.onAction(WorkoutAction.ScreenAttached(fakeScreenLifecycleOwner()))
         rep()
         rep()
 

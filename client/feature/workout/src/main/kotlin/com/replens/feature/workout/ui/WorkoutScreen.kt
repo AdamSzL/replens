@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,26 +30,39 @@ import com.replens.core.model.RepPhase
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.ZoomRange
+import com.replens.core.ui.ObserveAsEvents
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.components.PoseOverlay
 import com.replens.feature.workout.ui.components.RepCounter
 import com.replens.feature.workout.ui.components.SessionControls
 import com.replens.feature.workout.ui.components.ZoomControl
 
-/** Public only until Navigation 3 lands and `navigation/` calls it instead. */
 @Composable
-fun WorkoutRoot(modifier: Modifier = Modifier) {
+internal fun WorkoutRoot(
+    navigateToSummary: (workoutId: Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val viewModel: WorkoutViewModel = hiltViewModel()
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val surfaceRequest by viewModel.surfaceRequests.collectAsStateWithLifecycle()
 
+    ObserveAsEvents(viewModel.events) { event ->
+        when (event) {
+            is WorkoutEvent.NavigateToSummary -> navigateToSummary(event.workoutId)
+        }
+    }
+
     // No `by` on purpose: keeping the State box lets the overlay read the frame at
     // draw time. Unwrapping it here would recompose this screen 30 times a second.
     val poseFrame = viewModel.poseFrame.collectAsStateWithLifecycle()
 
-    LaunchedEffect(lifecycleOwner) {
-        viewModel.startCamera(lifecycleOwner)
+    // Disposable, not Launched: leaving this screen for the summary keeps the
+    // ViewModel alive on the back stack, so nothing else would ever give the
+    // camera back.
+    DisposableEffect(lifecycleOwner) {
+        viewModel.onAction(WorkoutAction.ScreenAttached(lifecycleOwner))
+        onDispose { viewModel.onAction(WorkoutAction.ScreenDetached) }
     }
 
     WorkoutScreen(

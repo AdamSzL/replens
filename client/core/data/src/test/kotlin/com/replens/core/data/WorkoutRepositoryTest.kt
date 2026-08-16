@@ -1,5 +1,7 @@
 package com.replens.core.data
 
+import com.replens.core.database.entity.SetEntity
+import com.replens.core.database.entity.WorkoutEntity
 import com.replens.core.model.Exercise
 import com.replens.core.model.Rep
 import kotlinx.coroutines.test.runTest
@@ -51,6 +53,25 @@ class WorkoutRepositoryTest {
         val workout = dao.workoutRows.single()
         assertEquals(noon.toEpochMilliseconds(), workout.startedAt)
         assertEquals((noon + 30.seconds).toEpochMilliseconds(), workout.endedAt)
+    }
+
+    /**
+     * Three sets because two cannot tell the answers apart: the first workout and
+     * the first set are both id 1, so a set id passes every assertion a workout id
+     * would. Only once a join has pushed the set ids ahead does the difference
+     * become visible.
+     */
+    @Test
+    fun `the id is the workout's, whether the set opened one or joined one`() = runTest {
+        val opened = record(startedAt = noon)
+        val joined = record(startedAt = noon + 1.minutes)
+        val reopened = record(startedAt = noon + 2.hours)
+
+        assertEquals(opened, joined)
+        assertEquals(listOf(opened, reopened), dao.workoutRows.map(WorkoutEntity::id))
+        // The set ids ran ahead, so the line above is a result rather than a
+        // coincidence of both counters agreeing.
+        assertEquals(listOf(1L, 2L, 3L), dao.setRows.map(SetEntity::id))
     }
 
     @Test

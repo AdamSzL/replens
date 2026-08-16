@@ -3,8 +3,14 @@ package com.replens.feature.workout.ui
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.ZoomRange
+import com.replens.core.testing.FakeClock
+import com.replens.core.testing.FakeWorkoutRepository
+import com.replens.core.testing.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
 import kotlin.time.Instant
@@ -96,9 +102,44 @@ class WorkoutCameraTest {
 
     @Test
     fun `starting the camera twice does not open a second stream`() = runTest {
-        viewModel.startCamera(NoLifecycleOwner)
-        viewModel.startCamera(NoLifecycleOwner)
+        viewModel.onAction(WorkoutAction.ScreenAttached(fakeScreenLifecycleOwner()))
+        viewModel.onAction(WorkoutAction.ScreenAttached(fakeScreenLifecycleOwner()))
 
+        assertEquals(1, camera.frames.subscriptionCount.value)
+    }
+
+    /**
+     * Navigating to the summary leaves this ViewModel on the back stack, so the
+     * screen going away is the only thing that can hand the camera back.
+     */
+    @Test
+    fun `releasing gives the camera back without ending the stream`() = runTest {
+        viewModel.onAction(WorkoutAction.ScreenAttached(fakeScreenLifecycleOwner()))
+        assertNotNull(camera.boundTo)
+
+        viewModel.onAction(WorkoutAction.ScreenDetached)
+
+        assertNull("the camera is still bound", camera.boundTo)
+        // Still subscribed: the detector and its loaded model outlive the release,
+        // which is the difference between this and cancelling the collection.
+        assertEquals(1, camera.frames.subscriptionCount.value)
+    }
+
+    /**
+     * The bug this exists for: the returning screen brings a *new* owner, because
+     * the previous one was destroyed with its composition. Rebinding to the old
+     * one throws, and reusing it silently leaves the preview black.
+     */
+    @Test
+    fun `returning to the screen rebinds onto the new owner`() = runTest {
+        val first = fakeScreenLifecycleOwner()
+        viewModel.onAction(WorkoutAction.ScreenAttached(first))
+        viewModel.onAction(WorkoutAction.ScreenDetached)
+
+        val second = fakeScreenLifecycleOwner()
+        viewModel.onAction(WorkoutAction.ScreenAttached(second))
+
+        assertSame(second, camera.boundTo)
         assertEquals(1, camera.frames.subscriptionCount.value)
     }
 }

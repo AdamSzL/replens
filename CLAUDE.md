@@ -96,7 +96,9 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
   (KGP refuses). The Kotlin version is raised by declaring
   `alias(libs.plugins.kotlin.android) apply false` in the root build file —
   classpath conflict resolution lifts AGP's bundled KGP. Built-in Kotlin aligns
-  `jvmTarget` with `compileOptions`; don't add a `kotlin {}` block for it.
+  `jvmTarget` with `compileOptions`; don't add a `kotlin {}` block for it. The ban
+  covers only KGP itself — Kotlin *compiler plugins* apply normally, verified with
+  `kotlin.plugin.serialization` on `:feature:workout`.
 - **Convention plugins can only apply plugins already on the buildscript
   classpath.** Hence every third-party plugin is declared `apply false` in the
   root build file, which is also where its version is pinned. build-logic's
@@ -107,24 +109,25 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
   `hiltViewModel()` additionally needs `rememberViewModelStoreNavEntryDecorator()`
   in `NavDisplay(entryDecorators = …)`, or every destination shares the Activity's
   `ViewModelStore` — a silent scoping bug, not a compile error.
-- **Compose stays `implementation` in `:core:ui`, and the composable overload is a
-  landmine because of it.** Catalog Compose entries are version-less (the BOM
-  supplies versions), so `api`-ing one exports a dependency that non-UI consumers
-  cannot resolve — `:core:audio` has no BOM and failed with
-  `Could not find androidx.compose.runtime:runtime:`. `implementation` is correct
-  here because `UiText` has **no Compose types in any signature**; `@Immutable` and
-  `@Composable` are annotations, and unresolvable annotations are silently skipped
-  when reading a class file. The day a Compose *type* enters a signature, `api`
-  becomes mandatory and non-UI modules can no longer depend on it.
-  The cost, **verified 2026-08-09**: a module without the Compose plugin can call
-  `UiText.asString()` (the `@Composable` one) and it **compiles with no error or
-  warning**, then throws
-  `NoSuchMethodError: UiTextKt.asString(UiText)` at runtime. The Compose plugin
-  rewrites the JVM signature to `asString(UiText, Composer, int)`, but Kotlin
-  resolves calls from `@Metadata`, which still describes the *source* signature —
-  and the `@Composable` annotation that would give it away is exactly the thing
-  being skipped. A Java caller would be safe: `javac` reads the class file, not the
-  metadata. **From a non-Compose module, use the `Context` overload.**
+- **Catalog Compose entries are version-less** (the BOM supplies versions), so
+  `api`-ing one exports a dependency that non-UI consumers cannot resolve —
+  `:core:audio` has no BOM and failed with
+  `Could not find androidx.compose.runtime:runtime:`. This is why a module that
+  non-UI code depends on must not put a Compose *type* in a signature, and why
+  `UiText` lives in `:core:text` rather than `:core:ui` (see *Model layers*).
+- **The `@Composable`-overload landmine, verified 2026-08-09 and now fixed by
+  construction rather than by discipline.** A module without the Compose plugin
+  could call the `@Composable` `UiText.asString()`, **compile with no error or
+  warning**, and throw `NoSuchMethodError: UiTextKt.asString(UiText)` at runtime:
+  the Compose plugin rewrites the JVM signature to
+  `asString(UiText, Composer, int)`, but Kotlin resolves calls from `@Metadata`,
+  which still describes the *source* signature — and the `@Composable` annotation
+  that would give it away is skipped when an unresolvable annotation is read from
+  a class file. (A Java caller is safe; `javac` reads the class file, not the
+  metadata.) The two resolvers now live in different modules, so a non-Compose
+  consumer cannot see the composable one at all. **The general rule survives the
+  fix: a `@Composable` extension on a type that non-Compose code also uses must
+  not sit in the same module as the type.**
 - The Compose BOM is declared twice on purpose (`implementation` +
   `androidTestImplementation`); the IDE's duplicate warning is a false positive.
 - Release runs R8 + resource shrinking; verify `assembleRelease` when adding
@@ -138,47 +141,66 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
 Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 
 ```
-:app                MainActivity: camera permission gate -> WorkoutRoot. Later:
-                    NavDisplay, back stack, every cross-feature edge.
-:feature:workout    …workout.ui/            the five files (no Event yet), plus
-                                            CueEngine (what to say), CueAnnouncer
-                                            (whether to say it again) and
-                                            CameraSelection (which lens to open
-                                            on, which zoom stops to offer)
+:app                MainActivity: camera permission gate -> NavDisplay. Owns the
+                    back stack and every cross-feature edge.
+:feature:workout    …workout.navigation/    WorkoutRoute + workoutEntries — the
+                                            module's whole public surface
+                    …workout.ui/            the five files, plus CueEngine (what
+                                            to say), CueAnnouncer (whether to say
+                                            it again) and CameraSelection (which
+                                            lens to open on, which zoom stops to
+                                            offer)
                     …workout.ui.mapper/     SessionCue + FormCue: domain state ->
                                             UiText, drawn and spoken from one source
                     …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
-                    63 tests.
+:feature:history    …history.navigation/    WorkoutSummaryRoute + historyEntries
+                    …history.ui/            the five files. No loading *phase* on
+                                            the workout screen, but there is one
+                                            here, so the state is a bare sealed
+                                            root: Loading / NotFound / Loaded
+                    …history.ui.mapper/     Workout -> the whole screen, plus
+                                            Duration -> UiText
+                    …history.ui.model/      SessionTotals, SetRow, DepthChart
+                    …history.ui.components/ SessionTotals, SetList, DepthChart
+                                            and DepthChartLayout, which is the
+                                            plot's arithmetic with no Canvas
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
                     focus. Silence is a legal outcome, never an error.
-:core:ui            UiText and its two resolvers. 8 tests. ObserveAsEvents lands
-                    when something is actually one-shot.
+:core:text          UiText, its Context resolver, and future
+                    <domain> -> UiText formatters. No Compose at all.
+:core:ui            The Compose utilities: ObserveAsEvents, ScreenStateCrossfade
+                    and the @Composable UiText.asString().
+:core:testing       MainDispatcherRule, FakeClock, FakeWorkoutRepository.
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
+                      …component.appbar/ RepLensTopAppBar
                       …component.button/ Primary, OverlayPrimary,
-                                         OverlaySecondary, OverlayIcon
+                                         OverlaySecondary, OverlayIcon, RepLensIcon
+                      …component.card/   RepLensCard
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame; Rep, RepPhase,
                     RepUpdate, AbandonedDescent; Exercise, ExerciseSet, Workout.
                     Pure Kotlin, no dependencies at all.
 :core:posemath      Point, joint angles, torso size, normalized distances, line
                     deviation; OneEuroFilter + PoseSmoother. Pure Kotlin,
-                    domain-free (no thresholds, no exercise names). 55 tests.
-:core:exercise      Exercise knowledge and thresholds. Pure Kotlin. 87 tests.
+                    domain-free (no thresholds, no exercise names).
+:core:exercise      Exercise knowledge and thresholds. Pure Kotlin.
                       …exercise/       Framing, FormFault, SetupCheck,
                                        SessionState, SetSession
                       …exercise.squat/ SquatSignals, SquatRepCounter, SquatRepConfig
 :core:database      Room 3: entities, WorkoutDao, ReplensDatabase (internal).
-                    Tested on the JVM against BundledSQLiteDriver. 12 tests.
+                    Tested on the JVM against BundledSQLiteDriver.
                       …dao/  …di/  …entity/
 :core:data          WorkoutRepository + impl, the entity mappers, WORKOUT_GAP.
-                    The only module speaking both vocabularies. 11 tests.
+                    The only module speaking both vocabularies.
                       …mapper/  …di/
 ```
 
-Planned, not built: `:core:network`, `:feature:{history,stats,leaderboard}`.
+Planned, not built: `:core:network`, `:feature:{stats,leaderboard}`. **`:feature:history`
+exists but holds only the workout summary** — the history *list* is the next screen,
+and `WorkoutDao` has no `workouts()` because its shape is that screen's question.
 
 ### Key decisions
 
@@ -200,12 +222,13 @@ Planned, not built: `:core:network`, `:feature:{history,stats,leaderboard}`.
   A per-feature convention, **not** a generic `BaseViewModel<S, A, E>` —
   inheritance-based MVI is where this pattern dies. Details in *Feature
   architecture*.
-- **Deferred until they have a job to do:** `WorkoutEvent` (nothing one-shot yet)
-  and Navigation 3 (one screen, nothing to navigate to — it lands with
-  the post-workout summary). The **set summary card is not that screen**: a card is
-  the *set* boundary, where you are still three meters away and want a number and
-  "go again"; the screen is the *workout* boundary, where you have picked the phone
-  up. Keep both.
+- **Deferred until they have a job to do.** `WorkoutEvent` and Navigation 3 were
+  both parked on this rule and both **landed 2026-08-15/16** with the post-workout
+  summary, which is what gave them something to navigate to. The **set summary
+  card is not that screen**: a
+  card is the *set* boundary, where you are still three meters away and want a
+  number and "go again"; the screen is the *workout* boundary, where you have
+  picked the phone up. Keep both.
 - Convention plugins in `client/build-logic/` (included build):
   `replens.android.application`, `replens.android.library`,
   `replens.android.compose` (additive: compose flag + BOM + tooling; non-UI
@@ -262,10 +285,14 @@ M3's five button variants encode Material's emphasis hierarchy rather than ours.
   detector, so do not add a floor "to be safe".**
 - **Wrap every M3 component before first use.** `IconButton` was the last leak; it
   read `IconButtonDefaults`, hence `OverlayIconButton`.
-- **Typography named for the job, not the size** — `display`, `title`, `body`,
-  `label`. `Title28` becomes a lie the moment the size changes or an accessibility
-  setting scales it. Four sizes, two weights; `display` sets `tnum` so the rep
-  counter does not reflow as it passes 9.
+- **Typography named for the job, not the size** — `display`, `title`, `heading`,
+  `body`, `label`. `Title28` becomes a lie the moment the size changes or an
+  accessibility setting scales it. Five sizes, two weights; `display` sets `tnum`
+  so the rep counter does not reflow as it passes 9. **`title` and `heading` are
+  told apart by reading distance, not by size**: `title` is what a camera cue
+  needs at three meters, `heading` names a screen or a section in your hand.
+  `heading` was added when the top app bar found the gap — 20sp against
+  Material's 22, because ours is SemiBold where `titleLarge` is Medium.
 - **Montserrat, subset by `tools/subset-fonts.sh`** to Latin + Polish.
 
 **No spacing, sizing or radius tokens — plain `.dp` at call sites.** Color varies
@@ -307,6 +334,18 @@ modules, so same-named resources silently override — but `RepLensIcons` means
 every id has exactly one reference, making a later rename trivial. Turn the
 parked `resourcePrefix` on when a collision-prone generic name appears
 (`ic_close`, `ic_settings`), not before.
+
+**The same hold applies to strings in feature modules, and it now has a live
+candidate.** `:feature:history` owns `duration_seconds` / `duration_minutes` /
+`duration_hours` — names a stats or history-list screen would plausibly reach for
+too, and a second module defining one silently wins for both, with no error and
+no warning. Prefixing was tried and reverted: **one module cannot collide with
+itself**, so today it buys nothing and costs a prefix on every call site.
+The trigger is the *second* module defining a `duration_*` string. At that point
+prefix both and set `resourcePrefix` per module so it is enforced rather than
+remembered — and note the likelier resolution is that the duration formatter
+moves to `:core:ui` and takes its strings with it, leaving one definition and
+nothing to collide.
 
 ### Haptics
 
@@ -425,6 +464,11 @@ speaks only domain models, wrapped in `Result`.
 
 - **Actions are past tense** — `StartClicked`, `PermissionGranted`. No `On`
   prefix, so non-click actions read consistently.
+- **`onAction` is the ViewModel's only entry point** — no `viewModel.doThing()`
+  from a composable, even for lifecycle wiring. `ScreenAttached(lifecycleOwner)`
+  / `ScreenDetached` is what that costs: an action carrying a framework object,
+  which is the right trade because the alternative is a second, undocumented way
+  in. Named for *composition*, not visibility — backgrounding fires neither.
 - **Events are imperative** — `NavigateToSummary`.
 - `<Feature>Screen.kt` holds exactly two composables: `<Feature>Root` (internal —
   collects state, hosts `ObserveAsEvents`, maps events to navigation callbacks;
@@ -467,6 +511,12 @@ DTO -> domain -> UI, plus Room entities and navigation arguments. Domain models
 stay free of `@Serializable`; routes are separate `NavKey` types with round-trip
 mappers.
 
+**UiModels are named `<Thing>UiModel`** and live in `ui/model/`. **One per
+component, never one per screen** — the whole-screen model is the `State` class,
+so a screen is a `State` holding primitives plus a UiModel for each card or
+section that has its own composable. `SpokenCue` is not an exception: it is the
+message between `CueEngine` and `CueAnnouncer`, not screen state.
+
 **Introduce a UiModel when the UI needs formatted or derived data, or when the
 domain model carries fields the UI must not see.** A raw geometry stream is
 neither — `PoseFrame` reaches the `Canvas` as a domain model, because mapping
@@ -477,8 +527,8 @@ overlay needs verbatim.
 not an invitation to add a layer. `SessionState` is the case: its arms *are* the
 screen's modes, so a UiModel would be a rename. **Stability is the weakest reason
 to wrap** — it produces a type whose only job is to carry `@Immutable`, and here
-it would not even remove the mechanism, since `CameraOptions` and `ZoomRange`
-still need the stability configuration file.
+it would not even remove the mechanism, since `CameraOptions` still needs
+`compose-stability.conf`.
 TTS was predicted to be the trigger that earned one, and **half of that prediction
 was right** (2026-08-10). `SetupCheck → stringResource` did have to leave the
 composable the moment the same line was both drawn and spoken: `stringResource`
@@ -498,13 +548,29 @@ type is already at the right altitude.
 ### UiText
 
 All user-facing text the ViewModel or a mapper **chooses between** is a `UiText`
-(`:core:ui`), resolved at render time — a `String` resolved in the ViewModel won't
-re-render on a locale change. Text that's always the same resource doesn't belong
-in state at all. Plain `String` only for server-provided or user-entered content.
+(`:core:text`), resolved at render time — a `String` resolved in the ViewModel
+won't re-render on a locale change. Text that's always the same resource doesn't
+belong in state at all. Plain `String` only for server-provided or user-entered
+content. **A parameter is not a choice**: a count is always the same plural
+resource, so it stays an `Int` and the composable names the resource. What earns
+a `UiText` is a *branch* — seconds against minutes against hours, one resource
+per enum value.
 
 Arms: `Raw(String)`, `Resource(@StringRes id, args: List<Any>)`,
-`Plural(@PluralsRes id, quantity, args)`. Two `asString()` extensions — a
-`@Composable @ReadOnlyComposable` one and one taking a `Context`.
+`Plural(@PluralsRes id, quantity, args)`. Two `asString()` resolvers, and
+**they deliberately live in different modules**: the `Context` one is a member on
+the type in `:core:text`, the `@Composable @ReadOnlyComposable` one an extension
+in `:core:ui`. That split is what makes the `NoSuchMethodError` under *Toolchain
+gotchas* impossible instead of merely documented — `:core:audio` speaks `UiText`
+and must never see a composable.
+
+**`UiText` carries no `@Immutable`**, which would mean a Compose dependency in
+`:core:text` and put the resolvers back together. It is listed in
+`compose-stability.conf` instead, which is what that file is for. Not a
+formality: the compiler reported it `runtime` before, and since every UiModel on
+the summary screen holds one, `SessionTotalsUiModel`, `SetRowUiModel` and
+`SpokenCue` were all `runtime` with it. Verify claims like this with
+`reportsDestination` in the compose convention plugin rather than by reading.
 
 **Args must be a `List`, not an `Array`, and the arms must be data classes.**
 `Array` equality is identity-based and `emptyArray()` allocates per construction,
@@ -563,34 +629,73 @@ or a lambda capturing changing state goes stale.
 
 ### Navigation (Navigation 3)
 
-Each feature owns its routes and entry provider:
+Built 2026-08-15 on the **stable** `navigation3-runtime`/`-ui` artifacts.
+`lifecycle-viewmodel-navigation3` rides the lifecycle version, not nav3's.
+`adaptive-navigation3` is **not** a dependency: it is list-detail and
+supporting-pane layouts for tablets, and this is a full-screen camera.
+
+**1.2.0 is alpha, and the two things in it worth wanting are named so the upgrade
+is a decision rather than a version bump.** `ResultEventBus` returns a result from
+a destination — nothing needs it yet, since the summary screen pops rather than
+answering. **Deep links are the likelier trigger**: a "you haven't trained in
+three days" notification or a Play app shortcut both open a route directly, and
+both are release-time features. Move when one of those is actually being built,
+not before — the back stack is the last place to run alpha code, because its
+failures are process-death failures nobody reproduces by hand.
+
+**A feature's entire public surface is its `NavKey`s and one entry-provider
+extension.** Everything else — the Root composable included — is `internal`, so
+`:app` cannot name a screen or a ViewModel even by accident.
 
 ```kotlin
 @Serializable data object WorkoutRoute : NavKey
 
-fun EntryProviderScope<NavKey>.workoutEntries(
-    navigator: Navigator,
-    navigateToHistory: () -> Unit,       // cross-feature: :app decides
-) {
-    entry<WorkoutRoute> {
-        WorkoutRoot(navigateToSummary = { navigator.goTo(WorkoutSummaryRoute(it)) })
-    }
+fun EntryProviderScope<NavKey>.workoutEntries() {
+    entry<WorkoutRoute> { WorkoutRoot() }
 }
 ```
 
 - **No shared routes module.** A feature can only name its own routes, so handing
-  it a `Navigator` is safe — the compiler enforces that cross-feature edges are
+  it the back stack is safe — the compiler enforces that cross-feature edges are
   hoisted lambdas wired in `:app`.
+- **No `Navigator` object, and the back stack persistence gotcha it created is
+  gone with it.** CLAUDE.md used to plan an `@ActivityRetainedScoped Navigator`
+  holding `mutableStateListOf`, which survives rotation but **not process death** —
+  filed as "fix before release". `rememberNavBackStack` serializes the keys into
+  saved state, so choosing it means that bug never exists rather than being
+  scheduled. It also removes the reason to invent a type: a `Navigator` would have
+  to live somewhere both `:app` and every feature can see, which is the shared
+  module being avoided two bullets up.
+- **Routes are `@Serializable` from the first one, not from when persistence is
+  wanted.** `rememberNavBackStack` resolves each key's serializer reflectively at
+  save time, so a key that forgot the annotation passes every test that does not
+  kill the process and fails on a user's phone. That same reflection is the shape
+  R8 usually breaks; kotlinx.serialization's consumer rules hold it, checked in
+  `mapping.txt` rather than inferred from a green `assembleRelease`.
+- **Adding any decorator replaces the defaults**, so `NavDisplay` lists
+  `rememberSaveableStateHolderNavEntryDecorator()` *and*
+  `rememberViewModelStoreNavEntryDecorator()`. Dropping the first silently loses
+  per-entry `rememberSaveable`; dropping the second is the ViewModel scoping bug
+  under *Toolchain gotchas*. There is no defaults list to append to.
 - **Google's multibinding recipe (`@IntoSet EntryProviderInstaller`) was rejected.**
   Hilt constructs the installer, so cross-feature lambdas can't be passed — which
   pushes you to a shared routes module or the api/impl split. Its payoff is
   unavailable anyway: a bottom bar means `:app` names all top-level routes
   regardless. Reversible in ~10 lines per feature if dynamic features ever appear.
-- **Back stack persistence gotcha:** an `@ActivityRetainedScoped Navigator` holding
-  `mutableStateListOf` survives rotation but **not process death**. `NavKey`s are
-  `@Serializable` from day one so it's fixable (`SavedStateHandle`, or a
-  `rememberNavBackStack`-backed list) — do it before release.
+- **Never capture a `LifecycleOwner`.** Each entry gets its own, destroyed with
+  its composition and replaced by a *new instance* on the way back, while the
+  ViewModel survives — so the camera stayed bound to a destroyed owner and the
+  preview was black forever. Anything long-lived that binds to one takes a
+  `Flow<LifecycleOwner?>`; null is "no screen showing". That null is also the
+  only moment to clear a `SurfaceRequest`: a viewfinder still on screen keeps its
+  last frame across a rebind, so clearing on a mere lens flip blanks it for
+  ~300 ms (measured), while a returning screen brings a new viewfinder that can
+  never fulfill the old request.
 - Wrap navigation clicks in `dropUnlessResumed { }`.
+
+**Bottom navigation and a login flow change nothing here.** Multiple back stacks
+is a map of `rememberNavBackStack`s and conditional navigation is swapping the
+root — both `:app`'s business, both leaving `workoutEntries()` untouched.
 
 ### Explicit backing fields
 
@@ -599,8 +704,8 @@ val state: StateFlow<WorkoutState>
     field = MutableStateFlow(WorkoutState())
 ```
 
-Verified on Kotlin 2.4.10: no flag, no experimental warning, and encapsulation
-confirmed empirically (an external `vm.state.value = …` fails to compile).
+Verified: no flag, no experimental warning, and encapsulation confirmed
+empirically (an external `vm.state.value = …` fails to compile).
 `state.update { }` resolves fine inside the class — the name is
 `MutableStateFlow` there and `StateFlow` only to the outside. The one real
 difference from `_state`: `asStateFlow()` returned a distinct read-only wrapper,
@@ -678,8 +783,8 @@ reps            id, setId (FK, indexed, cascade)       ← Rep / RepEntity
 | rep timings | `Duration` | `Long` | INTEGER millis |
 | set/workout times | `Instant` | `Long` | INTEGER epoch millis |
 
-**Both are `kotlin.time`** — `Instant` and `Clock` are stdlib and stable on Kotlin
-2.4.10 (verified: no opt-in, no warning). `java.time` and `kotlinx-datetime` were
+**Both are `kotlin.time`** — `Instant` and `Clock` are stdlib and stable
+(verified: no opt-in, no warning). `java.time` and `kotlinx-datetime` were
 both rejected: `Instant - Instant` yields a `kotlin.time.Duration` directly, which
 is exactly where the gap rule lives, and `java.time` would put two `Duration` types
 in one module. [Comparison](docs/decisions.md#time-types).
@@ -1404,6 +1509,13 @@ Milestones, progress and the backlog live in `docs/status.md`.
   `Foo(a = 1, b = 2)` becomes four lines. Applies to function and composable
   calls; modifier arguments (`.padding(horizontal = …, vertical = …)`) and
   annotations stay inline.
+- **A parameter of function type, or a named argument whose value is a
+  multi-line lambda, gets its own line even when it is the only one.** Count is
+  the wrong test here: `(workoutId: Long) -> Unit` brings its own parens and
+  arrow, so inline it the declaration's parens stop reading as the parameter
+  list, and a lambda argument puts the closing `)` on the same line as its `}`.
+  **Trailing lambdas are exempt** — they are outside the parens, so
+  `entry<WorkoutRoute> { … }` stays as it is.
 - **No expression body when the body carries a multi-line argument list.** Write
   a block body with `return` and an explicit return type instead — `= Rep(`
   followed by four named arguments and a `)` puts the declaration, the `=` and

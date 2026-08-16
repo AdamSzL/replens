@@ -10,9 +10,10 @@ away the screen is unreadable.
 *"Every rep, seen."*
 
 > **Status: in development.** Not on Google Play yet, and not ready to be. The
-> squat is implemented end to end — counting, voice coaching and local history all
-> work on a device — but there is no history or stats UI, no backend, and only one
-> exercise. See [`docs/status.md`](docs/status.md) for exactly where things stand.
+> squat is implemented end to end — counting, voice coaching, local history and a
+> post-workout summary all work on a device — but there is no history list, no
+> stats, no backend, and only one exercise. See
+> [`docs/status.md`](docs/status.md) for exactly where things stand.
 
 ## What works today
 
@@ -24,7 +25,10 @@ away the screen is unreadable.
 - **Depth scoring**, graded separately from counting, so ten shallow reps read as
   *"10 reps, depth 42%"* rather than *"0 reps"*.
 - **Local history** — sets, reps and inferred workout boundaries persisted to
-  Room, surviving process death.
+  Room, surviving process death. A workout has no "finish" button: the boundary is
+  inferred when a set *starts*, because the common case is pressing nothing at all.
+- **A post-workout summary** — session totals, every rep plotted against the
+  parallel threshold, and a set list with the rest between sets.
 - Front/back camera, ultra-wide zoom for small rooms, and a live skeleton overlay.
 
 ## How it works
@@ -72,6 +76,12 @@ The reasoning behind these lives in [`docs/decisions.md`](docs/decisions.md).
 - **Rep timings split at the turnaround, not at a threshold**, because the first
   device data showed the old split was measuring depth while claiming to measure
   tempo. → [rep timings](docs/decisions.md#rep-timings)
+- **A `@Composable` extension can compile clean and throw at runtime.** The
+  Compose plugin rewrites the JVM signature, but Kotlin resolves calls from
+  `@Metadata`, which still describes the source one — so a module without the
+  plugin called `UiText.asString()` with no error and no warning, and got
+  `NoSuchMethodError`. The two resolvers now live in different modules, which
+  makes it impossible rather than merely documented.
 
 ## Architecture
 
@@ -81,6 +91,7 @@ compilation — so the interesting parts run on plain JUnit in milliseconds.
 ```mermaid
 flowchart TD
     app[":app"] --> workout[":feature:workout"]
+    app --> history[":feature:history"]
     app --> ds[":core:designsystem"]
     workout --> ds
     workout --> pose[":core:pose"]
@@ -89,7 +100,12 @@ flowchart TD
     workout --> audio[":core:audio"]
     workout --> posemath[":core:posemath"]
     workout --> ui[":core:ui"]
-    audio --> ui
+    history --> ds
+    history --> data
+    history --> exercise
+    history --> ui
+    ui --> text[":core:text"]
+    audio --> text
     data --> database[":core:database"]
     data --> model[":core:model"]
     pose --> model
@@ -98,10 +114,15 @@ flowchart TD
     posemath --> model
 ```
 
+Features never depend on each other. Each owns its routes and exposes one
+entry-provider function; `:app` calls those and owns the back stack, so every
+cross-feature edge is a lambda wired in one place.
+
 | module | responsibility |
 |---|---|
 | `:app` | Activity, camera permission gate, cross-feature wiring |
 | `:feature:workout` | The workout screen, its ViewModel, and cue arbitration |
+| `:feature:history` | The post-workout summary: totals, the depth chart, the set list |
 | `:core:model` | Pure data. No thresholds, no behavior, no dependencies |
 | `:core:posemath` | Angles, distances, One Euro smoothing. Domain-free geometry |
 | `:core:exercise` | Exercise knowledge: thresholds, gates, the rep state machine |
@@ -109,7 +130,9 @@ flowchart TD
 | `:core:audio` | Text-to-speech, locale negotiation, audio focus |
 | `:core:database` | Room entities, DAOs, the database |
 | `:core:data` | The repository and its mappers — the only module speaking both vocabularies |
-| `:core:ui` | `UiText` and its resolvers |
+| `:core:text` | `UiText` and its `Context` resolver. No Compose at all |
+| `:core:ui` | The Compose utilities, including the `@Composable` `UiText` resolver |
+| `:core:testing` | Fakes and rules shared by the feature tests |
 | `:core:designsystem` | Theme, typography, wrapped components. The app's Compose gateway |
 
 Each module's dependencies are declared `api` only for types in its public
@@ -124,7 +147,7 @@ CameraX, ML Kit Pose Detection, kotlinx.serialization. AGP 9, minSdk 26, Java 21
 rather than Firebase, because building it is part of the point.
 → [why Ktor and not Spring Boot](docs/decisions.md#ktor-not-spring-boot)
 
-**Testing** — 236 unit tests, host-side. Rep counting is validated against eight
+**Testing** — 278 unit tests, host-side. Rep counting is validated against eight
 CSV fixtures generated from real recordings, each asserting one rep count.
 
 ## Repository layout
@@ -157,3 +180,9 @@ it.
   those rules.
 - [`docs/status.md`](docs/status.md) — what is built, what has been validated on a
   device, and what is next.
+
+## License
+
+Published to be read, not reused. See [`LICENSE`](LICENSE) — all rights reserved,
+which is also the default GitHub applies to a public repository without one. If
+you want to do something with this, ask.

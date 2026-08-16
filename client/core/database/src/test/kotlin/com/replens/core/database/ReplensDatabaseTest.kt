@@ -68,13 +68,12 @@ class ReplensDatabaseTest {
 
     @Test
     fun `a workout, its sets and their reps round-trip`() = runTest {
-        val setId = dao.recordFirstSet(
+        val workoutId = dao.recordFirstSet(
             workout = workout(startedAt = 1_000L, endedAt = 31_000L),
             set = ::set,
             reps = { id -> List(3) { rep(id, index = it + 1, deepestAngle = 80f + it) } },
         )
 
-        val workoutId = dao.mostRecentWorkout()!!.id
         val sets = dao.setsFor(workoutId)
         assertEquals(1, sets.size)
         assertEquals("SQUAT", sets.single().exercise)
@@ -115,10 +114,9 @@ class ReplensDatabaseTest {
      */
     @Test
     fun `reps come back in rep order, not insertion order`() = runTest {
-        dao.recordFirstSet(workout(), ::set) {
+        val workoutId = dao.recordFirstSet(workout(), ::set) {
             listOf(rep(it, index = 3), rep(it, index = 1), rep(it, index = 2))
         }
-        val workoutId = dao.mostRecentWorkout()!!.id
 
         assertEquals(listOf(1, 2, 3), dao.repsForWorkout(workoutId).map(RepEntity::index))
     }
@@ -127,9 +125,10 @@ class ReplensDatabaseTest {
     @Test
     fun `a workout's reps come back in one query, set by set`() = runTest {
         val workoutId = insertWorkout()
-        val first = dao.recordSet(set(workoutId)) { listOf(rep(it, 1), rep(it, 2)) }
-        val second = dao.recordSet(set(workoutId)) { listOf(rep(it, 1)) }
+        dao.recordSet(set(workoutId)) { listOf(rep(it, 1), rep(it, 2)) }
+        dao.recordSet(set(workoutId)) { listOf(rep(it, 1)) }
 
+        val (first, second) = dao.setsFor(workoutId).map(SetEntity::id)
         val reps = dao.repsForWorkout(workoutId)
         assertEquals(listOf(first, first, second), reps.map(RepEntity::setId))
         assertEquals(listOf(1, 2, 1), reps.map(RepEntity::index))

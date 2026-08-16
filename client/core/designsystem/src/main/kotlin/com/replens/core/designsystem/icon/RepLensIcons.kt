@@ -14,5 +14,8 @@ import com.replens.core.designsystem.R
 object RepLensIcons {
 
     @DrawableRes
+    val ArrowBack = R.drawable.ic_arrow_back
+
+    @DrawableRes
     val CameraSwitch = R.drawable.ic_camera_switch
 }

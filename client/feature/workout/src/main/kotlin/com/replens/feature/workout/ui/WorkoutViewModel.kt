@@ -21,11 +21,15 @@ import com.replens.core.model.RepPhase
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -54,6 +58,9 @@ internal class WorkoutViewModel @Inject constructor(
     val poseFrame: StateFlow<PoseFrame?>
         field = MutableStateFlow(null)
 
+    private val eventChannel = Channel<WorkoutEvent>(Channel.BUFFERED)
+    val events = eventChannel.receiveAsFlow()
+
     private val smoother = PoseSmoother()
     // Shared so the counter and the depth grading cannot disagree about the bottom.
     private val repConfig = SquatRepConfig()
@@ -79,6 +86,25 @@ internal class WorkoutViewModel @Inject constructor(
 
     private var cameraJob: Job? = null
 
+    /**
+     * Whose lifecycle the camera follows, and null while no screen is showing.
+     * A field rather than a parameter captured once, because returning to this
+     * screen brings a *new* owner — the previous one was destroyed with its
+     * composition, and CameraX refuses to bind to a destroyed lifecycle.
+     */
+    private val lifecycleOwners = MutableStateFlow<LifecycleOwner?>(null)
+
+    /**
+     * The write [finishSet] started, carrying the workout id it produced. Done can
+     * be pressed before it lands, so [doneWithSet] waits on this rather than
+     * reading an id and hoping. Null after a set that wrote nothing.
+     *
+     * A [Deferred] rather than a job plus a field: [doneWithSet] captures this
+     * before suspending, so a set started while the write is in flight cannot
+     * change which id it resolves to.
+     */
+    private var recordJob: Deferred<Long>? = null
+
     init {
         viewModelScope.launch {
             poseCamera.options.collect { options ->
@@ -93,28 +119,43 @@ internal class WorkoutViewModel @Inject constructor(
         }
     }
 
-    fun startCamera(lifecycleOwner: LifecycleOwner) {
+    fun onAction(action: WorkoutAction) {
+        when (action) {
+            is WorkoutAction.ScreenAttached -> startCamera(action.lifecycleOwner)
+            WorkoutAction.ScreenDetached -> releaseCamera()
+            is WorkoutAction.ZoomSelected -> selectZoom(action.ratio)
+            WorkoutAction.CameraFlipClicked -> flipCamera()
+            WorkoutAction.StartClicked, WorkoutAction.GoAgainClicked -> startSet()
+            WorkoutAction.CancelClicked -> cancelSet()
+            WorkoutAction.FinishClicked -> finishSet()
+            WorkoutAction.DoneClicked -> doneWithSet()
+        }
+    }
+
+    private fun startCamera(lifecycleOwner: LifecycleOwner) {
+        lifecycleOwners.value = lifecycleOwner
         if (cameraJob?.isActive == true) return
         cameraJob = viewModelScope.launch {
             // Driven from state, so what the camera does can't drift from what the
             // screen shows.
             poseCamera.poseFrames(
-                lifecycleOwner = lifecycleOwner,
+                lifecycleOwners = lifecycleOwners,
                 facings = state.mapNotNull { it.cameraFacing },
                 zoomRatios = state.map { it.zoomRatio },
             ).collect(::onFrame)
         }
     }
 
-    fun onAction(action: WorkoutAction) {
-        when (action) {
-            is WorkoutAction.ZoomSelected -> selectZoom(action.ratio)
-            WorkoutAction.CameraFlipClicked -> flipCamera()
-            WorkoutAction.StartClicked, WorkoutAction.GoAgainClicked -> startSet()
-            WorkoutAction.CancelClicked -> cancelSet()
-            WorkoutAction.FinishClicked -> finishSet()
-            WorkoutAction.DoneClicked -> dismissSummary()
-        }
+    /**
+     * The stream is left collecting on purpose: cancelling it would close the ML
+     * Kit detector, and reloading that model is a visible stall on a path taken
+     * once per workout.
+     */
+    private fun releaseCamera() {
+        lifecycleOwners.value = null
+        // The last pose is now arbitrarily old; leaving it would draw a skeleton
+        // from a different room until the first frame after rebinding.
+        poseFrame.value = null
     }
 
     private fun selectZoom(ratio: Float) {
@@ -127,6 +168,11 @@ internal class WorkoutViewModel @Inject constructor(
         reps.clear()
         abandoned.clear()
         setStart = null
+        // A new set makes the previous write irrelevant. Cleared here rather than
+        // in finishSet, which returns early when there is nothing to write and
+        // would otherwise leave the last set's workout to be navigated to. The
+        // write itself is left to finish — the row is the user's data either way.
+        recordJob = null
         state.update {
             it.copy(
                 session = setSession.start(),
@@ -161,7 +207,7 @@ internal class WorkoutViewModel @Inject constructor(
         val deepestAbandonedAngle = abandoned.minOfOrNull(AbandonedDescent::deepestAngle)
         val repsAtDepth = state.value.repsAtDepth
 
-        viewModelScope.launch {
+        recordJob = viewModelScope.async {
             repository.recordSet(
                 exercise = Exercise.SQUAT,
                 startedAt = start.at,
@@ -171,6 +217,20 @@ internal class WorkoutViewModel @Inject constructor(
                 deepestAbandonedAngle = deepestAbandonedAngle,
                 reps = recorded,
             )
+        }
+    }
+
+    /**
+     * Leaves the set behind and shows what it landed in. A set that wrote nothing
+     * has no workout to show, so Done just clears the card — silence is right
+     * there, since navigating to an empty summary would be worse than staying.
+     */
+    private fun doneWithSet() {
+        val job = recordJob
+        dismissSummary()
+        if (job == null) return
+        viewModelScope.launch {
+            eventChannel.send(WorkoutEvent.NavigateToSummary(job.await()))
         }
     }
 
