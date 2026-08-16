@@ -4,7 +4,10 @@ import com.replens.core.data.WorkoutRepository
 import com.replens.core.model.Exercise
 import com.replens.core.model.Rep
 import com.replens.core.model.Workout
+import com.replens.core.model.WorkoutOverview
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.time.Instant
 
 /**
@@ -17,8 +20,18 @@ import kotlin.time.Instant
  * the gate open; the rest leave it null and both calls complete immediately.
  */
 class FakeWorkoutRepository(
-    private val workouts: List<Workout> = emptyList(),
+    private val stored: List<Workout> = emptyList(),
 ) : WorkoutRepository {
+
+    /**
+     * The history list's source, mutable so a test can land a workout while the
+     * screen is already collecting — which is the behavior that separates a
+     * reactive list from one that reads once.
+     *
+     * Independent of [stored] rather than derived from it: the two answer
+     * different callers, and no test wants both.
+     */
+    val overviews = MutableStateFlow<List<WorkoutOverview>>(emptyList())
 
     data class Recorded(
         val exercise: Exercise,
@@ -59,8 +72,10 @@ class FakeWorkoutRepository(
 
     override suspend fun workout(id: Long): Workout? {
         readInFlight?.await()
-        return workouts.firstOrNull { it.id == id }
+        return stored.firstOrNull { it.id == id }
     }
+
+    override fun workouts(): Flow<List<WorkoutOverview>> = overviews
 
     companion object {
         /** Deliberately not 1: a set count standing in for a workout id would pass. */

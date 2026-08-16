@@ -1,5 +1,6 @@
 package com.replens.core.data.mapper
 
+import com.replens.core.database.dao.WorkoutTotals
 import com.replens.core.database.entity.RepEntity
 import com.replens.core.database.entity.SetEntity
 import com.replens.core.database.entity.WorkoutEntity
@@ -7,6 +8,7 @@ import com.replens.core.model.Exercise
 import com.replens.core.model.ExerciseSet
 import com.replens.core.model.Rep
 import com.replens.core.model.Workout
+import com.replens.core.model.WorkoutOverview
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -61,5 +63,16 @@ internal fun WorkoutEntity.toDomain(sets: List<ExerciseSet>): Workout {
         startedAt = Instant.fromEpochMilliseconds(startedAt),
         endedAt = Instant.fromEpochMilliseconds(endedAt),
         sets = sets,
+    )
+}
+
+internal fun WorkoutTotals.toDomain(): WorkoutOverview {
+    return WorkoutOverview(
+        id = id,
+        startedAt = Instant.fromEpochMilliseconds(startedAt),
+        endedAt = Instant.fromEpochMilliseconds(endedAt),
+        setCount = setCount,
+        repCount = repCount,
+        repsAtDepth = repsAtDepth,
     )
 }

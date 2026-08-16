@@ -4,6 +4,8 @@ import com.replens.core.database.entity.SetEntity
 import com.replens.core.database.entity.WorkoutEntity
 import com.replens.core.model.Exercise
 import com.replens.core.model.Rep
+import com.replens.core.model.WorkoutOverview
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -196,5 +198,37 @@ class WorkoutRepositoryTest {
 
         assertEquals(listOf(80f), sets[0].reps.map(Rep::deepestAngle))
         assertEquals(listOf(95f, 97f), sets[1].reps.map(Rep::deepestAngle))
+    }
+
+    /** Epoch millis leaving the schema and `Instant` arriving in the domain. */
+    @Test
+    fun `an overview carries the workout's totals as instants`() = runTest {
+        record(startedAt = noon, reps = listOf(rep(1), rep(2)), repsAtDepth = 1)
+        record(startedAt = noon + 5.minutes, reps = listOf(rep(1)), repsAtDepth = 1)
+
+        val overview = repository.workouts().first().single()
+
+        assertEquals(noon, overview.startedAt)
+        assertEquals(noon + 5.minutes + 30.seconds, overview.endedAt)
+        assertEquals(2, overview.setCount)
+        assertEquals(3, overview.repCount)
+        assertEquals(2, overview.repsAtDepth)
+    }
+
+    /**
+     * Recorded in the order they happened, because the gap rule reads the workout
+     * that ended *last* — a set dated before it joins that workout rather than
+     * opening one, so recording out of order would build a different fixture than
+     * it looks like.
+     */
+    @Test
+    fun `overviews are newest first`() = runTest {
+        record(startedAt = noon)
+        record(startedAt = noon + 2.hours)
+        record(startedAt = noon + 4.hours)
+
+        val started = repository.workouts().first().map(WorkoutOverview::startedAt)
+
+        assertEquals(listOf(noon + 4.hours, noon + 2.hours, noon), started)
     }
 }

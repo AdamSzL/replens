@@ -3,6 +3,8 @@ package com.replens.core.data
 import com.replens.core.model.Exercise
 import com.replens.core.model.Rep
 import com.replens.core.model.Workout
+import com.replens.core.model.WorkoutOverview
+import kotlinx.coroutines.flow.Flow
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -54,4 +56,10 @@ interface WorkoutRepository {
 
     /** `null` if there is no such workout, or nothing in it this build can read. */
     suspend fun workout(id: Long): Workout?
+
+    /**
+     * Every workout, newest first, re-emitting as sets are recorded — so a set
+     * finished on the camera screen reaches a history list already on screen.
+     */
+    fun workouts(): Flow<List<WorkoutOverview>>
 }
