@@ -1,6 +1,7 @@
 package com.replens.core.data
 
 import com.replens.core.database.dao.WorkoutDao
+import com.replens.core.database.dao.WorkoutTotals
 import com.replens.core.database.entity.RepEntity
 import com.replens.core.database.entity.SetEntity
 import com.replens.core.database.entity.WorkoutEntity
@@ -47,8 +48,19 @@ internal class FakeWorkoutDao : WorkoutDao {
 
     override suspend fun workout(id: Long): WorkoutEntity? = workoutRows.find { it.id == id }
 
-    override fun workouts(): Flow<List<WorkoutEntity>> =
-        flowOf(workoutRows.sortedByDescending(WorkoutEntity::startedAt))
+    override fun workouts(): Flow<List<WorkoutTotals>> = flowOf(
+        workoutRows.sortedByDescending(WorkoutEntity::startedAt).map { workout ->
+            val sets = setRows.filter { it.workoutId == workout.id }
+            WorkoutTotals(
+                id = workout.id,
+                startedAt = workout.startedAt,
+                endedAt = workout.endedAt,
+                setCount = sets.size,
+                repCount = sets.sumOf(SetEntity::repCount),
+                repsAtDepth = sets.sumOf(SetEntity::repsAtDepth),
+            )
+        },
+    )
 
     override suspend fun setsFor(workoutId: Long): List<SetEntity> =
         setRows.filter { it.workoutId == workoutId }.sortedBy(SetEntity::startedAt)

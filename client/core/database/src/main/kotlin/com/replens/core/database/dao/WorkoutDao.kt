@@ -34,8 +34,22 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE id = :id")
     suspend fun workout(id: Long): WorkoutEntity?
 
-    @Query("SELECT * FROM workouts ORDER BY startedAt DESC")
-    fun workouts(): Flow<List<WorkoutEntity>>
+    @Query(
+        """
+        SELECT
+            workouts.id AS id,
+            workouts.startedAt AS startedAt,
+            workouts.endedAt AS endedAt,
+            COUNT(sets.id) AS setCount,
+            COALESCE(SUM(sets.repCount), 0) AS repCount,
+            COALESCE(SUM(sets.repsAtDepth), 0) AS repsAtDepth
+        FROM workouts
+        LEFT JOIN sets ON sets.workoutId = workouts.id
+        GROUP BY workouts.id
+        ORDER BY workouts.startedAt DESC
+        """,
+    )
+    fun workouts(): Flow<List<WorkoutTotals>>
 
     @Query("SELECT * FROM sets WHERE workoutId = :workoutId ORDER BY startedAt")
     suspend fun setsFor(workoutId: Long): List<SetEntity>
