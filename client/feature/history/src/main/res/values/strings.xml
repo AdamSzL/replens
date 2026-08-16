@@ -44,7 +44,10 @@
     <string name="workout_summary_still_open">Start another set within the hour and it joins this session.</string>
 
     <string name="workout_summary_set_number">Set %1$d</string>
-    <string name="workout_summary_set_reps">%1$d reps · %2$d at depth</string>
+    <plurals name="workout_summary_set_reps">
+        <item quantity="one">%1$d rep · %2$d at depth</item>
+        <item quantity="other">%1$d reps · %2$d at depth</item>
+    </plurals>
     <string name="workout_summary_rest">%1$s rest</string>
     <plurals name="workout_summary_abandoned">
         <item quantity="one">%1$d descent stopped short</item>

@@ -69,8 +69,9 @@ private fun SetRow(
             )
         }
         Text(
-            text = stringResource(
-                R.string.workout_summary_set_reps,
+            text = pluralStringResource(
+                R.plurals.workout_summary_set_reps,
+                set.repCount,
                 set.repCount,
                 set.repsAtDepth,
             ),
@@ -171,13 +172,15 @@ private val session = listOf(
         restMinutes = 2,
         abandonedCount = 1,
     ),
+    // One rep on purpose: the singular is a different string, and it reached a
+    // screenshot reading "1 reps" because no preview ever showed a set this short.
     setRow(
         index = 3,
-        repCount = 8,
-        repsAtDepth = 4,
+        repCount = 1,
+        repsAtDepth = 1,
         seconds = 51,
         restMinutes = 3,
-        abandonedCount = 3,
+        abandonedCount = 1,
     ),
 )
 
