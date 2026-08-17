@@ -43,10 +43,10 @@ class WorkoutSummaryViewModelTest {
     fun `a workout is read and mapped`() = runTest {
         val state = viewModel().state.value
 
-        val loaded = state as WorkoutSummaryState.Loaded
-        assertEquals(3, loaded.totals.repCount)
-        assertEquals(2, loaded.sets.size)
-        val series = loaded.depthChart!!.sets.map { it.angles }
+        val content = state as WorkoutSummaryState.Content
+        assertEquals(3, content.totals.repCount)
+        assertEquals(2, content.sets.size)
+        val series = content.depthChart!!.sets.map { it.angles }
         assertEquals(listOf(listOf(90f, 100f), listOf(80f)), series)
     }
 
@@ -68,7 +68,7 @@ class WorkoutSummaryViewModelTest {
 
         repository.readInFlight?.complete(Unit)
 
-        assertTrue(viewModel.state.value is WorkoutSummaryState.Loaded)
+        assertTrue(viewModel.state.value is WorkoutSummaryState.Content)
     }
 
     @Test
@@ -87,11 +87,11 @@ class WorkoutSummaryViewModelTest {
      */
     @Test
     fun `whether the workout is still open is read from the clock`() = runTest {
-        val soon = viewModel().state.value as WorkoutSummaryState.Loaded
+        val soon = viewModel().state.value as WorkoutSummaryState.Content
         assertTrue(soon.totals.isOpen)
 
         clock.instant = EPOCH + 3.hours
-        val later = viewModel().state.value as WorkoutSummaryState.Loaded
+        val later = viewModel().state.value as WorkoutSummaryState.Content
 
         assertFalse(later.totals.isOpen)
     }

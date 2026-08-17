@@ -43,8 +43,8 @@ private const val AXIS_STEP = 5f
 internal fun Workout.toSummaryState(
     now: Instant,
     config: SquatRepConfig = SquatRepConfig(),
-): WorkoutSummaryState.Loaded {
-    return WorkoutSummaryState.Loaded(
+): WorkoutSummaryState.Content {
+    return WorkoutSummaryState.Content(
         totals = totals(now),
         depthChart = depthChart(config),
         sets = setRows(),

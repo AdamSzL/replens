@@ -10,7 +10,7 @@ internal sealed interface WorkoutSummaryState {
 
     data object NotFound : WorkoutSummaryState
 
-    data class Loaded(
+    data class Content(
         val totals: SessionTotalsUiModel,
         val depthChart: DepthChartUiModel?,
         val sets: List<SetRowUiModel>,

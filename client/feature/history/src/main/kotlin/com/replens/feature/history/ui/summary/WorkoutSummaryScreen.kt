@@ -87,15 +87,15 @@ private fun WorkoutSummaryScreen(
 
                 WorkoutSummaryState.NotFound -> WorkoutNotFound()
 
-                is WorkoutSummaryState.Loaded -> LoadedWorkout(state = screenState)
+                is WorkoutSummaryState.Content -> WorkoutContent(state = screenState)
             }
         }
     }
 }
 
 @Composable
-private fun LoadedWorkout(
-    state: WorkoutSummaryState.Loaded,
+private fun WorkoutContent(
+    state: WorkoutSummaryState.Content,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -143,7 +143,7 @@ private fun WorkoutNotFound(modifier: Modifier = Modifier) {
     }
 }
 
-private val previewState = WorkoutSummaryState.Loaded(
+private val previewState = WorkoutSummaryState.Content(
     totals = SessionTotalsUiModel(
         setCount = 3,
         repCount = 30,
