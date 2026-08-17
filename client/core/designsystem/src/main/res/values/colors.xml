@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The one color that has to exist as a resource as well as in `Palette`: the
+    window is painted by the platform before Compose draws, and it is what shows
+    through a NavDisplay crossfade, where two screens at half alpha cover only
+    75% of what is behind them.
+
+    Must equal `Palette.Light.Slate1` / `Palette.Dark.Slate1`, which is what
+    `RepLensColors.background` resolves to. Nothing enforces that — changing one
+    means changing the other, and the symptom is a flash of the wrong gray for
+    the length of a transition.
+-->
+<resources>
+    <color name="replens_window_background">#FCFCFD</color>
+</resources>
