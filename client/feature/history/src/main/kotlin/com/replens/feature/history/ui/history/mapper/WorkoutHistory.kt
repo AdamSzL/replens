@@ -16,17 +16,17 @@ internal fun List<WorkoutOverview>.toHistoryState(
     zone: ZoneId,
 ): HistoryState {
     if (isEmpty()) return HistoryState.Empty
+    val today = now.toJavaInstant().atZone(zone).toLocalDate()
     return HistoryState.Content(
-        workouts = map { it.toRow(now, zone) },
+        workouts = map { it.toRow(today, zone) },
     )
 }
 
-internal fun WorkoutOverview.toRow(
-    now: Instant,
+private fun WorkoutOverview.toRow(
+    today: LocalDate,
     zone: ZoneId,
 ): WorkoutRowUiModel {
     val started = startedAt.toJavaInstant().atZone(zone)
-    val today = now.toJavaInstant().atZone(zone).toLocalDate()
     return WorkoutRowUiModel(
         id = id,
         day = started.toLocalDate().named(today),

@@ -43,8 +43,12 @@ class WorkoutHistoryTest {
         )
     }
 
-    private fun dayOf(startedAt: String): WorkoutDay =
-        overview(startedAt).toRow(now, zone).day
+    private fun rowOf(overview: WorkoutOverview): WorkoutRowUiModel {
+        val state = listOf(overview).toHistoryState(now, zone)
+        return (state as HistoryState.Content).workouts.single()
+    }
+
+    private fun dayOf(startedAt: String): WorkoutDay = rowOf(overview(startedAt)).day
 
     @Test
     fun `a workout earlier today is today`() {
@@ -104,7 +108,7 @@ class WorkoutHistoryTest {
 
     @Test
     fun `the clock time is the zone's`() {
-        val row = overview("2026-08-17T05:12:00Z").toRow(now, zone)
+        val row = rowOf(overview("2026-08-17T05:12:00Z"))
 
         assertEquals(LocalTime.of(7, 12), row.startedAt)
     }
@@ -127,13 +131,15 @@ class WorkoutHistoryTest {
 
     @Test
     fun `the row carries the totals and the duration it spanned`() {
-        val row = overview(
-            startedAt = "2026-08-17T05:00:00Z",
-            endedAt = "2026-08-17T05:24:00Z",
-            setCount = 3,
-            repCount = 30,
-            repsAtDepth = 21,
-        ).toRow(now, zone)
+        val row = rowOf(
+            overview(
+                startedAt = "2026-08-17T05:00:00Z",
+                endedAt = "2026-08-17T05:24:00Z",
+                setCount = 3,
+                repCount = 30,
+                repsAtDepth = 21,
+            ),
+        )
 
         assertEquals(7L, row.id)
         assertEquals(3, row.setCount)
