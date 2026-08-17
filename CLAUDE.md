@@ -15,11 +15,14 @@ Corollary: **the backend is hand-built (Kotlin + Ktor) and is part of v1** —
 Firebase/BaaS was considered and rejected; building it is part of the fun.
 
 **This file is the rules: what to do, what to avoid, and what has already been
-ruled out.** Two companions carry what it used to:
+ruled out.** Three companions carry what it used to:
 
 - [`docs/status.md`](docs/status.md) — milestones, device-validation results, the
-  roadmap, the backlog. The file that changes every session; keeping it here made
-  these rules churn for no reason.
+  roadmap. The file that changes every session; keeping it here made these rules
+  churn for no reason. **What happened, not what is next.**
+- [GitHub issues](https://github.com/AdamSzL/replens/issues) — the backlog, and
+  the only copy of it. Anything deferred with a reason goes there rather than into
+  a doc, because a duplicate backlog means maintaining the staler half.
 - [`docs/decisions.md`](docs/decisions.md) — the arguments, measurements and
   rejected options behind the rules below. Read it to *reopen* a decision, not to
   follow one.
@@ -132,6 +135,19 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
   `androidTestImplementation`); the IDE's duplicate warning is a false positive.
 - Release runs R8 + resource shrinking; verify `assembleRelease` when adding
   libraries.
+- **Only a `Configuration` change recreates a composition, and the 12/24-hour
+  setting is not one.** `Configuration` carries locale, font scale, orientation
+  and uiMode; `Settings.System.TIME_12_24` is none of those, and toggling it
+  notifies nobody who has not registered a `ContentObserver`. So
+  `DateFormat.is24HourFormat(context)` is read **fresh, deliberately** — a
+  `remember` around it freezes a value nothing invalidates, while reading per
+  composition self-heals on the next one. This was reviewed as an unmemoized read
+  sitting next to a memoized formatter and nearly "fixed" backwards (2026-08-17):
+  the formatter is memoized because `ofPattern` parses a pattern, whereas
+  `is24HourFormat` is a `NameValueCache` lookup. Memoizing the expensive one and
+  not the cheap one is proportionate, not inconsistent. **The general question is
+  "does it need a `Context`", not "is it a device setting"** — a locale change
+  recreates the Activity, a timezone or hour-format change does not.
 - AGP 9 plugin code: `CommonExtension` has no type parameters, and DSL blocks are
   property access (`defaultConfig.minSdk = 26`), except
   `compileSdk { version = release(37) }`.
@@ -155,17 +171,18 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                     …workout.ui.model/      SpokenCue
                     …workout.ui.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
-:feature:history    …history.navigation/    WorkoutSummaryRoute + historyEntries
-                    …history.ui/            the five files. No loading *phase* on
-                                            the workout screen, but there is one
-                                            here, so the state is a bare sealed
-                                            root: Loading / NotFound / Loaded
-                    …history.ui.mapper/     Workout -> the whole screen, plus
-                                            Duration -> UiText
-                    …history.ui.model/      SessionTotals, SetRow, DepthChart
-                    …history.ui.components/ SessionTotals, SetList, DepthChart
-                                            and DepthChartLayout, which is the
-                                            plot's arithmetic with no Canvas
+:feature:history    …history.navigation/    HistoryRoute + WorkoutSummaryRoute +
+                                            historyEntries
+                    …history.ui.common/     mapper/ Duration -> UiText, the only
+                                            thing both screens call
+                    …history.ui.history/    the list: the five files, WorkoutRow,
+                                            WorkoutOverview -> the screen,
+                                            WorkoutDay + WorkoutRowUiModel
+                    …history.ui.summary/    the summary: the five files,
+                                            Workout -> the screen, SessionTotals,
+                                            SetList, DepthChart and
+                                            DepthChartLayout, which is the plot's
+                                            arithmetic with no Canvas
 :core:pose          PoseCameraDataSource: CameraX + ML Kit behind Flow<PoseFrame>
                     + surfaceRequests. PoseMapper is internal — the ML Kit boundary.
 :core:audio         Speaker + TtsSpeaker: one engine, locale negotiation, audio
@@ -198,9 +215,13 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                       …mapper/  …di/
 ```
 
-Planned, not built: `:core:network`, `:feature:{stats,leaderboard}`. **`:feature:history`
-exists but holds only the workout summary** — the history *list* is the next screen,
-and `WorkoutDao` has no `workouts()` because its shape is that screen's question.
+Planned, not built: `:core:network`, `:feature:{stats,leaderboard}`.
+
+**A feature module gets one package per screen** (`ui/history/`, `ui/summary/`),
+each with its own five files, mapper and models, plus `ui/common/` for what both
+call. Something moves to `common` when a **second screen actually calls it**,
+never in anticipation — the duration formatter is the only thing that has earned
+it, and it leaves for `:core:text` the day a second *module* wants it.
 
 ### Key decisions
 
@@ -329,23 +350,22 @@ there is nothing to normalize, and an id also works where a `@Composable` getter
 cannot — notification small icons, shortcuts, `RemoteViews`. Call sites use
 `painterResource`, which covers bitmaps too if one ever appears.
 
-**No `resourcePrefix` yet, deliberately.** Resource merging is flat across
-modules, so same-named resources silently override — but `RepLensIcons` means
-every id has exactly one reference, making a later rename trivial. Turn the
-parked `resourcePrefix` on when a collision-prone generic name appears
-(`ic_close`, `ic_settings`), not before.
+**No `resourcePrefix`, and it is expected never to be needed** — a held opinion
+now rather than a hold pending a trigger. Resource merging is flat across modules,
+so same-named resources silently override, but `RepLensIcons` means every id has
+exactly one reference, making a later rename trivial.
 
-**The same hold applies to strings in feature modules, and it now has a live
-candidate.** `:feature:history` owns `duration_seconds` / `duration_minutes` /
-`duration_hours` — names a stats or history-list screen would plausibly reach for
-too, and a second module defining one silently wins for both, with no error and
-no warning. Prefixing was tried and reverted: **one module cannot collide with
-itself**, so today it buys nothing and costs a prefix on every call site.
-The trigger is the *second* module defining a `duration_*` string. At that point
-prefix both and set `resourcePrefix` per module so it is enforced rather than
-remembered — and note the likelier resolution is that the duration formatter
-moves to `:core:ui` and takes its strings with it, leaving one definition and
-nothing to collide.
+**The strings case was the live candidate, and it resolved the other way.**
+`:feature:history` owns `duration_seconds` / `duration_minutes` /
+`duration_hours` — names a stats screen would plausibly reach for too. Prefixing
+was tried and reverted, because **one module cannot collide with itself**: it
+bought nothing and cost a prefix at every call site. The history list then became
+the second consumer and, being in the same module, collided with nothing — which
+is the prediction holding rather than the trigger firing. When a second *module*
+wants those strings, the answer is that the duration formatter moves to
+`:core:text` and takes them with it, leaving one definition and nothing to
+collide. That is a smaller change than prefixing two modules, and it is why the
+prefix is not waiting in the wings.
 
 ### Haptics
 
@@ -480,13 +500,45 @@ speaks only domain models, wrapped in `Result`.
 
 ### State modeling
 
-Default: a **data class** with screen-level flags plus one
-`val content: <Feature>Content` — a sealed interface with `Loading` / `Error` /
-`Loaded`. Drop to a bare sealed root only when there is genuinely nothing outside
-content; converting back later rewrites every `when` at every call site, and
-screens reliably grow flags. `Loaded`, not `Success` — these are states, not
-completed operations. Not every screen needs it — the workout screen has no
-loading *phase*, though it does have not-yet-known *values* (below).
+**Default: a bare sealed root** — `Loading` / `Empty` / `NotFound` / `Content`,
+which is what both history screens are. This file used to default to a data class
+wrapping `val content: <Feature>Content`, on the grounds that converting later
+*"rewrites every `when` at every call site"*; measured on `HistoryScreen` that is
+three sites in one file plus the test, which is not worth pre-paying for a shape
+no screen has yet. `Content`, not `Loaded` or `Success` — these are states, not
+completed operations. Not every screen needs the root at all: the workout screen
+has no loading *phase*, though it does have not-yet-known *values* (below).
+
+**The first genuinely orthogonal flag earns the wrapper**, and the conversion is
+mechanical — rename `<Feature>State` to `<Feature>Content`, rename its `Content`
+arm to `Loaded`, and add:
+
+```kotlin
+data class <Feature>State(
+    val content: <Feature>Content,
+    val isSaving: Boolean = false,
+)
+```
+
+The arm is renamed because its **container** changed, not because the first name
+was wrong: bare, the type is the state and `Content` is the arm carrying content;
+wrapped, the type *is* the content and the arm names the load state. Two IDE
+renames, inside a change being made deliberately.
+
+**A flag never gets its own `StateFlow`.** Three costs, ascending: two flows can
+be observed mid-update, so a flag and the data it describes can disagree for a
+frame; `<Feature>Screen(state, onAction)` grows a parameter per flag, threaded
+through the Root and every preview; and whole-state `assertEquals` stops covering
+everything — which is the one that matters most here, because the `UiText`
+args-must-be-a-`List` rule exists to keep exactly that assertion working.
+
+**A second `StateFlow` is a statement about update *rate*, not about shape.**
+`poseFrame` has one because Compose subscribes per `State` object, so sharing
+would invalidate the rep counter 30×/s. A save flag flips twice per save — the
+right argument, two orders of magnitude short.
+
+**A flag goes inside an arm** only when it is a property of that arm's data.
+Otherwise a second arm needs it too, and every `when` reads it twice.
 
 **Nullable when it's an observation we haven't made; a plain default when it's a
 choice we made.** A default that stands in for an unasked question is a lie, and
@@ -593,8 +645,9 @@ fragment is optional, write **two whole sentences** and choose between them —
 `Set %1$d` and `Set %1$d · %2$s` — rather than one sentence plus a joiner, so a
 language that inflects the number before a noun can say so. A generic
 `%1$s · %2$s` joiner is the tempting wrong answer: it hands the translator two
-context-free fragments and is exactly the collision-prone name the
-`resourcePrefix` hold above is waiting for.
+context-free fragments, and it is exactly the kind of context-free generic name
+that would make the rejected `resourcePrefix` look necessary — a second reason
+not to write one.
 
 The `Context` overload is what TTS calls, so one `UiText` drives both the on-screen
 cue and the spoken line, and the form-rule engine stays unit-testable.
@@ -815,6 +868,16 @@ both rejected: `Instant - Instant` yields a `kotlin.time.Duration` directly, whi
 is exactly where the gap rule lives, and `java.time` would put two `Duration` types
 in one module. [Comparison](docs/decisions.md#time-types).
 
+**Rejected for the domain and the entities — not banned from the codebase.** The
+history list reaches for `java.time` the moment a question is *calendrical* rather
+than a span: `LocalDate`, `LocalTime`, `ZoneId` and `DateTimeFormatter` have no
+`kotlin.time` equivalent, and *"which calendar day is this instant on, where the
+user is"* is not a question an `Instant` can answer. The line that survives:
+`Instant` and `Duration` cross module boundaries and reach the database;
+`java.time` appears at the UI edge, in a mapper, at the point a zone is applied.
+Both `LocalDate` and `LocalTime` are listed in `compose-stability.conf` for the
+same reason `UiText` is.
+
 **`Duration` over `Long`** because this project has the scar: `READY_FRAMES = 14`,
 *"~0.5 s at ~27 fps"*, was a full second at 15 fps.
 
@@ -865,6 +928,14 @@ spelling of one that already exists.** `repsFor(setId)` went (a subset of
 `repsForWorkout`); `deleteWorkout` stayed and is genuinely test-only, because it is
 the only lever the cascade test can pull and `onDelete = CASCADE` needs a migration
 to add.
+
+**Every `ORDER BY` is total**, each ending in `id`. A partial ordering leaves
+SQLite free to pick an arrangement and free to pick differently when the plan
+changes; `id` is monotonic with insertion, so it refines the intent the query
+already states rather than introducing a second one. This is specifying an order,
+not guarding against a caller — the distinction that keeps it out of the
+speculative-defense bin. `mostRecentWorkout` is the one with teeth: a tie there
+decides which workout a new set *joins*, not merely how a list is arranged.
 
 ### Where these live
 
@@ -1521,7 +1592,7 @@ Completeness is **not** more exercises. It is the app *around* the camera:
 onboarding, setup guidance, history worth browsing, stats worth opening, sensible
 empty states, cues that feel like a coach.
 
-Milestones, progress and the backlog live in `docs/status.md`.
+Milestones and progress live in `docs/status.md`; the backlog is GitHub issues.
 
 ## Conventions
 

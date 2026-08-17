@@ -77,9 +77,9 @@ Last updated 2026-08-17.
   force-stop and relaunch attached to a workout written by the *previous* process,
   10 minutes earlier, so the gap rule reads committed data rather than only its
   own. Cancel and a Finish with no movement each wrote nothing, as designed.
-  What is not built: any screen that reads it back — `workout(id)` has no caller,
-  and `workouts()` does not exist because its shape is the history screen's
-  question to answer.
+  What was not built at the time: any screen that reads it back — `workout(id)`
+  had no caller, and `workouts()` did not exist because its shape was the history
+  screen's question to answer. Both landed since, with the summary and the list.
   **`BundledSQLiteDriver` means Android Studio's Database Inspector may show
   nothing** — it hooks framework SQLite connections, and this driver compiles its
   own. Pull the file instead (`adb exec-out run-as com.replens.app cat
@@ -133,9 +133,24 @@ Last updated 2026-08-17.
   findings about its `Canvas` are false: `verticalScroll` translates a layer rather
   than re-running draw lambdas, and `rememberTextMeasurer` caches internally. The
   30 fps budget in CLAUDE.md is the pose pipeline, not this screen.
-- **Next:** the history *list* — the first screen with a `workouts()` query behind
-  it, and the thing that makes the summary reachable from somewhere other than
-  finishing a set. 279 unit tests.
+- **The history list: done 2026-08-17** (PR #20, nine commits, 56 files). The
+  summary is now reachable from somewhere other than finishing a set — an overlay
+  button on the camera screen, shown only while the session is `Idle`.
+  `WorkoutDao.workouts()` is one grouped query returning `WorkoutTotals`, and the
+  row says *when* rather than *what date*: Today / Yesterday / a weekday for the
+  last week / a date / a date with its year. Both screens moved into a package
+  each (`ui/history/`, `ui/summary/`) with `ui/common/` for the duration
+  formatter. 304 unit tests.
+- **Reviewed by three agents, four fixes landed 2026-08-17.** Nine findings: the
+  year missing from older dates (real, and the only behavior bug), `today`
+  recomputed per row, every DAO `ORDER BY` made total, and `Loaded` renamed to
+  `Content`. Three were rejected on inspection — the depth chart already filters
+  empty sets, `FakeWorkoutRepository`'s `replay = 1` is deliberate so `Loading` is
+  testable, and memoizing `is24HourFormat` would have frozen a setting nothing
+  invalidates (see CLAUDE.md). One was deferred to #21.
+- **Next:** unstarted. The nearest candidates are the app shell (#17 — bottom
+  nav, the Home naming question, a top bar) and the live geometric form rules,
+  which need footage before code.
 
 ## Roadmap
 
@@ -143,8 +158,8 @@ Last updated 2026-08-17.
 2. **The squat** — angles, smoothing, rep state machine, the whole voice channel
    and the first two form cues done; **the live geometric rules (valgus, forward
    lean, heel lift) are what remains, and they need footage before code**.
-3. **Local persistence & app shell** — Room history, the Nav 3 wiring and the
-   workout summary done; the history list and stats screens remain.
+3. **Local persistence & app shell** — Room history, the Nav 3 wiring, the workout
+   summary and the history list done; the shell itself (#17) and stats remain.
 4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
@@ -175,52 +190,10 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
 
 ## Backlog
 
-- Remembering the camera choice and zoom across launches (needs DataStore, which
-  the setup/settings work will bring anyway).
-- Per-category cue switches (same DataStore).
-- Widening the fixture CSVs so framing is testable against real footage.
-- `TtsSpeaker` has no `shutdown()` and holds its engine for the life of the
-  process — defensible for a `@Singleton`, but a choice rather than an oversight.
-- `MainActivity`'s permission gate hardcodes its two strings and uses a raw M3
-  `Button`; `CameraPermissionGate` also paints no background, so what shows behind
-  it is `windowBackground` from `themes.xml` — light in both themes today. All of
-  it lands with the real permission flow.
-- Parked for the library convention plugin when they earn their keep:
-  `resourcePrefix`, default `testInstrumentationRunner`, `animationsDisabled`,
-  `disableUnnecessaryAndroidTests`.
-- **Tapping a mark on the depth chart.** The touch target is not the problem it
-  looks like: hit-test the *nearest* mark to the tap's x rather than the 10dp
-  circle, so every point in the plot belongs to exactly one rep and spacing stops
-  mattering. `markGroups()` already has the positions. Three things it decides:
-  what the readout says (a raw `62.7°` is developer-facing — the interior/flexion
-  trap means it tells a lifter nothing, so it wants framing against parallel or
-  against the session); that it is **the first reader for `Rep.descent` and
-  `Rep.ascent`**, which are stored today on the "unrecoverable after the fact"
-  argument and would show tempo per rep, more interesting than depth per rep
-  since depth is already the y-axis; and that `DepthChartSetUiModel` grows past
-  bare floats to carry rep identity and timings. A popup is probably the wrong
-  surface — it clips against the card and sits under the thumb — so let the
-  selection drive a line below the plot, where the legend already is.
-
-- **The workout summary against a second exercise.** Audited 2026-08-16, and the
-  screen turns out to be narrower-shaped than it looks: rep counts, at-depth
-  counts, set counts and durations are all exercise-agnostic arithmetic, and the
-  set list is a chronological log that already names the exercise when a workout
-  mixes two. **Grouping that list by exercise would be the wrong fix** — it
-  reorders history and breaks supersets.
-  The one thing that does not generalize is the **y-axis**: 95° of knee and 90° of
-  elbow cannot share a scale, and the threshold, the label and the direction are
-  per-exercise. So `depthChart: DepthChartUiModel?` becomes one chart per
-  exercise, each titled, `null` for an exercise with no angle metric — which the
-  current nullable already models. A mapper change plus a title field; the Canvas
-  does not move.
-  Two questions only exercise #2 answers, so they are not guessed at now:
-  whether `repsAtDepth` is squat vocabulary (if push-up depth and curl range are
-  the same idea it is `repsAtFullRange` and the schema gets a free rename while
-  the population is one phone; if they are not, the totals card loses its middle
-  line and quality goes per-exercise), and whether one angle per rep is even the
-  right shape — probably yes for push-ups and curls, both elbow, which is two of
-  the three the scope guard allows.
+**Moved to [GitHub issues](https://github.com/AdamSzL/replens/issues).** It was a
+duplicate of them and the issues were the fuller copy, so keeping both meant
+maintaining the worse one. This file keeps what *happened*; issues keep what is
+next.
 
 ## Reference
 
