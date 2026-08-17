@@ -2,6 +2,9 @@ package com.replens.feature.workout.ui
 
 import androidx.camera.compose.CameraXViewfinder
 import androidx.camera.core.SurfaceRequest
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +14,9 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -31,12 +37,14 @@ import com.replens.core.model.RepPhase
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.ZoomRange
+import com.replens.core.ui.FadeExitTransition
 import com.replens.core.ui.ObserveAsEvents
 import com.replens.feature.workout.R
 import com.replens.feature.workout.ui.components.PoseOverlay
 import com.replens.feature.workout.ui.components.RepCounter
 import com.replens.feature.workout.ui.components.SessionControls
 import com.replens.feature.workout.ui.components.ZoomControl
+import androidx.camera.core.Preview as CameraPreview
 
 @Composable
 internal fun WorkoutRoot(
@@ -86,12 +94,16 @@ private fun WorkoutScreen(
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
+    var hasStreamed by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         surfaceRequest?.let { request ->
             CameraXViewfinder(
                 surfaceRequest = request,
                 modifier = Modifier.fillMaxSize(),
+                onStreamStateChanged = { streamState ->
+                    if (streamState == CameraPreview.STREAM_STATE_STREAMING) hasStreamed = true
+                },
             )
         }
         // The viewfinder mirrors the front preview but analysis frames are never
@@ -101,6 +113,17 @@ private fun WorkoutScreen(
             mirrored = state.cameraFacing == CameraFacing.FRONT,
             modifier = Modifier.fillMaxSize(),
         )
+        AnimatedVisibility(
+            visible = surfaceRequest != null && !hasStreamed,
+            enter = EnterTransition.None,
+            exit = FadeExitTransition,
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(RepLensTheme.colors.background),
+            )
+        }
         // The preview and overlay stay edge to edge; only the controls are inset,
         // or the system bars and a punch-hole cutout sit on top of them.
         Box(
