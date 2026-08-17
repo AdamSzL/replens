@@ -25,7 +25,7 @@ interface WorkoutDao {
      * The workout a starting set might belong to. The caller decides whether it is
      * recent enough — the cutoff is a product rule, not a schema one.
      */
-    @Query("SELECT * FROM workouts ORDER BY endedAt DESC LIMIT 1")
+    @Query("SELECT * FROM workouts ORDER BY endedAt DESC, id DESC LIMIT 1")
     suspend fun mostRecentWorkout(): WorkoutEntity?
 
     @Query("UPDATE workouts SET endedAt = :endedAt, updatedAt = :updatedAt, isDirty = 1 WHERE id = :id")
@@ -46,12 +46,12 @@ interface WorkoutDao {
         FROM workouts
         LEFT JOIN sets ON sets.workoutId = workouts.id
         GROUP BY workouts.id
-        ORDER BY workouts.startedAt DESC
+        ORDER BY workouts.startedAt DESC, workouts.id DESC
         """,
     )
     fun workouts(): Flow<List<WorkoutTotals>>
 
-    @Query("SELECT * FROM sets WHERE workoutId = :workoutId ORDER BY startedAt")
+    @Query("SELECT * FROM sets WHERE workoutId = :workoutId ORDER BY startedAt, id")
     suspend fun setsFor(workoutId: Long): List<SetEntity>
 
     /**
