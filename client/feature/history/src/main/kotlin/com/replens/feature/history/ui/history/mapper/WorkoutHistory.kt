@@ -43,6 +43,6 @@ private fun LocalDate.named(today: LocalDate): WorkoutDay {
         0L -> WorkoutDay.Today
         1L -> WorkoutDay.Yesterday
         in 2L..6L -> WorkoutDay.Weekday(dayOfWeek)
-        else -> WorkoutDay.Earlier(this)
+        else -> if (year == today.year) WorkoutDay.ThisYear(this) else WorkoutDay.Earlier(this)
     }
 }

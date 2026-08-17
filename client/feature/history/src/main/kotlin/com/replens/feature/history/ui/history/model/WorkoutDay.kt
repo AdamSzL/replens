@@ -9,5 +9,6 @@ internal sealed interface WorkoutDay {
     data object Today : WorkoutDay
     data object Yesterday : WorkoutDay
     data class Weekday(val day: DayOfWeek) : WorkoutDay
+    data class ThisYear(val date: LocalDate) : WorkoutDay
     data class Earlier(val date: LocalDate) : WorkoutDay
 }

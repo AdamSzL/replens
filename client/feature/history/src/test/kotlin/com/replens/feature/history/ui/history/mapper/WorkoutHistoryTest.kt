@@ -73,7 +73,18 @@ class WorkoutHistoryTest {
 
     @Test
     fun `seven days back falls back to a date`() {
-        assertEquals(WorkoutDay.Earlier(LocalDate.of(2026, 8, 10)), dayOf("2026-08-10T05:00:00Z"))
+        assertEquals(WorkoutDay.ThisYear(LocalDate.of(2026, 8, 10)), dayOf("2026-08-10T05:00:00Z"))
+    }
+
+    /**
+     * A date names one day only within its year, so the arm that carries the year
+     * starts where the current one ends — not at a fixed distance, which would put
+     * two identically labelled rows next to each other across a new year.
+     */
+    @Test
+    fun `a date in another year is told apart from one in this year`() {
+        assertEquals(WorkoutDay.Earlier(LocalDate.of(2025, 12, 31)), dayOf("2025-12-31T05:00:00Z"))
+        assertEquals(WorkoutDay.ThisYear(LocalDate.of(2026, 1, 1)), dayOf("2026-01-01T05:00:00Z"))
     }
 
     /**
@@ -88,7 +99,7 @@ class WorkoutHistoryTest {
     /** A clock set forward, or set back after training. A date is the honest answer. */
     @Test
     fun `a workout dated after today reads as a date`() {
-        assertEquals(WorkoutDay.Earlier(LocalDate.of(2026, 8, 18)), dayOf("2026-08-18T05:00:00Z"))
+        assertEquals(WorkoutDay.ThisYear(LocalDate.of(2026, 8, 18)), dayOf("2026-08-18T05:00:00Z"))
     }
 
     @Test

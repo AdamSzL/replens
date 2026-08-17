@@ -91,7 +91,8 @@ private fun WorkoutDay.asLabel(): String {
         WorkoutDay.Today -> stringResource(R.string.history_today)
         WorkoutDay.Yesterday -> stringResource(R.string.history_yesterday)
         is WorkoutDay.Weekday -> day.getDisplayName(TextStyle.FULL, locale())
-        is WorkoutDay.Earlier -> date.format(rememberDateTimeFormatter(DATE_SKELETON))
+        is WorkoutDay.ThisYear -> date.format(rememberDateTimeFormatter(DATE_SKELETON))
+        is WorkoutDay.Earlier -> date.format(rememberDateTimeFormatter(DATE_WITH_YEAR_SKELETON))
     }
 }
 
@@ -116,6 +117,7 @@ private fun rememberDateTimeFormatter(skeleton: String): DateTimeFormatter {
 private fun locale(): Locale = LocalLocale.current.platformLocale
 
 private const val DATE_SKELETON = "dMMM"
+private const val DATE_WITH_YEAR_SKELETON = "dMMMy"
 
 private val previewWorkout = WorkoutRowUiModel(
     id = 1,
@@ -143,7 +145,7 @@ private fun WorkoutRowDarkThemePreview() {
     }
 }
 
-/** The three labels that are not "Today", and the one that has to wrap. */
+/** The four labels that are not "Today", and the one that has to wrap. */
 @Preview
 @Composable
 private fun WorkoutRowDayLabelsPreview() {
@@ -161,7 +163,13 @@ private fun WorkoutRowDayLabelsPreview() {
             )
             WorkoutRow(
                 workout = previewWorkout.copy(
-                    day = WorkoutDay.Earlier(LocalDate.of(2026, 8, 10)),
+                    day = WorkoutDay.ThisYear(LocalDate.of(2026, 8, 10)),
+                ),
+                onClick = {},
+            )
+            WorkoutRow(
+                workout = previewWorkout.copy(
+                    day = WorkoutDay.Earlier(LocalDate.of(2025, 8, 10)),
                 ),
                 onClick = {},
             )

@@ -188,10 +188,17 @@ private val previewState = HistoryState.Content(
         ),
         previewRow(
             id = 4,
-            day = WorkoutDay.Earlier(LocalDate.of(2026, 8, 10)),
+            day = WorkoutDay.ThisYear(LocalDate.of(2026, 8, 10)),
             startedAt = LocalTime.of(12, 15),
             repCount = 18,
             repsAtDepth = 9,
+        ),
+        previewRow(
+            id = 5,
+            day = WorkoutDay.Earlier(LocalDate.of(2025, 11, 2)),
+            startedAt = LocalTime.of(9, 30),
+            repCount = 21,
+            repsAtDepth = 15,
         ),
     ),
 )
