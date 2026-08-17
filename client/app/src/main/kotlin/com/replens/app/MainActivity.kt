@@ -31,6 +31,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.replens.core.designsystem.theme.RepLensTheme
+import com.replens.core.ui.FadeContentTransform
 import com.replens.feature.history.navigation.HistoryRoute
 import com.replens.feature.history.navigation.WorkoutSummaryRoute
 import com.replens.feature.history.navigation.historyEntries
@@ -57,6 +58,8 @@ private fun RepLensNavDisplay() {
 
     NavDisplay(
         backStack = backStack,
+        transitionSpec = { FadeContentTransform },
+        popTransitionSpec = { FadeContentTransform },
         entryDecorators = listOf(
             rememberSaveableStateHolderNavEntryDecorator(),
             rememberViewModelStoreNavEntryDecorator(),

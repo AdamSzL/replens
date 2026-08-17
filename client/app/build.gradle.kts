@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(projects.core.designsystem)
+    implementation(projects.core.ui)
     implementation(projects.feature.history)
     implementation(projects.feature.workout)
 }
