@@ -19,6 +19,8 @@ internal sealed interface WorkoutAction {
 
     data object CameraFlipClicked : WorkoutAction
 
+    data object HistoryClicked : WorkoutAction
+
     data object StartClicked : WorkoutAction
 
     /** Backing out of [SessionState.Waiting] or [SessionState.CountingIn]. */
