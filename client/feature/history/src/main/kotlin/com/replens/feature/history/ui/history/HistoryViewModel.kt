@@ -3,12 +3,11 @@ package com.replens.feature.history.ui.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.replens.core.data.WorkoutRepository
+import com.replens.core.ui.EventChannel
 import com.replens.feature.history.ui.history.mapper.toHistoryState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.time.ZoneId
 import javax.inject.Inject
@@ -24,8 +23,8 @@ internal class HistoryViewModel @Inject constructor(
     val state: StateFlow<HistoryState>
         field = MutableStateFlow<HistoryState>(HistoryState.Loading)
 
-    private val eventChannel = Channel<HistoryEvent>(Channel.BUFFERED)
-    val events = eventChannel.receiveAsFlow()
+    private val eventChannel = EventChannel<HistoryEvent>(viewModelScope)
+    val events = eventChannel.events
 
     init {
         viewModelScope.launch {
@@ -40,16 +39,16 @@ internal class HistoryViewModel @Inject constructor(
 
     fun onAction(action: HistoryAction) {
         when (action) {
-            HistoryAction.BackClicked -> send(HistoryEvent.NavigateBack)
-            is HistoryAction.WorkoutClicked -> {
-                send(HistoryEvent.NavigateToWorkout(action.workoutId))
-            }
+            HistoryAction.BackClicked -> navigateBack()
+            is HistoryAction.WorkoutClicked -> navigateToWorkout(action.workoutId)
         }
     }
 
-    private fun send(event: HistoryEvent) {
-        viewModelScope.launch {
-            eventChannel.send(event)
-        }
+    private fun navigateBack() {
+        eventChannel.send(HistoryEvent.NavigateBack)
+    }
+
+    private fun navigateToWorkout(workoutId: Long) {
+        eventChannel.send(HistoryEvent.NavigateToWorkout(workoutId))
     }
 }

@@ -20,16 +20,15 @@ import com.replens.core.model.Rep
 import com.replens.core.model.RepPhase
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
+import com.replens.core.ui.EventChannel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -58,8 +57,8 @@ internal class WorkoutViewModel @Inject constructor(
     val poseFrame: StateFlow<PoseFrame?>
         field = MutableStateFlow(null)
 
-    private val eventChannel = Channel<WorkoutEvent>(Channel.BUFFERED)
-    val events = eventChannel.receiveAsFlow()
+    private val eventChannel = EventChannel<WorkoutEvent>(viewModelScope)
+    val events = eventChannel.events
 
     private val smoother = PoseSmoother()
     // Shared so the counter and the depth grading cannot disagree about the bottom.
@@ -134,9 +133,7 @@ internal class WorkoutViewModel @Inject constructor(
     }
 
     private fun openHistory() {
-        viewModelScope.launch {
-            eventChannel.send(WorkoutEvent.NavigateToHistory)
-        }
+        eventChannel.send(WorkoutEvent.NavigateToHistory)
     }
 
     private fun startCamera(lifecycleOwner: LifecycleOwner) {

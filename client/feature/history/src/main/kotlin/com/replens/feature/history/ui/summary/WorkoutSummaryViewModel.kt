@@ -3,15 +3,14 @@ package com.replens.feature.history.ui.summary
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.replens.core.data.WorkoutRepository
+import com.replens.core.ui.EventChannel
 import com.replens.feature.history.ui.summary.mapper.toSummaryState
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
@@ -30,8 +29,8 @@ internal class WorkoutSummaryViewModel @AssistedInject constructor(
     val state: StateFlow<WorkoutSummaryState>
         field = MutableStateFlow<WorkoutSummaryState>(WorkoutSummaryState.Loading)
 
-    private val eventChannel = Channel<WorkoutSummaryEvent>(Channel.BUFFERED)
-    val events = eventChannel.receiveAsFlow()
+    private val eventChannel = EventChannel<WorkoutSummaryEvent>(viewModelScope)
+    val events = eventChannel.events
 
     init {
         viewModelScope.launch {
@@ -47,8 +46,6 @@ internal class WorkoutSummaryViewModel @AssistedInject constructor(
     }
 
     private fun navigateBack() {
-        viewModelScope.launch {
-            eventChannel.send(WorkoutSummaryEvent.NavigateBack)
-        }
+        eventChannel.send(WorkoutSummaryEvent.NavigateBack)
     }
 }
