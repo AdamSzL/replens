@@ -78,7 +78,7 @@ private fun SetRow(
         }
         Text(
             text = pluralStringResource(
-                R.plurals.workout_summary_set_reps,
+                R.plurals.workout_reps_at_depth,
                 set.repCount,
                 set.repCount,
                 set.repsAtDepth,

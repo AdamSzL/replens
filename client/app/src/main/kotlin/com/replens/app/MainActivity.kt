@@ -67,7 +67,8 @@ private fun RepLensNavDisplay() {
                 }
             )
             historyEntries(
-                onBack = { backStack.removeLastOrNull() }
+                onBack = { backStack.removeLastOrNull() },
+                onWorkoutClick = { backStack.add(WorkoutSummaryRoute(it)) },
             )
         },
     )

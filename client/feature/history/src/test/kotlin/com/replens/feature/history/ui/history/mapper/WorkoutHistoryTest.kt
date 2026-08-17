@@ -3,7 +3,9 @@ package com.replens.feature.history.ui.history.mapper
 import com.replens.core.model.WorkoutOverview
 import com.replens.core.text.UiText
 import com.replens.feature.history.R
+import com.replens.feature.history.ui.history.HistoryState
 import com.replens.feature.history.ui.history.model.WorkoutDay
+import com.replens.feature.history.ui.history.model.WorkoutRowUiModel
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.DayOfWeek
@@ -94,6 +96,22 @@ class WorkoutHistoryTest {
         val row = overview("2026-08-17T05:12:00Z").toRow(now, zone)
 
         assertEquals(LocalTime.of(7, 12), row.startedAt)
+    }
+
+    @Test
+    fun `an empty list is Empty, not a Content holding nothing`() {
+        assertEquals(HistoryState.Empty, emptyList<WorkoutOverview>().toHistoryState(now, zone))
+    }
+
+    @Test
+    fun `a list maps to rows in the order it arrived`() {
+        val state = listOf(
+            overview("2026-08-17T05:00:00Z"),
+            overview("2026-08-16T05:00:00Z"),
+        ).toHistoryState(now, zone)
+
+        val days = (state as HistoryState.Content).workouts.map(WorkoutRowUiModel::day)
+        assertEquals(listOf(WorkoutDay.Today, WorkoutDay.Yesterday), days)
     }
 
     @Test

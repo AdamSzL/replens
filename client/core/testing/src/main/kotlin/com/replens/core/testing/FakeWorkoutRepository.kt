@@ -7,7 +7,7 @@ import com.replens.core.model.Workout
 import com.replens.core.model.WorkoutOverview
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlin.time.Instant
 
 /**
@@ -28,10 +28,15 @@ class FakeWorkoutRepository(
      * screen is already collecting — which is the behavior that separates a
      * reactive list from one that reads once.
      *
+     * Emits nothing until a test says so, for the same reason the `inFlight`
+     * gates exist: a `StateFlow` starting at `emptyList()` would answer "no
+     * workouts" before the query has run, and no test could tell the screen's
+     * loading state from its empty one.
+     *
      * Independent of [stored] rather than derived from it: the two answer
      * different callers, and no test wants both.
      */
-    val overviews = MutableStateFlow<List<WorkoutOverview>>(emptyList())
+    val overviews = MutableSharedFlow<List<WorkoutOverview>>(replay = 1)
 
     data class Recorded(
         val exercise: Exercise,

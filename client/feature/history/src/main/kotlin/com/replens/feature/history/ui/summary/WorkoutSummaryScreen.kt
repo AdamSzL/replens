@@ -83,7 +83,7 @@ private fun WorkoutSummaryScreen(
             modifier = Modifier.fillMaxSize(),
         ) { screenState ->
             when (screenState) {
-                WorkoutSummaryState.Loading -> Box(Modifier.fillMaxSize())
+                WorkoutSummaryState.Loading -> Unit
 
                 WorkoutSummaryState.NotFound -> WorkoutNotFound()
 

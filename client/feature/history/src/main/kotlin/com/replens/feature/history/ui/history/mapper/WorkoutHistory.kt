@@ -2,6 +2,7 @@ package com.replens.feature.history.ui.history.mapper
 
 import com.replens.core.model.WorkoutOverview
 import com.replens.feature.history.ui.common.mapper.toUiText
+import com.replens.feature.history.ui.history.HistoryState
 import com.replens.feature.history.ui.history.model.WorkoutDay
 import com.replens.feature.history.ui.history.model.WorkoutRowUiModel
 import java.time.LocalDate
@@ -9,6 +10,16 @@ import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
+
+internal fun List<WorkoutOverview>.toHistoryState(
+    now: Instant,
+    zone: ZoneId,
+): HistoryState {
+    if (isEmpty()) return HistoryState.Empty
+    return HistoryState.Content(
+        workouts = map { it.toRow(now, zone) },
+    )
+}
 
 internal fun WorkoutOverview.toRow(
     now: Instant,
