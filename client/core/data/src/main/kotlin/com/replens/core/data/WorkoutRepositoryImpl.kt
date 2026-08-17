@@ -3,12 +3,16 @@ package com.replens.core.data
 import com.replens.core.data.mapper.toDomain
 import com.replens.core.data.mapper.toEntity
 import com.replens.core.database.dao.WorkoutDao
+import com.replens.core.database.dao.WorkoutTotals
 import com.replens.core.database.entity.RepEntity
 import com.replens.core.database.entity.SetEntity
 import com.replens.core.database.entity.WorkoutEntity
 import com.replens.core.model.Exercise
 import com.replens.core.model.Rep
 import com.replens.core.model.Workout
+import com.replens.core.model.WorkoutOverview
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import kotlin.time.Instant
 
@@ -60,6 +64,9 @@ internal class WorkoutRepositoryImpl @Inject constructor(
             reps = repRows,
         )
     }
+
+    override fun workouts(): Flow<List<WorkoutOverview>> =
+        dao.workouts().map { rows -> rows.map(WorkoutTotals::toDomain) }
 
     override suspend fun workout(id: Long): Workout? {
         val entity = dao.workout(id) ?: return null

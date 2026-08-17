@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="workout_flip_camera">Switch camera</string>
+    <string name="workout_open_history">Workout history</string>
     <string name="workout_start_set">Start set</string>
     <string name="workout_setup_no_pose">Step into frame</string>
     <string name="workout_setup_too_close">Step back from the phone</string>

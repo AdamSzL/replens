@@ -31,6 +31,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.replens.core.designsystem.theme.RepLensTheme
+import com.replens.feature.history.navigation.HistoryRoute
 import com.replens.feature.history.navigation.WorkoutSummaryRoute
 import com.replens.feature.history.navigation.historyEntries
 import com.replens.feature.workout.navigation.WorkoutRoute
@@ -64,10 +65,14 @@ private fun RepLensNavDisplay() {
             workoutEntries(
                 navigateToSummary = {
                     backStack.add(WorkoutSummaryRoute(it))
-                }
+                },
+                navigateToHistory = {
+                    backStack.add(HistoryRoute)
+                },
             )
             historyEntries(
-                onBack = { backStack.removeLastOrNull() }
+                onBack = { backStack.removeLastOrNull() },
+                onWorkoutClick = { backStack.add(WorkoutSummaryRoute(it)) },
             )
         },
     )

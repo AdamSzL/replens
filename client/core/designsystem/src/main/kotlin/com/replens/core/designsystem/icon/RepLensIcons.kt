@@ -18,4 +18,7 @@ object RepLensIcons {
 
     @DrawableRes
     val CameraSwitch = R.drawable.ic_camera_switch
+
+    @DrawableRes
+    val History = R.drawable.ic_history
 }

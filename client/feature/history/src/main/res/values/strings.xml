@@ -13,6 +13,30 @@
 
     <string name="exercise_squat">Squat</string>
 
+    <!--
+      Read by both screens, so neither name says "summary": the list draws a
+      workout's totals with the same two lines the summary draws a set's with.
+    -->
+    <plurals name="workout_sets_duration">
+        <item quantity="one">%1$d set · %2$s</item>
+        <item quantity="other">%1$d sets · %2$s</item>
+    </plurals>
+    <plurals name="workout_reps_at_depth">
+        <item quantity="one">%1$d rep · %2$d at depth</item>
+        <item quantity="other">%1$d reps · %2$d at depth</item>
+    </plurals>
+
+    <string name="history_title">History</string>
+    <string name="history_back">Back</string>
+    <string name="history_empty_title">No workouts yet</string>
+    <string name="history_empty_body">Finish a set and it lands here.</string>
+    <!--
+      Only these two are words. A weekday and a date are formatted against the
+      user's locale instead, which no string resource can express.
+    -->
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+
     <string name="workout_summary_title">Workout</string>
     <string name="workout_summary_back">Back</string>
     <string name="workout_summary_not_found">This workout is no longer here.</string>
@@ -20,10 +44,6 @@
     <plurals name="workout_summary_reps">
         <item quantity="one">rep</item>
         <item quantity="other">reps</item>
-    </plurals>
-    <plurals name="workout_summary_sets_duration">
-        <item quantity="one">%1$d set · %2$s</item>
-        <item quantity="other">%1$d sets · %2$s</item>
     </plurals>
     <!--
       Read by TalkBack in place of the plot. Deliberately without degrees: the
@@ -48,10 +68,6 @@
     -->
     <string name="workout_summary_set_number">Set %1$d</string>
     <string name="workout_summary_set_number_exercise">Set %1$d · %2$s</string>
-    <plurals name="workout_summary_set_reps">
-        <item quantity="one">%1$d rep · %2$d at depth</item>
-        <item quantity="other">%1$d reps · %2$d at depth</item>
-    </plurals>
     <string name="workout_summary_rest">%1$s rest</string>
     <plurals name="workout_summary_abandoned">
         <item quantity="one">%1$d descent stopped short</item>

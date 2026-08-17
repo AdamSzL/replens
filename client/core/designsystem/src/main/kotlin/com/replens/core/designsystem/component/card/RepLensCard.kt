@@ -15,15 +15,40 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.theme.RepLensTheme
 
+private val CardShape = RoundedCornerShape(16.dp)
+private val CardPadding = PaddingValues(16.dp)
+
 @Composable
 fun RepLensCard(
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(16.dp),
+    contentPadding: PaddingValues = CardPadding,
     content: @Composable () -> Unit,
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = CardShape,
+        color = RepLensTheme.colors.surface,
+        contentColor = RepLensTheme.colors.onSurface,
+    ) {
+        Box(
+            modifier = Modifier.padding(contentPadding),
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun RepLensCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = CardPadding,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = CardShape,
         color = RepLensTheme.colors.surface,
         contentColor = RepLensTheme.colors.onSurface,
     ) {

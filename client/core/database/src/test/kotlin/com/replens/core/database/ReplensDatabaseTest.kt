@@ -2,6 +2,7 @@ package com.replens.core.database
 
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.replens.core.database.dao.WorkoutTotals
 import com.replens.core.database.entity.RepEntity
 import com.replens.core.database.entity.SetEntity
 import com.replens.core.database.entity.WorkoutEntity
@@ -173,8 +174,38 @@ class ReplensDatabaseTest {
 
         assertEquals(
             listOf(9_000L, 5_000L, 1_000L),
-            dao.workouts().first().map(WorkoutEntity::startedAt),
+            dao.workouts().first().map(WorkoutTotals::startedAt),
         )
+    }
+
+    /** The whole reason the counts are denormalized onto sets: one join, no reps. */
+    @Test
+    fun `a workout totals up its sets`() = runTest {
+        val workoutId = insertWorkout(startedAt = 1_000L, endedAt = 2_000L)
+        dao.recordSet(set(workoutId, repCount = 5).copy(repsAtDepth = 4)) { listOf(rep(it, 1)) }
+        dao.recordSet(set(workoutId, repCount = 3).copy(repsAtDepth = 1)) { listOf(rep(it, 1)) }
+
+        val totals = dao.workouts().first().single()
+
+        assertEquals(2, totals.setCount)
+        assertEquals(8, totals.repCount)
+        assertEquals(5, totals.repsAtDepth)
+    }
+
+    /**
+     * Unreachable — [WorkoutDao.recordFirstSet] writes both in one transaction —
+     * and pinned anyway, because the alternative join silently drops such a row
+     * and would make a broken transaction invisible instead of merely wrong.
+     */
+    @Test
+    fun `a workout with no sets reads as zeros rather than disappearing`() = runTest {
+        insertWorkout(startedAt = 1_000L, endedAt = 2_000L)
+
+        val totals = dao.workouts().first().single()
+
+        assertEquals(0, totals.setCount)
+        assertEquals(0, totals.repCount)
+        assertEquals(0, totals.repsAtDepth)
     }
 
     /**
@@ -197,6 +228,31 @@ class ReplensDatabaseTest {
         collecting.cancel()
 
         assertEquals(listOf(0, 1, 2), sizes)
+    }
+
+    /**
+     * The row count does not move here — the *counts on it* do, which is what a
+     * second set joining an open workout looks like on this screen.
+     *
+     * Inserted directly rather than through [WorkoutDao.recordSet], deliberately:
+     * that also calls `touchWorkout`, so the write to `workouts` alone would
+     * trigger the re-emission and the test would pass without `sets` being
+     * observed at all. Bypassing it is the only way to pin the join's half.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `the workout list emits again when only a set is written`() = runTest {
+        val workoutId = insertWorkout(startedAt = 1_000L, endedAt = 2_000L)
+        val counts = mutableListOf<Int>()
+        val collecting = backgroundScope.launch(Dispatchers.Unconfined) {
+            dao.workouts().collect { counts += it.single().repCount }
+        }
+
+        dao.insert(set(workoutId, repCount = 4))
+        advanceUntilIdle()
+        collecting.cancel()
+
+        assertEquals(listOf(0, 4), counts)
     }
 
     @Test

@@ -125,10 +125,17 @@ internal class WorkoutViewModel @Inject constructor(
             WorkoutAction.ScreenDetached -> releaseCamera()
             is WorkoutAction.ZoomSelected -> selectZoom(action.ratio)
             WorkoutAction.CameraFlipClicked -> flipCamera()
+            WorkoutAction.HistoryClicked -> openHistory()
             WorkoutAction.StartClicked, WorkoutAction.GoAgainClicked -> startSet()
             WorkoutAction.CancelClicked -> cancelSet()
             WorkoutAction.FinishClicked -> finishSet()
             WorkoutAction.DoneClicked -> doneWithSet()
+        }
+    }
+
+    private fun openHistory() {
+        viewModelScope.launch {
+            eventChannel.send(WorkoutEvent.NavigateToHistory)
         }
     }
 
