@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,17 +26,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.replens.app.navigation.Navigator
+import com.replens.app.navigation.RepLensBottomNavigation
+import com.replens.app.navigation.TopLevelDestination
+import com.replens.app.navigation.rememberNavigationState
+import com.replens.app.navigation.rememberRepLensNavigationSceneDecoratorStrategy
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.ui.FadeContentTransform
 import com.replens.feature.history.navigation.HistoryRoute
 import com.replens.feature.history.navigation.WorkoutSummaryRoute
 import com.replens.feature.history.navigation.historyEntries
-import com.replens.feature.workout.navigation.WorkoutRoute
 import com.replens.feature.workout.navigation.workoutEntries
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -54,31 +56,43 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun RepLensNavDisplay() {
-    val backStack = rememberNavBackStack(WorkoutRoute)
+    SharedTransitionLayout {
+        val navigationState = rememberNavigationState(
+            startRoute = HistoryRoute,
+            topLevelRoutes = TopLevelDestination.entries.map { it.route }.toSet(),
+        )
+        val navigator = remember(navigationState) { Navigator(navigationState) }
 
-    NavDisplay(
-        backStack = backStack,
-        transitionSpec = { FadeContentTransform },
-        popTransitionSpec = { FadeContentTransform },
-        entryDecorators = listOf(
-            rememberSaveableStateHolderNavEntryDecorator(),
-            rememberViewModelStoreNavEntryDecorator(),
-        ),
-        entryProvider = entryProvider {
-            workoutEntries(
-                navigateToSummary = {
-                    backStack.add(WorkoutSummaryRoute(it))
-                },
-                navigateToHistory = {
-                    backStack.add(HistoryRoute)
-                },
-            )
-            historyEntries(
-                onBack = { backStack.removeLastOrNull() },
-                onWorkoutClick = { backStack.add(WorkoutSummaryRoute(it)) },
-            )
-        },
-    )
+        val navDecorator = rememberRepLensNavigationSceneDecoratorStrategy(
+            navBar = {
+                RepLensBottomNavigation(
+                    selectedRoute = navigator.topLevelRoute,
+                    onDestinationClick = navigator::navigate,
+                )
+            },
+            sharedTransitionScope = this,
+        )
+
+        NavDisplay(
+            entries = navigationState.toDecoratedEntries(
+                entryProvider {
+                    workoutEntries(
+                        navigateToSummary = { navigator.navigate(WorkoutSummaryRoute(it)) },
+                        navigateToHistory = { navigator.navigate(HistoryRoute) },
+                    )
+                    historyEntries(
+                        onBack = navigator::goBack,
+                        onWorkoutClick = { navigator.navigate(WorkoutSummaryRoute(it)) },
+                    )
+                }
+            ),
+            sceneDecoratorStrategies = listOf(navDecorator),
+            sharedTransitionScope = this,
+            transitionSpec = { FadeContentTransform },
+            popTransitionSpec = { FadeContentTransform },
+            onBack = navigator::goBack,
+        )
+    }
 }
 
 @Composable

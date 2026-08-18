@@ -111,11 +111,4 @@ class HistoryViewModelTest {
 
         assertEquals(HistoryEvent.NavigateToWorkout(7), viewModel.events.first())
     }
-
-    @Test
-    fun `back navigates back`() = runTest {
-        viewModel.onAction(HistoryAction.BackClicked)
-
-        assertEquals(HistoryEvent.NavigateBack, viewModel.events.first())
-    }
 }

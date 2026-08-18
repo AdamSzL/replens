@@ -39,13 +39,8 @@ internal class HistoryViewModel @Inject constructor(
 
     fun onAction(action: HistoryAction) {
         when (action) {
-            HistoryAction.BackClicked -> navigateBack()
             is HistoryAction.WorkoutClicked -> navigateToWorkout(action.workoutId)
         }
-    }
-
-    private fun navigateBack() {
-        eventChannel.send(HistoryEvent.NavigateBack)
     }
 
     private fun navigateToWorkout(workoutId: Long) {
