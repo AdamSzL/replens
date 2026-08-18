@@ -18,7 +18,7 @@ androidxHilt = "1.4.0"
 ksp = "2.3.11"
 room = "3.0.1"
 sqlite = "2.7.0"
-nav3 = "1.1.6"
+nav3 = "1.2.0-alpha07"
 kotlinxSerialization = "1.11.0"
 
 [libraries]
