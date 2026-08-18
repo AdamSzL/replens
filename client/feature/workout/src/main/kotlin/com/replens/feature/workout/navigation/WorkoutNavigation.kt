@@ -10,12 +10,10 @@ data object WorkoutRoute : NavKey
 
 fun EntryProviderScope<NavKey>.workoutEntries(
     navigateToSummary: (workoutId: Long) -> Unit,
-    navigateToHistory: () -> Unit,
 ) {
     entry<WorkoutRoute> {
         WorkoutRoot(
             navigateToSummary = navigateToSummary,
-            navigateToHistory = navigateToHistory,
         )
     }
 }

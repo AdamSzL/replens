@@ -116,16 +116,6 @@ class WorkoutViewModelTest {
     }
 
     @Test
-    fun `the history button navigates without touching the session`() = runTest {
-        val events = collectEvents()
-
-        viewModel.onAction(WorkoutAction.HistoryClicked)
-
-        assertEquals(listOf(WorkoutEvent.NavigateToHistory), events)
-        assertEquals(SessionState.Idle, viewModel.state.value.session)
-    }
-
-    @Test
     fun `Done navigates to the workout the set landed in`() = runTest {
         val events = collectEvents()
         start()

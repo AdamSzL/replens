@@ -78,7 +78,6 @@ private fun RepLensNavDisplay() {
                 entryProvider {
                     workoutEntries(
                         navigateToSummary = { navigator.navigate(WorkoutSummaryRoute(it)) },
-                        navigateToHistory = { navigator.navigate(HistoryRoute) },
                     )
                     historyEntries(
                         onBack = navigator::goBack,

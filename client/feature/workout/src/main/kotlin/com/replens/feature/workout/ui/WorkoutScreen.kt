@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.dropUnlessResumed
 import com.replens.core.designsystem.component.button.OverlayIconButton
 import com.replens.core.designsystem.icon.RepLensIcons
 import com.replens.core.designsystem.theme.RepLensTheme
@@ -49,7 +48,6 @@ import androidx.camera.core.Preview as CameraPreview
 @Composable
 internal fun WorkoutRoot(
     navigateToSummary: (workoutId: Long) -> Unit,
-    navigateToHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val viewModel: WorkoutViewModel = hiltViewModel()
@@ -60,7 +58,6 @@ internal fun WorkoutRoot(
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
             is WorkoutEvent.NavigateToSummary -> navigateToSummary(event.workoutId)
-            WorkoutEvent.NavigateToHistory -> navigateToHistory()
         }
     }
 
@@ -141,18 +138,6 @@ private fun WorkoutScreen(
                     },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(24.dp),
-                )
-            }
-            if (state.session == SessionState.Idle) {
-                OverlayIconButton(
-                    icon = RepLensIcons.History,
-                    contentDescription = stringResource(R.string.workout_open_history),
-                    onClick = dropUnlessResumed {
-                        onAction(WorkoutAction.HistoryClicked)
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
                         .padding(24.dp),
                 )
             }
