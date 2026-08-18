@@ -38,6 +38,7 @@ import com.replens.core.ui.FadeContentTransform
 import com.replens.feature.history.navigation.HistoryRoute
 import com.replens.feature.history.navigation.WorkoutSummaryRoute
 import com.replens.feature.history.navigation.historyEntries
+import com.replens.feature.workout.navigation.WorkoutRoute
 import com.replens.feature.workout.navigation.workoutEntries
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -77,6 +78,7 @@ private fun RepLensNavDisplay() {
             entries = navigationState.toDecoratedEntries(
                 entryProvider {
                     workoutEntries(
+                        navigateToWorkout = { navigator.navigate(WorkoutRoute) },
                         navigateToSummary = { navigator.navigate(WorkoutSummaryRoute(it)) },
                     )
                     historyEntries(

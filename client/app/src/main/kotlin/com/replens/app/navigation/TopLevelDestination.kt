@@ -6,7 +6,7 @@ import androidx.navigation3.runtime.NavKey
 import com.replens.app.R
 import com.replens.core.designsystem.icon.RepLensIcons
 import com.replens.feature.history.navigation.HistoryRoute
-import com.replens.feature.workout.navigation.WorkoutRoute
+import com.replens.feature.workout.navigation.ExercisePickerRoute
 
 enum class TopLevelDestination(
     val route: NavKey,
@@ -19,7 +19,7 @@ enum class TopLevelDestination(
         icon = RepLensIcons.History,
     ),
     Workout(
-        route = WorkoutRoute,
+        route = ExercisePickerRoute,
         label = R.string.tab_workout,
         icon = RepLensIcons.Exercise,
     ),
