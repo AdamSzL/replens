@@ -19,7 +19,8 @@ private val Montserrat = FontFamily(
  * Named for the job, not the size: `Title28` becomes a lie the moment the size
  * changes, or an accessibility setting scales it.
  *
- * [title] and [heading] are told apart by reading distance rather than by size.
+ * [title] and [heading] are told apart by what they top rather than by size: a
+ * section of the app, or a screen you drilled into.
  */
 @Immutable
 data class RepLensTypography(
@@ -31,7 +32,7 @@ data class RepLensTypography(
         lineHeight = 100.sp,
         fontFeatureSettings = "tnum",
     ),
-    /** Large enough to read from across the room, which is where the camera cues are read from. */
+    /** Reads across a room, where the camera cues are, and names a section in the hand. */
     val title: TextStyle = TextStyle(
         fontFamily = Montserrat,
         fontWeight = FontWeight.SemiBold,
