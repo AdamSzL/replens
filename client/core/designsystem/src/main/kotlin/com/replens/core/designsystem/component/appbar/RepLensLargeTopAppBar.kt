@@ -22,7 +22,7 @@ fun RepLensLargeTopAppBar(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
-        modifier = modifier.topAppBarContainer(),
+        modifier = modifier.topAppBarContainer(vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
