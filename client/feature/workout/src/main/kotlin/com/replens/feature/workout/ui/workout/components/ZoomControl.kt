@@ -16,6 +16,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.replens.core.designsystem.preview.RepLensOverlayPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 
 @Composable
@@ -78,7 +79,7 @@ private fun formatRatio(ratio: Float): String =
 @Preview
 @Composable
 private fun ZoomControlPreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         ZoomControl(
             stops = listOf(0.7f, 1f, 2f),
             selected = 1f,

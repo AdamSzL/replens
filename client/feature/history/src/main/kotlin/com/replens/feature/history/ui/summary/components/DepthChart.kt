@@ -20,8 +20,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.card.RepLensCard
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
 import com.replens.core.ui.asString
@@ -158,11 +160,8 @@ private fun ThresholdLegend(
 }
 
 @Composable
-private fun ChartPreview(
-    darkTheme: Boolean,
-    chart: DepthChartUiModel,
-) {
-    RepLensTheme(darkTheme = darkTheme) {
+private fun ChartPreview(chart: DepthChartUiModel) {
+    RepLensPreview {
         DepthChart(chart = chart)
     }
 }
@@ -191,19 +190,14 @@ private val deepSession = chartOf(
     listOf(57.3f, 71.6f, 52.7f),
 )
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun DepthChartDeepLightPreview() = ChartPreview(darkTheme = false, chart = deepSession)
-
-@Preview
-@Composable
-private fun DepthChartDeepDarkPreview() = ChartPreview(darkTheme = true, chart = deepSession)
+private fun DepthChartDeepPreview() = ChartPreview(chart = deepSession)
 
 /** Every rep short of parallel, so the line sits low with marks above it. */
 @Preview
 @Composable
 private fun DepthChartShallowPreview() = ChartPreview(
-    darkTheme = true,
     chart = chartOf(
         listOf(112f, 105f, 109f),
         listOf(101f, 108f, 113f),
@@ -214,7 +208,6 @@ private fun DepthChartShallowPreview() = ChartPreview(
 @Preview
 @Composable
 private fun DepthChartMixedPreview() = ChartPreview(
-    darkTheme = true,
     chart = chartOf(
         listOf(88f, 92f, 97f, 103f),
         listOf(91f, 99f, 108f),
@@ -225,7 +218,6 @@ private fun DepthChartMixedPreview() = ChartPreview(
 @Preview
 @Composable
 private fun DepthChartLongSetPreview() = ChartPreview(
-    darkTheme = true,
     chart = chartOf(
         List(15) { 84f + (it % 5) * 4f },
     ),
@@ -235,11 +227,10 @@ private fun DepthChartLongSetPreview() = ChartPreview(
 @Preview
 @Composable
 private fun DepthChartSingleRepPreview() = ChartPreview(
-    darkTheme = true,
     chart = chartOf(listOf(92f)),
 )
 
 /** 200% font scale: the set numbers shrink the plot rather than spilling past it. */
 @Preview(fontScale = 2f)
 @Composable
-private fun DepthChartLargeFontPreview() = ChartPreview(darkTheme = true, chart = deepSession)
+private fun DepthChartLargeFontPreview() = ChartPreview(chart = deepSession)

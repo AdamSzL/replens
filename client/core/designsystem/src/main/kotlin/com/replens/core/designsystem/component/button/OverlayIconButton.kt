@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.replens.core.designsystem.icon.RepLensIcons
+import com.replens.core.designsystem.preview.RepLensOverlayPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 
 /**
@@ -54,10 +55,10 @@ fun OverlayIconButton(
 
 // Mid-gray stands in for the camera feed: previewing overlay colors on a
 // flat white background says nothing about what they sit on.
-@Preview(showBackground = true, backgroundColor = 0xFF6E7378)
+@Preview
 @Composable
 private fun OverlayIconButtonPreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         OverlayIconButton(
             icon = RepLensIcons.CameraSwitch,
             contentDescription = "Switch camera",

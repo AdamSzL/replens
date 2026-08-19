@@ -16,11 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import com.replens.core.designsystem.component.appbar.RepLensLargeTopAppBar
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
 import com.replens.core.ui.ObserveAsEvents
@@ -193,18 +195,10 @@ private val previewState = HistoryState.Content(
     ),
 )
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun HistoryScreenLightThemePreview() {
-    RepLensTheme(darkTheme = false) {
-        HistoryScreen(state = previewState, onAction = {})
-    }
-}
-
-@Preview
-@Composable
-private fun HistoryScreenDarkThemePreview() {
-    RepLensTheme(darkTheme = true) {
+private fun HistoryScreenPreview() {
+    RepLensPreview {
         HistoryScreen(state = previewState, onAction = {})
     }
 }
@@ -212,7 +206,7 @@ private fun HistoryScreenDarkThemePreview() {
 @Preview
 @Composable
 private fun HistoryEmptyPreview() {
-    RepLensTheme {
+    RepLensPreview {
         HistoryScreen(state = HistoryState.Empty, onAction = {})
     }
 }
@@ -220,7 +214,7 @@ private fun HistoryEmptyPreview() {
 @Preview(fontScale = 2f)
 @Composable
 private fun HistoryScreenLargeFontPreview() {
-    RepLensTheme(darkTheme = true) {
+    RepLensPreview {
         HistoryScreen(state = previewState, onAction = {})
     }
 }

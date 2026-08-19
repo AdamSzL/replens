@@ -19,6 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.button.OverlayPrimaryButton
 import com.replens.core.designsystem.component.button.OverlaySecondaryButton
+import com.replens.core.designsystem.preview.RepLensOverlayPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.exercise.SessionState
 import com.replens.core.exercise.SetupCheck
@@ -152,7 +153,7 @@ private fun SetSummary(
 @Preview
 @Composable
 private fun SessionControlsIdlePreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         SessionControls(
             session = SessionState.Idle,
             repCount = 0,
@@ -165,7 +166,7 @@ private fun SessionControlsIdlePreview() {
 @Preview
 @Composable
 private fun SessionControlsWaitingPreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         SessionControls(
             session = SessionState.Waiting(SetupCheck.LEGS_NOT_VISIBLE),
             repCount = 0,
@@ -178,7 +179,7 @@ private fun SessionControlsWaitingPreview() {
 @Preview
 @Composable
 private fun SessionControlsCountingInPreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         SessionControls(
             session = SessionState.CountingIn(3),
             repCount = 0,
@@ -191,7 +192,7 @@ private fun SessionControlsCountingInPreview() {
 @Preview
 @Composable
 private fun SessionControlsFinishedPreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         SessionControls(
             session = SessionState.Finished,
             repCount = 12,

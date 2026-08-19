@@ -5,7 +5,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 
 @Composable
@@ -31,21 +32,10 @@ fun PrimaryButton(
     }
 }
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun PrimaryButtonLightThemePreview() {
-    RepLensTheme(darkTheme = false) {
-        PrimaryButton(
-            text = "Save workout",
-            onClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun PrimaryButtonDarkThemePreview() {
-    RepLensTheme(darkTheme = true) {
+private fun PrimaryButtonPreview() {
+    RepLensPreview {
         PrimaryButton(
             text = "Save workout",
             onClick = {},

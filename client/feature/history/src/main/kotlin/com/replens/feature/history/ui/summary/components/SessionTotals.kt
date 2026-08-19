@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.card.RepLensCard
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
 import com.replens.core.ui.asString
@@ -84,7 +85,7 @@ internal fun StillOpenNote(modifier: Modifier = Modifier) {
 @Preview
 @Composable
 private fun SessionTotalsPreview() {
-    RepLensTheme {
+    RepLensPreview {
         Column {
             SessionTotals(
                 totals = SessionTotalsUiModel(

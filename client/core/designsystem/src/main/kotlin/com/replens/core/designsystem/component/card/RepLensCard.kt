@@ -11,8 +11,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 
 private val CardShape = RoundedCornerShape(16.dp)
@@ -60,12 +61,10 @@ fun RepLensCard(
     }
 }
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun RepLensCardLightThemePreview() {
-    RepLensTheme(
-        darkTheme = false,
-    ) {
+private fun RepLensCardPreview() {
+    RepLensPreview {
         RepLensCard(
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -83,24 +82,6 @@ private fun RepLensCardLightThemePreview() {
                     color = RepLensTheme.colors.onSurfaceMuted,
                 )
             }
-        }
-    }
-}
-
-@Preview
-@Composable
-private fun RepLensCardDarkThemePreview() {
-    RepLensTheme(
-        darkTheme = true,
-    ) {
-        RepLensCard(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = "12 reps",
-                style = RepLensTheme.typography.title,
-                color = RepLensTheme.colors.onSurface,
-            )
         }
     }
 }

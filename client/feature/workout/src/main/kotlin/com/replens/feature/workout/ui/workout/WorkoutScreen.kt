@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.replens.core.designsystem.component.button.OverlayIconButton
 import com.replens.core.designsystem.icon.RepLensIcons
+import com.replens.core.designsystem.preview.RepLensOverlayPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.exercise.SessionState
 import com.replens.core.model.PoseFrame
@@ -182,7 +183,7 @@ private fun WorkoutScreen(
 @Preview
 @Composable
 private fun WorkoutScreenIdlePreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         WorkoutScreen(
             state = WorkoutState(
                 session = SessionState.Idle,
@@ -202,7 +203,7 @@ private fun WorkoutScreenIdlePreview() {
 @Preview
 @Composable
 private fun WorkoutScreenPreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         WorkoutScreen(
             state = WorkoutState(
                 session = SessionState.Active,

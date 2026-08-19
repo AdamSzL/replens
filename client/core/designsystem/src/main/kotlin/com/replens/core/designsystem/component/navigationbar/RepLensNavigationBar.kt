@@ -10,8 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import com.replens.core.designsystem.icon.RepLensIcons
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 
 @Composable
@@ -63,36 +64,23 @@ fun RowScope.RepLensNavigationBarItem(
     )
 }
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun RepLensNavigationBarLightThemePreview() {
-    RepLensTheme(darkTheme = false) {
-        RepLensNavigationBarPreviewContent()
-    }
-}
-
-@Preview
-@Composable
-private fun RepLensNavigationBarDarkThemePreview() {
-    RepLensTheme(darkTheme = true) {
-        RepLensNavigationBarPreviewContent()
-    }
-}
-
-@Composable
-private fun RepLensNavigationBarPreviewContent() {
-    RepLensNavigationBar {
-        RepLensNavigationBarItem(
-            icon = RepLensIcons.History,
-            label = "History",
-            selected = true,
-            onClick = {},
-        )
-        RepLensNavigationBarItem(
-            icon = RepLensIcons.Exercise,
-            label = "Workout",
-            selected = false,
-            onClick = {},
-        )
+private fun RepLensNavigationBarPreview() {
+    RepLensPreview {
+        RepLensNavigationBar {
+            RepLensNavigationBarItem(
+                icon = RepLensIcons.History,
+                label = "History",
+                selected = true,
+                onClick = {},
+            )
+            RepLensNavigationBarItem(
+                icon = RepLensIcons.Exercise,
+                label = "Workout",
+                selected = false,
+                onClick = {},
+            )
+        }
     }
 }

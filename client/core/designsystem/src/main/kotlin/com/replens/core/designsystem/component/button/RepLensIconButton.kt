@@ -8,8 +8,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import com.replens.core.designsystem.icon.RepLensIcons
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 
 @Composable
@@ -36,22 +37,10 @@ fun RepLensIconButton(
     }
 }
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun RepLensIconButtonLightThemePreview() {
-    RepLensTheme(darkTheme = false) {
-        RepLensIconButton(
-            icon = RepLensIcons.ArrowBack,
-            contentDescription = "Back",
-            onClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun RepLensIconButtonDarkThemePreview() {
-    RepLensTheme(darkTheme = true) {
+private fun RepLensIconButtonPreview() {
+    RepLensPreview {
         RepLensIconButton(
             icon = RepLensIcons.ArrowBack,
             contentDescription = "Back",

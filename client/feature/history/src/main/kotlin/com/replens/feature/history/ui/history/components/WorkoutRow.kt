@@ -16,8 +16,10 @@ import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.card.RepLensCard
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
 import com.replens.core.ui.asString
@@ -129,18 +131,10 @@ private val previewWorkout = WorkoutRowUiModel(
     duration = UiText.Resource(R.string.duration_minutes, 24),
 )
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun WorkoutRowLightThemePreview() {
-    RepLensTheme(darkTheme = false) {
-        WorkoutRow(workout = previewWorkout, onClick = {})
-    }
-}
-
-@Preview
-@Composable
-private fun WorkoutRowDarkThemePreview() {
-    RepLensTheme(darkTheme = true) {
+private fun WorkoutRowPreview() {
+    RepLensPreview {
         WorkoutRow(workout = previewWorkout, onClick = {})
     }
 }
@@ -149,7 +143,7 @@ private fun WorkoutRowDarkThemePreview() {
 @Preview
 @Composable
 private fun WorkoutRowDayLabelsPreview() {
-    RepLensTheme {
+    RepLensPreview {
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -180,7 +174,7 @@ private fun WorkoutRowDayLabelsPreview() {
 @Preview(fontScale = 2f)
 @Composable
 private fun WorkoutRowLargeFontPreview() {
-    RepLensTheme(darkTheme = true) {
+    RepLensPreview {
         WorkoutRow(
             workout = previewWorkout.copy(day = WorkoutDay.Weekday(DayOfWeek.WEDNESDAY)),
             onClick = {},

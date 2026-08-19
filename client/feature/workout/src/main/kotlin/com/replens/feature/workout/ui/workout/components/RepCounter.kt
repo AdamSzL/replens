@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.replens.core.designsystem.preview.RepLensOverlayPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.model.RepPhase
 
@@ -42,7 +43,7 @@ internal fun RepCounter(
 @Preview
 @Composable
 private fun RepCounterPreview() {
-    RepLensTheme {
+    RepLensOverlayPreview {
         RepCounter(
             repCount = 12,
             phase = RepPhase.BOTTOM,

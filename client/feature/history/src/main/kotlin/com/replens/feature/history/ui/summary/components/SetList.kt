@@ -15,8 +15,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.card.RepLensCard
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
 import com.replens.core.ui.asString
@@ -138,11 +140,8 @@ private fun Hairline(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun SetListPreview(
-    darkTheme: Boolean,
-    sets: List<SetRowUiModel>,
-) {
-    RepLensTheme(darkTheme = darkTheme) {
+private fun SetListPreview(sets: List<SetRowUiModel>) {
+    RepLensPreview {
         SetList(
             sets = sets,
         )
@@ -192,19 +191,14 @@ private val session = listOf(
     ),
 )
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun SetListDarkPreview() = SetListPreview(darkTheme = true, sets = session)
-
-@Preview
-@Composable
-private fun SetListLightPreview() = SetListPreview(darkTheme = false, sets = session)
+private fun SetListSessionPreview() = SetListPreview(sets = session)
 
 /** A workout that mixed exercises, which is the only case that names them. */
 @Preview
 @Composable
 private fun SetListMixedPreview() = SetListPreview(
-    darkTheme = true,
     sets = listOf(
         setRow(
             index = 1,
@@ -228,4 +222,4 @@ private fun SetListMixedPreview() = SetListPreview(
 /** 200% font scale: the rest label wraps rather than crushing its rules. */
 @Preview(fontScale = 2f)
 @Composable
-private fun SetListLargeFontPreview() = SetListPreview(darkTheme = true, sets = session)
+private fun SetListLargeFontPreview() = SetListPreview(sets = session)

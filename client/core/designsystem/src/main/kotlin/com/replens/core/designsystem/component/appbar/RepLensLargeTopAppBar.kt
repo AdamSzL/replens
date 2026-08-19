@@ -1,6 +1,5 @@
 package com.replens.core.designsystem.component.appbar
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
@@ -10,9 +9,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.button.RepLensIconButton
 import com.replens.core.designsystem.icon.RepLensIcons
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 
 @Composable
@@ -39,31 +40,11 @@ fun RepLensLargeTopAppBar(
     }
 }
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun RepLensLargeTopAppBarLightThemePreview() {
-    RepLensTheme(darkTheme = false) {
-        RepLensLargeTopAppBar(
-            title = "History",
-            modifier = Modifier.background(RepLensTheme.colors.background),
-        ) {
-            RepLensIconButton(
-                icon = RepLensIcons.Settings,
-                contentDescription = "Settings",
-                onClick = {},
-            )
-        }
-    }
-}
-
-@Preview
-@Composable
-private fun RepLensLargeTopAppBarDarkThemePreview() {
-    RepLensTheme(darkTheme = true) {
-        RepLensLargeTopAppBar(
-            title = "History",
-            modifier = Modifier.background(RepLensTheme.colors.background),
-        ) {
+private fun RepLensLargeTopAppBarPreview() {
+    RepLensPreview {
+        RepLensLargeTopAppBar(title = "History") {
             RepLensIconButton(
                 icon = RepLensIcons.Settings,
                 contentDescription = "Settings",
@@ -76,11 +57,8 @@ private fun RepLensLargeTopAppBarDarkThemePreview() {
 @Preview(fontScale = 2f)
 @Composable
 private fun RepLensLargeTopAppBarLongTitlePreview() {
-    RepLensTheme(darkTheme = true) {
-        RepLensLargeTopAppBar(
-            title = "Workout history and statistics",
-            modifier = Modifier.background(RepLensTheme.colors.background),
-        ) {
+    RepLensPreview {
+        RepLensLargeTopAppBar(title = "Workout history and statistics") {
             RepLensIconButton(
                 icon = RepLensIcons.Settings,
                 contentDescription = "Settings",

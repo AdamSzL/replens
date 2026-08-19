@@ -3,11 +3,11 @@ package com.replens.app.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.navigation3.runtime.NavKey
 import com.replens.core.designsystem.component.navigationbar.RepLensNavigationBar
 import com.replens.core.designsystem.component.navigationbar.RepLensNavigationBarItem
-import com.replens.core.designsystem.theme.RepLensTheme
+import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.feature.history.navigation.HistoryRoute
 
 @Composable
@@ -28,21 +28,10 @@ internal fun RepLensBottomNavigation(
     }
 }
 
-@Preview
+@PreviewLightDark
 @Composable
-private fun RepLensBottomNavigationLightThemePreview() {
-    RepLensTheme(darkTheme = false) {
-        RepLensBottomNavigation(
-            selectedRoute = HistoryRoute,
-            onDestinationClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun RepLensBottomNavigationDarkThemePreview() {
-    RepLensTheme(darkTheme = true) {
+private fun RepLensBottomNavigationPreview() {
+    RepLensPreview {
         RepLensBottomNavigation(
             selectedRoute = HistoryRoute,
             onDestinationClick = {},
