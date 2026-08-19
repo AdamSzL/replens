@@ -8,7 +8,7 @@ import com.replens.core.designsystem.icon.RepLensIcons
 import com.replens.feature.history.navigation.HistoryRoute
 import com.replens.feature.workout.navigation.ExercisePickerRoute
 
-enum class TopLevelDestination(
+internal enum class TopLevelDestination(
     val route: NavKey,
     @StringRes val label: Int,
     @DrawableRes val icon: Int,

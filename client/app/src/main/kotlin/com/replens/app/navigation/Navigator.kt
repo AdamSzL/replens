@@ -2,7 +2,7 @@ package com.replens.app.navigation
 
 import androidx.navigation3.runtime.NavKey
 
-class Navigator(private val state: NavigationState) {
+internal class Navigator(private val state: NavigationState) {
 
     val topLevelRoute: NavKey
         get() = state.topLevelRoute

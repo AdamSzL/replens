@@ -11,7 +11,7 @@ import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.feature.history.navigation.HistoryRoute
 
 @Composable
-fun RepLensBottomNavigation(
+internal fun RepLensBottomNavigation(
     selectedRoute: NavKey,
     onDestinationClick: (NavKey) -> Unit,
     modifier: Modifier = Modifier,

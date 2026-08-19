@@ -18,7 +18,7 @@ import androidx.navigation3.runtime.serialization.NavKeySerializer
 import androidx.savedstate.compose.serialization.serializers.MutableStateSerializer
 
 @Composable
-fun rememberNavigationState(
+internal fun rememberNavigationState(
     startRoute: NavKey,
     topLevelRoutes: Set<NavKey>,
 ): NavigationState {
@@ -40,7 +40,7 @@ fun rememberNavigationState(
     }
 }
 
-class NavigationState(
+internal class NavigationState(
     val startRoute: NavKey,
     topLevelRoute: MutableState<NavKey>,
     val backStacks: Map<NavKey, NavBackStack<NavKey>>,

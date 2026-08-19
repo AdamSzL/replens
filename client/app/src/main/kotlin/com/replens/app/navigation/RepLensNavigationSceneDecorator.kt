@@ -23,7 +23,7 @@ import com.replens.core.ui.TOP_LEVEL_NAV_METADATA_KEY
 
 private const val BOTTOM_BAR_SHARED_KEY = "replens_bottom_bar"
 
-class RepLensNavigationSceneDecoratorStrategy<T : Any>(
+internal class RepLensNavigationSceneDecoratorStrategy<T : Any>(
     private val navBar: @Composable () -> Unit,
     private val sharedTransitionScope: SharedTransitionScope,
 ) : SceneDecoratorStrategy<T> {
@@ -38,7 +38,7 @@ class RepLensNavigationSceneDecoratorStrategy<T : Any>(
 }
 
 @Composable
-fun rememberRepLensNavigationSceneDecoratorStrategy(
+internal fun rememberRepLensNavigationSceneDecoratorStrategy(
     navBar: @Composable () -> Unit,
     sharedTransitionScope: SharedTransitionScope,
 ): RepLensNavigationSceneDecoratorStrategy<NavKey> {
