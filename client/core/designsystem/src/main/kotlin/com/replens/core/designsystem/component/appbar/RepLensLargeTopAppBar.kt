@@ -3,12 +3,12 @@ package com.replens.core.designsystem.component.appbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.replens.core.designsystem.component.button.RepLensIconButton
@@ -29,9 +29,12 @@ fun RepLensLargeTopAppBar(
             text = title,
             style = RepLensTheme.typography.title,
             color = RepLensTheme.colors.onBackground,
-            modifier = Modifier.padding(start = 12.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp),
         )
-        Spacer(modifier = Modifier.weight(1f))
         actions()
     }
 }
@@ -59,6 +62,23 @@ private fun RepLensLargeTopAppBarDarkThemePreview() {
     RepLensTheme(darkTheme = true) {
         RepLensLargeTopAppBar(
             title = "History",
+            modifier = Modifier.background(RepLensTheme.colors.background),
+        ) {
+            RepLensIconButton(
+                icon = RepLensIcons.Settings,
+                contentDescription = "Settings",
+                onClick = {},
+            )
+        }
+    }
+}
+
+@Preview(fontScale = 2f)
+@Composable
+private fun RepLensLargeTopAppBarLongTitlePreview() {
+    RepLensTheme(darkTheme = true) {
+        RepLensLargeTopAppBar(
+            title = "Workout history and statistics",
             modifier = Modifier.background(RepLensTheme.colors.background),
         ) {
             RepLensIconButton(
