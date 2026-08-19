@@ -16,6 +16,7 @@ kotlinxCoroutines = "1.11.0"
 hilt = "2.60.1"
 androidxHilt = "1.4.0"
 ksp = "2.3.11"
+datastore = "1.2.1"
 room = "3.0.1"
 sqlite = "2.7.0"
 nav3 = "1.2.0-alpha07"
@@ -55,6 +56,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 androidx-hilt-lifecycle-viewmodel-compose = { group = "androidx.hilt", name = "hilt-lifecycle-viewmodel-compose", version.ref = "androidxHilt" }
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-room-runtime = { group = "androidx.room3", name = "room3-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room3", name = "room3-compiler", version.ref = "room" }
 # The driver Room 3 runs on. The `-jvm` variant has to be named explicitly: an
