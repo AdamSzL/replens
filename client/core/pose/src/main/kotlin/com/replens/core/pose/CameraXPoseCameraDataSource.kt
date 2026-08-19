@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -109,6 +110,7 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
             5L,
             TimeUnit.SECONDS,
             LinkedBlockingQueue(),
+            ThreadFactory { runnable -> Thread(runnable, "replens-pose-analysis") },
         ).apply { allowCoreThreadTimeOut(true) }
         val preview = Preview.Builder().build().apply {
             setSurfaceProvider { request -> surfaceRequests.value = request }
