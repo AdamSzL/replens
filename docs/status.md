@@ -4,7 +4,7 @@ Where RepLens actually is, what has been validated on a device, and what is next
 **This is the file that changes every session** — CLAUDE.md holds the rules, which
 should not churn just because a milestone landed.
 
-Last updated 2026-08-17.
+Last updated 2026-08-19.
 
 ## Milestones
 
@@ -148,9 +148,43 @@ Last updated 2026-08-17.
   empty sets, `FakeWorkoutRepository`'s `replay = 1` is deliberate so `Loading` is
   testable, and memoizing `is24HourFormat` would have frozen a setting nothing
   invalidates (see CLAUDE.md). One was deferred to #21.
-- **Next:** unstarted. The nearest candidates are the app shell (#17 — bottom
-  nav, the Home naming question, a top bar) and the live geometric form rules,
-  which need footage before code.
+- **The app shell: done and validated on device 2026-08-19** (#25, PR #29, eight
+  commits plus six review fixes, 55 files). Two tabs with a back stack each,
+  a bottom bar drawn per scene, and the camera is no longer the app's root — the
+  Workout tab opens an exercise picker that pushes the camera. Verified by hand:
+  tab switching, per-tab state, predictive back across a bar boundary, and
+  restore after process death.
+  Three things came out of building it. **The bar is drawn by a
+  `SceneDecoratorStrategy` rather than hoisted**, because a hoisted bar reads the
+  top back-stack key, which does not change until a predictive-back gesture
+  commits — the incoming screen would draw bare and the bar pop in. **Google's
+  multiple-stacks recipe omits `rememberViewModelStoreNavEntryDecorator`**, which
+  silently gives every destination the Activity's `ViewModelStore`. And the
+  camera teardown was **crashing the process** on every second visit — a
+  pre-existing bug nothing could reach until leaving the camera became possible.
+  See *The 30 fps path*; the short version is that ML Kit posts
+  `detector.close()`'s cancellation onto an executor the old code had already
+  shut down, and `AbortPolicy` throws on main.
+  **Known and carried deliberately:** `CameraPermissionGate` still wraps the whole
+  display, so denying the camera locks you out of History. Where the gate belongs
+  is a design question that lands with the picker — #9, noted there.
+- **Reviewed by three agents, six fixes landed 2026-08-19.** Roughly two dozen
+  findings; six were worth taking — the large app bar's actions being squeezed out
+  by a long title, `internal` on the shell, dead `navigationBarsPadding()` in the
+  history list, a `NavigatorTest`, a named pose-analysis thread, and typing the
+  decorator list.
+  **The pattern worth keeping is in the rejections.** Three separate findings —
+  a duplicate `contentKey`, an inert tab reselect, and back stacks restoring
+  positionally — each described a state the code *permits* and the app cannot
+  *reach*, all three for the same reason: the bar renders only at a tab root and
+  the bar is the only way to switch tabs, so a tab you are not on is always at its
+  root. Two more were actively wrong for this codebase, both proposing
+  `NavigationBarItemDefaults.colors()` as a base, which is precisely the
+  `MaterialTheme` leak the design system exists to expose. Filed instead: #30, for
+  when a multi-pane layout breaks that invariant. 308 unit tests.
+- **Next:** unstarted. The nearest candidates are the real exercise picker with
+  the permission flow (#26 + #9) and the live geometric form rules, which need
+  footage before code.
 
 ## Roadmap
 
@@ -159,7 +193,8 @@ Last updated 2026-08-17.
    and the first two form cues done; **the live geometric rules (valgus, forward
    lean, heel lift) are what remains, and they need footage before code**.
 3. **Local persistence & app shell** — Room history, the Nav 3 wiring, the workout
-   summary and the history list done; the shell itself (#17) and stats remain.
+   summary, the history list and the shell itself all done; **stats remains**,
+   along with the real exercise picker and permission flow (#26, #9).
 4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.
@@ -180,7 +215,8 @@ Scope guard, which is a rule rather than a plan and so also lives in CLAUDE.md:
   chart reads. `repsAtDepth` is recomputed from the list every frame rather than incremented,
   so the list is the only thing that can be wrong — a derived value cannot drift
   the way a counter maintained in three places can.
-- **`:feature:workout` exposes exactly `WorkoutRoute` and `workoutEntries()`**;
+- **`:feature:workout` exposes exactly `ExercisePickerRoute`, `WorkoutRoute` and
+  `workoutEntries()`**;
   `WorkoutRoot`, the ViewModel, state and actions are all `internal`, so
   `:core:pose` and `:core:exercise` are `implementation`. The `RepPhase` text is a
   debug affordance; removing the

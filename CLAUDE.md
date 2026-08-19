@@ -157,19 +157,27 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
 Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 
 ```
-:app                MainActivity: camera permission gate -> NavDisplay. Owns the
-                    back stack and every cross-feature edge.
-:feature:workout    …workout.navigation/    WorkoutRoute + workoutEntries — the
-                                            module's whole public surface
-                    …workout.ui/            the five files, plus CueEngine (what
-                                            to say), CueAnnouncer (whether to say
-                                            it again) and CameraSelection (which
-                                            lens to open on, which zoom stops to
-                                            offer)
-                    …workout.ui.mapper/     SessionCue + FormCue: domain state ->
-                                            UiText, drawn and spoken from one source
-                    …workout.ui.model/      SpokenCue
-                    …workout.ui.components/ PoseOverlay, RepCounter,
+:app                MainActivity: camera permission gate -> NavDisplay. Owns
+                    every cross-feature edge. Everything here is internal.
+                      …app.navigation/ NavigationState + Navigator (a back stack
+                                       per tab), TopLevelDestination,
+                                       RepLensBottomNavigation, and the scene
+                                       decorator that draws the bar
+:feature:workout    …workout.navigation/    ExercisePickerRoute + WorkoutRoute +
+                                            workoutEntries — the module's whole
+                                            public surface
+                    …workout.ui.picker/     the Workout tab's root: one button
+                                            per exercise, no ViewModel yet (#26)
+                    …workout.ui.workout/    the camera: the five files, plus
+                                            CueEngine (what to say), CueAnnouncer
+                                            (whether to say it again) and
+                                            CameraSelection (which lens to open
+                                            on, which zoom stops to offer)
+                    …workout.ui.workout.mapper/     SessionCue + FormCue: domain
+                                            state -> UiText, drawn and spoken
+                                            from one source
+                    …workout.ui.workout.model/      SpokenCue
+                    …workout.ui.workout.components/ PoseOverlay, RepCounter,
                                             SessionControls, ZoomControl
 :feature:history    …history.navigation/    HistoryRoute + WorkoutSummaryRoute +
                                             historyEntries
@@ -189,14 +197,18 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                     focus. Silence is a legal outcome, never an error.
 :core:text          UiText, its Context resolver, and future
                     <domain> -> UiText formatters. No Compose at all.
-:core:ui            The Compose utilities: ObserveAsEvents, ScreenStateCrossfade
-                    and the @Composable UiText.asString().
+:core:ui            The Compose utilities: ObserveAsEvents, ScreenStateCrossfade,
+                    the @Composable UiText.asString(), and topLevelNavMetadata —
+                    a raw Map, so no navigation dependency.
 :core:testing       MainDispatcherRule, FakeClock, FakeWorkoutRepository.
 :core:designsystem  RepLensTheme + the app's Compose gateway (below).
-                      …component.appbar/ RepLensTopAppBar
+                      …component.appbar/ RepLensTopAppBar, RepLensLargeTopAppBar
+                                         (tab roots), and the shared container
+                                         modifier keeping their insets in sync
                       …component.button/ Primary, OverlayPrimary,
                                          OverlaySecondary, OverlayIcon, RepLensIcon
                       …component.card/   RepLensCard
+                      …component.navigationbar/ RepLensNavigationBar + its item
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame; Rep, RepPhase,
                     RepUpdate, AbandonedDescent; Exercise, ExerciseSet, Workout.
                     Pure Kotlin, no dependencies at all.
@@ -446,6 +458,18 @@ What actually costs:
 3. **Delayed `imageProxy.close()`** — silently drops frames under
    `KEEP_ONLY_LATEST`. `ImageAnalysis` runs on its own single-thread executor to
    keep the pipeline off Compose's frame timing.
+   **That executor is never shut down, and that is why it is built by hand
+   rather than with `Executors.newSingleThreadExecutor()`.** ML Kit is handed it
+   for its listeners and delivers `detector.close()`'s cancellation on its own
+   schedule, so a terminated pool *rejects* that submission — and `AbortPolicy`
+   throws on the **posting** thread, which is main. That killed the app on every
+   second camera visit until 2026-08-19, and was invisible before the shell
+   because nothing could leave the camera. `allowCoreThreadTimeOut(true)` retires
+   the worker 5 s after the last frame instead, so the pool is collected like any
+   other object and no thread is parked for the app's life. Two fixes that look
+   right and are not: `DiscardPolicy` drops `imageProxy.close()`, which owns real
+   cleanup, and the main executor puts that close on the frame-timing path this
+   bullet exists to avoid.
 
 Stability of `PoseFrame`/`BodyPose` (a `Map`, hence unstable) is **moot** — under
 strong skipping it only selects `equals` vs identity comparison, and the frame
@@ -708,19 +732,14 @@ or a lambda capturing changing state goes stale.
 
 ### Navigation (Navigation 3)
 
-Built 2026-08-15 on the **stable** `navigation3-runtime`/`-ui` artifacts.
+Built 2026-08-15, on **1.2.0-alpha07** since the app shell (2026-08-19).
 `lifecycle-viewmodel-navigation3` rides the lifecycle version, not nav3's.
 `adaptive-navigation3` is **not** a dependency: it is list-detail and
 supporting-pane layouts for tablets, and this is a full-screen camera.
 
-**1.2.0 is alpha, and the two things in it worth wanting are named so the upgrade
-is a decision rather than a version bump.** `ResultEventBus` returns a result from
-a destination — nothing needs it yet, since the summary screen pops rather than
-answering. **Deep links are the likelier trigger**: a "you haven't trained in
-three days" notification or a Play app shortcut both open a route directly, and
-both are release-time features. Move when one of those is actually being built,
-not before — the back stack is the last place to run alpha code, because its
-failures are process-death failures nobody reproduces by hand.
+**Aim for 1.2.0 stable before release.** Alpha in the back stack is a standing
+debt rather than a settled choice: its failures are process-death failures nobody
+reproduces by hand.
 
 **A feature's entire public surface is its `NavKey`s and one entry-provider
 extension.** Everything else — the Root composable included — is `internal`, so
@@ -737,25 +756,32 @@ fun EntryProviderScope<NavKey>.workoutEntries() {
 - **No shared routes module.** A feature can only name its own routes, so handing
   it the back stack is safe — the compiler enforces that cross-feature edges are
   hoisted lambdas wired in `:app`.
-- **No `Navigator` object, and the back stack persistence gotcha it created is
-  gone with it.** CLAUDE.md used to plan an `@ActivityRetainedScoped Navigator`
-  holding `mutableStateListOf`, which survives rotation but **not process death** —
-  filed as "fix before release". `rememberNavBackStack` serializes the keys into
-  saved state, so choosing it means that bug never exists rather than being
-  scheduled. It also removes the reason to invent a type: a `Navigator` would have
-  to live somewhere both `:app` and every feature can see, which is the shared
-  module being avoided two bullets up.
+- **`Navigator` exists and is `internal` to `:app`, which is the whole of why it
+  is fine.** It was once ruled out because a navigator would have to live
+  somewhere both `:app` and every feature can see — the shared module being
+  avoided one bullet up. That objection was about *visibility*, not about the
+  type: features never name it, they take hoisted lambdas, so the shared module
+  never appears. What did **not** come back is the `@ActivityRetainedScoped`
+  version holding `mutableStateListOf`, which survived rotation but **not process
+  death**. State lives in `rememberNavBackStack` and `rememberSerializable`;
+  `Navigator` only mutates it.
 - **Routes are `@Serializable` from the first one, not from when persistence is
   wanted.** `rememberNavBackStack` resolves each key's serializer reflectively at
   save time, so a key that forgot the annotation passes every test that does not
   kill the process and fails on a user's phone. That same reflection is the shape
   R8 usually breaks; kotlinx.serialization's consumer rules hold it, checked in
   `mapping.txt` rather than inferred from a green `assembleRelease`.
-- **Adding any decorator replaces the defaults**, so `NavDisplay` lists
+- **Adding any decorator replaces the defaults**, and since the shell they are
+  listed **per back stack** in `NavigationState.toDecoratedEntries` rather than on
+  `NavDisplay` — the entries overload takes entries that are already decorated and
+  has no `entryDecorators` parameter at all. Both are still required:
   `rememberSaveableStateHolderNavEntryDecorator()` *and*
   `rememberViewModelStoreNavEntryDecorator()`. Dropping the first silently loses
   per-entry `rememberSaveable`; dropping the second is the ViewModel scoping bug
   under *Toolchain gotchas*. There is no defaults list to append to.
+  **Google's own multiple-stacks recipe passes only the first**, so copying it
+  hands every destination the Activity's `ViewModelStore` — no compile error, no
+  test failure, nothing to notice until two screens share a ViewModel.
 - **Google's multibinding recipe (`@IntoSet EntryProviderInstaller`) was rejected.**
   Hilt constructs the installer, so cross-feature lambdas can't be passed — which
   pushes you to a shared routes module or the api/impl split. Its payoff is
@@ -772,9 +798,41 @@ fun EntryProviderScope<NavKey>.workoutEntries() {
   never fulfill the old request.
 - Wrap navigation clicks in `dropUnlessResumed { }`.
 
-**Bottom navigation and a login flow change nothing here.** Multiple back stacks
-is a map of `rememberNavBackStack`s and conditional navigation is swapping the
-root — both `:app`'s business, both leaving `workoutEntries()` untouched.
+**A login flow changes nothing here** — conditional navigation is swapping the
+root, which is `:app`'s business alone.
+
+### The shell — a back stack per tab
+
+Built 2026-08-19. `rememberNavigationState(startRoute, topLevelRoutes)` holds one
+`NavBackStack` per tab plus the selected `topLevelRoute`, persisted with
+`rememberSerializable(MutableStateSerializer(NavKeySerializer()))`. `Navigator`
+switches tabs for a top-level route and pushes onto the current stack for
+anything else. **Exit through home:** when a non-start tab is selected, the start
+stack is flattened in front of it, so back always lands on History before leaving
+the app.
+
+- **The bar is drawn per scene by a `SceneDecoratorStrategy`, never hoisted above
+  `NavDisplay`.** Hoisting derives visibility from the top back-stack key, which
+  does not change until a predictive-back gesture *commits* — so the incoming
+  screen draws without its bar and the bar pops in afterwards. Per-scene bars
+  joined by a `sharedElement` are correct mid-drag.
+- **`:app` decides which routes are tabs; each screen decides whether it wears
+  chrome.** `TopLevelDestination` is the first question, `topLevelNavMetadata` on
+  an `entry` is the second. The metadata is a plain `Map<String, Any>`, so
+  `:core:ui` needs no navigation dependency to declare it.
+- **Bar visibility and tab switching are coupled, and more follows from that than
+  it looks.** The bar renders only when the current entry is a tab root, and the
+  bar is the only way to switch tabs — so leaving a tab means popping it to its
+  root first, and **a tab you are not on is always at its root**. That is why
+  re-tapping the selected tab has nothing to pop, and why one route cannot sit on
+  two stacks at once. Both were raised as review findings and both are
+  unreachable for this one reason. **The invariant is emergent, not enforced:** a
+  multi-pane layout decouples the two, which is
+  [#30](https://github.com/AdamSzL/replens/issues/30).
+- **`contentKey` defaults to `key.toString()` and must be unique across the
+  flattened list.** It identifies an entry's decorator state and its
+  `movableContentOf` slot, so two entries sharing one are *the same entry* to
+  nav3 — which is what #30 is about.
 
 ### Explicit backing fields
 
@@ -1396,6 +1454,18 @@ before there is history worth keeping.
 one:** they need signing secrets, and CI needs none. Keeping them apart means no
 workflow with access to the keystore ever runs on an untrusted PR.
 
+- **`Navigator` is tested; `NavigationState` mostly isn't** (2026-08-19, 5
+  tests). `mutableStateOf` and `NavBackStack(vararg)` are constructible
+  off-composition, so the tab and back rules need no Compose rule and no
+  Robolectric. `toDecoratedEntries` is `@Composable` and wants a real
+  `SaveableStateRegistry`, so it stays untested rather than dragging an
+  instrumented test into a host-side suite.
+  **A sixth test was written and deleted, and the reason is the rule:** it
+  pinned `goBack()` at the start root, which `NavigationBackHandler` makes
+  unreachable, and mutation-checking showed every mutant it killed was already
+  killed by a reachable test. Three findings on that same branch's reviews
+  described states the app cannot enter; **a test can make the same mistake, and
+  a mutation check is what tells the two apart.**
 - **`WorkoutViewModel` is tested end to end now** (2026-08-14, 20 tests across
   `WorkoutViewModelTest` and `WorkoutCameraTest`), against a fake
   `PoseCameraDataSource` — the interface extracted the same day. It was
