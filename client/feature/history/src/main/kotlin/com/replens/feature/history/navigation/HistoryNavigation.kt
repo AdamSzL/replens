@@ -2,6 +2,7 @@ package com.replens.feature.history.navigation
 
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import com.replens.core.ui.topLevelNavMetadata
 import com.replens.feature.history.ui.history.HistoryRoot
 import com.replens.feature.history.ui.summary.WorkoutSummaryRoot
 import kotlinx.serialization.Serializable
@@ -16,11 +17,8 @@ fun EntryProviderScope<NavKey>.historyEntries(
     onBack: () -> Unit,
     onWorkoutClick: (workoutId: Long) -> Unit,
 ) {
-    entry<HistoryRoute> {
-        HistoryRoot(
-            onBack = onBack,
-            onWorkoutClick = onWorkoutClick,
-        )
+    entry<HistoryRoute>(metadata = topLevelNavMetadata) {
+        HistoryRoot(onWorkoutClick = onWorkoutClick)
     }
     entry<WorkoutSummaryRoute> { key ->
         WorkoutSummaryRoot(

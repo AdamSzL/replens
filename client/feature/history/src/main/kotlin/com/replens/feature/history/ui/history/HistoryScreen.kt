@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
-import com.replens.core.designsystem.component.appbar.RepLensTopAppBar
+import com.replens.core.designsystem.component.appbar.RepLensLargeTopAppBar
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.text.UiText
 import com.replens.core.ui.ObserveAsEvents
@@ -36,7 +35,6 @@ import java.time.LocalTime
 
 @Composable
 internal fun HistoryRoot(
-    onBack: () -> Unit,
     onWorkoutClick: (workoutId: Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -45,7 +43,6 @@ internal fun HistoryRoot(
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
-            HistoryEvent.NavigateBack -> onBack()
             is HistoryEvent.NavigateToWorkout -> onWorkoutClick(event.workoutId)
         }
     }
@@ -68,12 +65,8 @@ private fun HistoryScreen(
             .fillMaxSize()
             .background(RepLensTheme.colors.background),
     ) {
-        RepLensTopAppBar(
+        RepLensLargeTopAppBar(
             title = stringResource(R.string.history_title),
-            onBack = dropUnlessResumed {
-                onAction(HistoryAction.BackClicked)
-            },
-            backContentDescription = stringResource(R.string.history_back),
         )
         ScreenStateCrossfade(
             targetState = state,
@@ -100,9 +93,7 @@ private fun WorkoutList(
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
+        modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -125,7 +116,6 @@ private fun HistoryEmpty(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .navigationBarsPadding()
             .padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,

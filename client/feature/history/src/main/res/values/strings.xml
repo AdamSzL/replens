@@ -27,7 +27,6 @@
     </plurals>
 
     <string name="history_title">History</string>
-    <string name="history_back">Back</string>
     <string name="history_empty_title">No workouts yet</string>
     <string name="history_empty_body">Finish a set and it lands here.</string>
     <!--

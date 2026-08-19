@@ -33,8 +33,11 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+    implementation(libs.androidx.savedstate.compose)
     implementation(projects.core.designsystem)
     implementation(projects.core.ui)
     implementation(projects.feature.history)
     implementation(projects.feature.workout)
+
+    testImplementation(libs.junit)
 }

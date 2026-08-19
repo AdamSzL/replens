@@ -34,7 +34,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
@@ -93,7 +96,22 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
         )
         // Off the main thread so the pipeline never queues behind Compose: a late
         // imageProxy.close() silently drops frames under KEEP_ONLY_LATEST.
-        val analysisExecutor = Executors.newSingleThreadExecutor()
+        //
+        // Never shut down, which is why it is built by hand rather than with
+        // Executors.newSingleThreadExecutor(). ML Kit is handed this executor for
+        // its listeners, and delivers the cancellation from detector.close() on
+        // its own schedule — so a terminated pool rejects that submission, and the
+        // rejection is thrown on whichever thread posted it, which is main. Core
+        // threads time out instead: the worker exits once idle, so the pool is
+        // collected like any other object and nothing is parked for the app's life.
+        val analysisExecutor = ThreadPoolExecutor(
+            1,
+            1,
+            5L,
+            TimeUnit.SECONDS,
+            LinkedBlockingQueue(),
+            ThreadFactory { runnable -> Thread(runnable, "replens-pose-analysis") },
+        ).apply { allowCoreThreadTimeOut(true) }
         val preview = Preview.Builder().build().apply {
             setSurfaceProvider { request -> surfaceRequests.value = request }
         }
@@ -159,11 +177,14 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
             }
         }
         awaitClose {
+            // The documented way to stop analysis; unbinding alone leaves the
+            // analyzer registered. It does not settle a detector.process() task
+            // that is already in flight, which is why the executor outlives this.
+            analysis.clearAnalyzer()
             // Not unbindAll(): the provider is a process singleton, so that would
             // also tear down any other camera use case bound elsewhere.
             provider.unbind(preview, analysis)
             detector.close()
-            analysisExecutor.shutdown()
             surfaceRequests.value = null
             options.value = null
         }

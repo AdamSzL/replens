@@ -20,5 +20,11 @@ object RepLensIcons {
     val CameraSwitch = R.drawable.ic_camera_switch
 
     @DrawableRes
+    val Exercise = R.drawable.ic_exercise
+
+    @DrawableRes
     val History = R.drawable.ic_history
+
+    @DrawableRes
+    val Settings = R.drawable.ic_settings
 }
