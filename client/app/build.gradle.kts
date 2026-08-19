@@ -38,4 +38,6 @@ dependencies {
     implementation(projects.core.ui)
     implementation(projects.feature.history)
     implementation(projects.feature.workout)
+
+    testImplementation(libs.junit)
 }
