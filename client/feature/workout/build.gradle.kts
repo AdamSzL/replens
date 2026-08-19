@@ -12,6 +12,7 @@ android {
 dependencies {
     implementation(projects.core.audio)
     implementation(projects.core.data)
+    implementation(projects.core.datastore)
     implementation(projects.core.designsystem)
     implementation(projects.core.exercise)
     implementation(projects.core.pose)
