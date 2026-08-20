@@ -21,6 +21,9 @@ import com.replens.core.model.RepPhase
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import com.replens.core.ui.EventChannel
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
@@ -31,18 +34,23 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
-@HiltViewModel
-internal class WorkoutViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = WorkoutViewModel.Factory::class)
+internal class WorkoutViewModel @AssistedInject constructor(
+    @Assisted private val exercise: Exercise,
     private val poseCamera: PoseCameraDataSource,
     private val speaker: Speaker,
     private val repository: WorkoutRepository,
     private val clock: Clock,
 ) : ViewModel() {
+
+    @AssistedFactory
+    internal interface Factory {
+        fun create(exercise: Exercise): WorkoutViewModel
+    }
 
     val surfaceRequests: StateFlow<SurfaceRequest?> = poseCamera.surfaceRequests
 
@@ -208,7 +216,7 @@ internal class WorkoutViewModel @Inject constructor(
 
         recordJob = viewModelScope.async {
             repository.recordSet(
-                exercise = Exercise.SQUAT,
+                exercise = exercise,
                 startedAt = start.at,
                 endedAt = endedAt,
                 repsAtDepth = repsAtDepth,

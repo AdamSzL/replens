@@ -15,6 +15,7 @@ dependencies {
     implementation(projects.core.datastore)
     implementation(projects.core.designsystem)
     implementation(projects.core.exercise)
+    api(projects.core.model)
     implementation(projects.core.pose)
     implementation(projects.core.posemath)
     implementation(projects.core.text)

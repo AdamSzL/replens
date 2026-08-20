@@ -78,7 +78,7 @@ private fun RepLensNavDisplay() {
             entries = navigationState.toDecoratedEntries(
                 entryProvider {
                     workoutEntries(
-                        navigateToWorkout = { navigator.navigate(WorkoutRoute) },
+                        navigateToWorkout = { navigator.navigate(WorkoutRoute(it)) },
                         navigateToSummary = { navigator.navigate(WorkoutSummaryRoute(it)) },
                     )
                     historyEntries(

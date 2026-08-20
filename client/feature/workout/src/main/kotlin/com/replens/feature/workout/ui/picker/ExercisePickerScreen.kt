@@ -16,11 +16,12 @@ import com.replens.core.designsystem.component.appbar.RepLensLargeTopAppBar
 import com.replens.core.designsystem.component.button.PrimaryButton
 import com.replens.core.designsystem.preview.RepLensPreview
 import com.replens.core.designsystem.theme.RepLensTheme
+import com.replens.core.model.Exercise
 import com.replens.feature.workout.R
 
 @Composable
 internal fun ExercisePickerRoot(
-    navigateToWorkout: () -> Unit,
+    navigateToWorkout: (Exercise) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ExercisePickerScreen(
@@ -31,7 +32,7 @@ internal fun ExercisePickerRoot(
 
 @Composable
 private fun ExercisePickerScreen(
-    onExerciseClick: () -> Unit,
+    onExerciseClick: (Exercise) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -50,7 +51,7 @@ private fun ExercisePickerScreen(
         ) {
             PrimaryButton(
                 text = stringResource(R.string.exercise_squat),
-                onClick = dropUnlessResumed(block = onExerciseClick),
+                onClick = dropUnlessResumed { onExerciseClick(Exercise.SQUAT) },
             )
         }
     }

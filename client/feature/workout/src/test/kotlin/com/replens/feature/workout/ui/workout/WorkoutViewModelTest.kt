@@ -44,6 +44,7 @@ class WorkoutViewModelTest {
      */
     private val viewModel by lazy {
         WorkoutViewModel(
+            exercise = Exercise.SQUAT,
             poseCamera = camera,
             speaker = speaker,
             repository = repository,

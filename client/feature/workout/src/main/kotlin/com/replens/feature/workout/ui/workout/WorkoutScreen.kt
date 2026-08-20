@@ -32,6 +32,7 @@ import com.replens.core.designsystem.icon.RepLensIcons
 import com.replens.core.designsystem.preview.RepLensOverlayPreview
 import com.replens.core.designsystem.theme.RepLensTheme
 import com.replens.core.exercise.SessionState
+import com.replens.core.model.Exercise
 import com.replens.core.model.PoseFrame
 import com.replens.core.model.RepPhase
 import com.replens.core.pose.CameraFacing
@@ -48,10 +49,13 @@ import androidx.camera.core.Preview as CameraPreview
 
 @Composable
 internal fun WorkoutRoot(
+    exercise: Exercise,
     navigateToSummary: (workoutId: Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: WorkoutViewModel = hiltViewModel()
+    val viewModel = hiltViewModel<WorkoutViewModel, WorkoutViewModel.Factory>(
+        creationCallback = { factory -> factory.create(exercise) },
+    )
     val lifecycleOwner = LocalLifecycleOwner.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val surfaceRequest by viewModel.surfaceRequests.collectAsStateWithLifecycle()

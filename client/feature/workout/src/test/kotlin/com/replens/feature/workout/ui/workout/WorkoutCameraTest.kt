@@ -1,5 +1,6 @@
 package com.replens.feature.workout.ui.workout
 
+import com.replens.core.model.Exercise
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.ZoomRange
@@ -29,6 +30,7 @@ class WorkoutCameraTest {
 
     private val viewModel by lazy {
         WorkoutViewModel(
+            exercise = Exercise.SQUAT,
             poseCamera = camera,
             speaker = FakeSpeaker(),
             repository = FakeWorkoutRepository(),
