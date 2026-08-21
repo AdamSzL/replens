@@ -202,6 +202,25 @@ class ExercisePickerViewModelTest {
     }
 
     /**
+     * A kept intent has no expiry: granting the camera by any route later, and
+     * coming back to the picker, would open a workout nobody asked for on that
+     * visit.
+     */
+    @Test
+    fun `returning from settings without the camera forgets the exercise`() = runTest {
+        cameraPermission.isDenied = true
+        val events = collectEvents()
+        resume()
+        pickSquat()
+        viewModel.onAction(ExercisePickerAction.OpenSettingsClicked)
+
+        resume()
+        resume(isGranted = true)
+
+        assertEquals(listOf(ExercisePickerEvent.OpenAppSettings), events)
+    }
+
+    /**
      * Otherwise the next resume that finds the camera granted starts a workout the
      * user backed out of.
      */

@@ -23,27 +23,17 @@ internal class ExercisePickerViewModel @Inject constructor(
     private val eventChannel = EventChannel<ExercisePickerEvent>(viewModelScope)
     val events = eventChannel.events
 
-    /**
-     * Android reports no "permanently denied" state:
-     * `shouldShowRequestPermissionRationale` is false both before the first denial
-     * and after the system stops asking. Only a memory of the denial in between
-     * separates them, so it has to outlive the process.
-     */
-    private var hasDeniedCamera = false
-
-    private var isCameraGranted = false
-    private var canShowCameraRationale = false
+    private val camera = CameraGate()
 
     /**
-     * What to open once the permission arrives. Cleared whenever it does, or the
-     * next resume would send the user straight back into the camera they just
-     * left.
+     * Cleared the moment it opens, or a later resume that finds the camera
+     * granted would launch a workout nobody asked for on that visit.
      */
     private var pendingExercise: Exercise? = null
 
     init {
         viewModelScope.launch {
-            hasDeniedCamera = cameraPermission.hasBeenDenied()
+            camera.restore(cameraPermission.hasBeenDenied())
         }
     }
 
@@ -58,51 +48,58 @@ internal class ExercisePickerViewModel @Inject constructor(
     }
 
     private fun selectExercise(exercise: Exercise) {
-        if (isCameraGranted) {
-            openWorkout(exercise)
-            return
-        }
         pendingExercise = exercise
-        if (!canShowCameraRationale && hasDeniedCamera) {
-            state.update { it.copy(isCameraBlockedDialogVisible = true) }
-        } else {
-            eventChannel.send(ExercisePickerEvent.RequestCameraPermission)
+        when (camera.access) {
+            CameraAccess.Granted -> openWorkout(exercise)
+            CameraAccess.Requestable -> {
+                eventChannel.send(ExercisePickerEvent.RequestCameraPermission)
+            }
+            CameraAccess.Blocked -> showBlockedDialog()
         }
     }
 
     private fun onScreenResumed(action: ExercisePickerAction.ScreenResumed) {
-        isCameraGranted = action.isCameraGranted
-        observeRationale(action.canShowCameraRationale)
+        record(
+            isGranted = action.isCameraGranted,
+            canShowRationale = action.canShowCameraRationale,
+        )
 
-        // Set only by a request this screen made, so this is the return from
-        // Settings rather than any other way back to the picker.
+        // No dialog here, unlike a permission result: the user is coming back
+        // from the one screen that could have fixed this, and being told again
+        // is nagging.
         val exercise = pendingExercise ?: return
-        if (isCameraGranted) openWorkout(exercise)
+        if (camera.access == CameraAccess.Granted) openWorkout(exercise) else pendingExercise = null
     }
 
     private fun onPermissionAnswered(action: ExercisePickerAction.PermissionAnswered) {
-        isCameraGranted = action.isGranted
-        observeRationale(action.canShowRationale)
+        record(
+            isGranted = action.isGranted,
+            canShowRationale = action.canShowRationale,
+        )
 
-        val exercise = pendingExercise
-        pendingExercise = null
-        if (action.isGranted && exercise != null) openWorkout(exercise)
+        val exercise = pendingExercise ?: return
+        when (camera.access) {
+            CameraAccess.Granted -> openWorkout(exercise)
+            // Otherwise the tap that asked for a workout ends in silence.
+            CameraAccess.Blocked -> showBlockedDialog()
+            // Denied, or backed out of. Either way the user said no to this one.
+            CameraAccess.Requestable -> pendingExercise = null
+        }
     }
 
-    /**
-     * True is the only informative reading, so false decides nothing: it means
-     * either that nothing has been denied yet or that the system has stopped
-     * asking, and those are told apart by the flag rather than by this.
-     *
-     * Not awaited. The flag is read again only after the system stops offering
-     * its dialog, which takes a second denial, so a process death here costs one
-     * tap that shows a dialog the user can dismiss.
-     */
-    private fun observeRationale(canShow: Boolean) {
-        canShowCameraRationale = canShow
-        if (!canShow || hasDeniedCamera) return
-        hasDeniedCamera = true
-        viewModelScope.launch { cameraPermission.markDenied() }
+    /** Not awaited: losing the write costs one tap, and every denial rewrites it. */
+    private fun record(isGranted: Boolean, canShowRationale: Boolean) {
+        val isNewDenial = camera.record(
+            isGranted = isGranted,
+            canShowRationale = canShowRationale,
+        )
+        if (isNewDenial) {
+            viewModelScope.launch { cameraPermission.markDenied() }
+        }
+    }
+
+    private fun showBlockedDialog() {
+        state.update { it.copy(isCameraBlockedDialogVisible = true) }
     }
 
     private fun openSettings() {
