@@ -8,17 +8,17 @@ import com.replens.feature.workout.domain.CameraPermissionRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-private val CameraPermissionRequested = booleanPreferencesKey("camera_permission_requested")
+private val CameraPermissionDeniedKey = booleanPreferencesKey("camera_permission_denied")
 
 internal class CameraPermissionRepositoryImpl @Inject constructor(
     private val dataStore: DataStore<Preferences>,
 ) : CameraPermissionRepository {
 
-    override suspend fun hasRequestedBefore(): Boolean {
-        return dataStore.data.first()[CameraPermissionRequested] ?: false
+    override suspend fun hasBeenDenied(): Boolean {
+        return dataStore.data.first()[CameraPermissionDeniedKey] ?: false
     }
 
-    override suspend fun markRequested() {
-        dataStore.edit { preferences -> preferences[CameraPermissionRequested] = true }
+    override suspend fun markDenied() {
+        dataStore.edit { preferences -> preferences[CameraPermissionDeniedKey] = true }
     }
 }

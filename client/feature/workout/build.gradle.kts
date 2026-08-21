@@ -24,6 +24,7 @@ dependencies {
     api(libs.androidx.navigation3.runtime)
     implementation(libs.kotlinx.serialization.core)
 
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.camera.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

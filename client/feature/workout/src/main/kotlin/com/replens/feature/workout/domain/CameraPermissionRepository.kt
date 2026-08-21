@@ -2,7 +2,7 @@ package com.replens.feature.workout.domain
 
 internal interface CameraPermissionRepository {
 
-    suspend fun hasRequestedBefore(): Boolean
+    suspend fun hasBeenDenied(): Boolean
 
-    suspend fun markRequested()
+    suspend fun markDenied()
 }

@@ -3,6 +3,17 @@
     <string name="exercise_picker_title">Workout</string>
     <string name="exercise_squat">Squat</string>
 
+    <!-- Permanent disclosure, so the camera is explained before it is asked for
+         rather than in a screen the user has to dismiss. -->
+    <string name="exercise_picker_camera_disclosure">RepLens watches your form with the camera. Video never leaves your phone.</string>
+
+    <!-- Shown when the system will no longer offer its own dialog, which is the
+         one case the app has to explain something the system will not. -->
+    <string name="exercise_picker_camera_blocked_title">Camera access is off</string>
+    <string name="exercise_picker_camera_blocked_message">RepLens needs the camera to count your reps and check your form. Turn it on in Settings to start a workout.</string>
+    <string name="exercise_picker_camera_blocked_confirm">Open settings</string>
+    <string name="exercise_picker_camera_blocked_dismiss">Not now</string>
+
     <string name="workout_flip_camera">Switch camera</string>
     <string name="workout_start_set">Start set</string>
     <string name="workout_setup_no_pose">Step into frame</string>
