@@ -14,6 +14,21 @@
     <string name="exercise_picker_camera_blocked_confirm">Open settings</string>
     <string name="exercise_picker_camera_blocked_dismiss">Not now</string>
 
+    <string name="workout_camera_blocked_title">Camera access is off</string>
+    <string name="workout_camera_blocked_message">RepLens needs the camera to count your reps. Turn it on in Settings to start a workout.</string>
+    <string name="workout_camera_open_settings">Open settings</string>
+
+    <!-- Promises recovery because CameraX delivers it: it reopens the camera when
+         the other app releases it, with nothing pressed here. -->
+    <string name="workout_camera_in_use_title">Camera in use</string>
+    <string name="workout_camera_in_use_message">Another app is using the camera. This screen picks it up as soon as it is free.</string>
+
+    <!-- One message for every critical error: none has been reproduced, so wording
+         per code would be guesswork. -->
+    <string name="workout_camera_broken_title">Camera unavailable</string>
+    <string name="workout_camera_broken_message">The camera could not be opened. Try again in a moment, or restart your phone.</string>
+    <string name="workout_camera_go_back">Go back</string>
+
     <string name="workout_flip_camera">Switch camera</string>
     <string name="workout_start_set">Start set</string>
     <string name="workout_setup_no_pose">Step into frame</string>

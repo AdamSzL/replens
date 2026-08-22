@@ -4,6 +4,7 @@ import com.replens.core.exercise.SessionState
 import com.replens.core.model.RepPhase
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
+import com.replens.feature.workout.ui.workout.model.CameraProblem
 
 /**
  * Screen state for the workout screen. The pose frame is deliberately **not**
@@ -14,6 +15,9 @@ import com.replens.core.pose.CameraOptions
  * @param cameraFacing a choice, but one constrained by hardware — null until
  *   [cameraOptions] says which lenses exist. [zoomRatio] needs no such wait: 1x
  *   is valid on every camera.
+ * @param cameraProblem null both when nothing is wrong and when it is too early
+ *   to say; either way there is nothing to tell the user. Non-null replaces the
+ *   whole screen, so it is not a flag.
  */
 internal data class WorkoutState(
     val session: SessionState = SessionState.Idle,
@@ -24,4 +28,5 @@ internal data class WorkoutState(
     val cameraFacing: CameraFacing? = null,
     val zoomRatio: Float = 1f,
     val cameraOptions: CameraOptions? = null,
+    val cameraProblem: CameraProblem? = null,
 )

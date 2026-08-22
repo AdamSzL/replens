@@ -61,6 +61,7 @@ private fun RepLensNavDisplay() {
                     workoutEntries(
                         navigateToWorkout = { navigator.navigate(WorkoutRoute(it)) },
                         navigateToSummary = { navigator.navigate(WorkoutSummaryRoute(it)) },
+                        onBack = navigator::goBack,
                     )
                     historyEntries(
                         onBack = navigator::goBack,

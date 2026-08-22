@@ -17,6 +17,7 @@ data class WorkoutRoute(val exercise: Exercise) : NavKey
 fun EntryProviderScope<NavKey>.workoutEntries(
     navigateToWorkout: (Exercise) -> Unit,
     navigateToSummary: (workoutId: Long) -> Unit,
+    onBack: () -> Unit,
 ) {
     entry<ExercisePickerRoute>(metadata = topLevelNavMetadata) {
         ExercisePickerRoot(navigateToWorkout = navigateToWorkout)
@@ -25,6 +26,7 @@ fun EntryProviderScope<NavKey>.workoutEntries(
         WorkoutRoot(
             exercise = key.exercise,
             navigateToSummary = navigateToSummary,
+            onBack = onBack,
         )
     }
 }

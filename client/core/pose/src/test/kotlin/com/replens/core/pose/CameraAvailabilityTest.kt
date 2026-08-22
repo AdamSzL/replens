@@ -63,13 +63,15 @@ class CameraAvailabilityTest {
     }
 
     /**
-     * Critical outranks the state: the camera is disabled by policy, and waiting
-     * for it to become available is not a thing the user can do anything about.
+     * The shape a revoked permission actually takes, measured on device:
+     * `CLOSING(code=6)` then `PENDING_OPEN(code=6)`. The error describes the
+     * attempt that failed; the type says the camera is still waiting, so reading
+     * the error first would call a parked camera broken.
      */
     @Test
-    fun `a critical error while pending open is a failure`() {
-        val pending = state(CameraState.Type.PENDING_OPEN, CameraState.ERROR_CAMERA_DISABLED)
+    fun `a critical error carried into pending open is still unavailable`() {
+        val pending = state(CameraState.Type.PENDING_OPEN, CameraState.ERROR_CAMERA_FATAL_ERROR)
 
-        assertEquals(CameraAvailability.Failed, pending.toAvailability())
+        assertEquals(CameraAvailability.Unavailable, pending.toAvailability())
     }
 }

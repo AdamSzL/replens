@@ -18,9 +18,12 @@ import com.replens.core.model.Exercise
 import com.replens.core.model.PoseFrame
 import com.replens.core.model.Rep
 import com.replens.core.model.RepPhase
+import com.replens.core.pose.CameraAvailability
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import com.replens.core.ui.EventChannel
+import com.replens.feature.workout.ui.workout.model.CameraProblem
+import com.replens.feature.workout.ui.workout.model.cameraProblem
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -112,6 +115,12 @@ internal class WorkoutViewModel @AssistedInject constructor(
      */
     private var recordJob: Deferred<Long>? = null
 
+    /**
+     * Not defaulted to true: the camera binds on composition and can fail before
+     * the first reading, which arrives on resume.
+     */
+    private var isCameraGranted: Boolean? = null
+
     init {
         viewModelScope.launch {
             poseCamera.options.collect { options ->
@@ -124,12 +133,22 @@ internal class WorkoutViewModel @AssistedInject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            poseCamera.availability.collect { availability ->
+                state.update { it.copy(cameraProblem = problemFrom(availability)) }
+            }
+        }
     }
 
     fun onAction(action: WorkoutAction) {
         when (action) {
             is WorkoutAction.ScreenAttached -> startCamera(action.lifecycleOwner)
             WorkoutAction.ScreenDetached -> releaseCamera()
+            is WorkoutAction.ScreenResumed -> onScreenResumed(action.isCameraGranted)
+            WorkoutAction.OpenSettingsClicked -> {
+                eventChannel.send(WorkoutEvent.OpenAppSettings)
+            }
+            WorkoutAction.GoBackClicked -> eventChannel.send(WorkoutEvent.NavigateBack)
             is WorkoutAction.ZoomSelected -> selectZoom(action.ratio)
             WorkoutAction.CameraFlipClicked -> flipCamera()
             WorkoutAction.StartClicked, WorkoutAction.GoAgainClicked -> startSet()
@@ -163,6 +182,20 @@ internal class WorkoutViewModel @AssistedInject constructor(
         // The last pose is now arbitrarily old; leaving it would draw a skeleton
         // from a different room until the first frame after rebinding.
         poseFrame.value = null
+    }
+
+    /**
+     * Nothing is rebound here: CameraX detaches on stop and re-attaches on start,
+     * so a permission granted while we were away has already been retried. Only
+     * the name for a failure that survived it is missing.
+     */
+    private fun onScreenResumed(isCameraGranted: Boolean) {
+        this.isCameraGranted = isCameraGranted
+        state.update { it.copy(cameraProblem = problemFrom(poseCamera.availability.value)) }
+    }
+
+    private fun problemFrom(availability: CameraAvailability): CameraProblem? {
+        return cameraProblem(availability = availability, isCameraGranted = isCameraGranted)
     }
 
     private fun selectZoom(ratio: Float) {

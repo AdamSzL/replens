@@ -35,16 +35,20 @@ enum class CameraAvailability {
 }
 
 /**
- * The state decides and the error only separates the terminal cases: `OPENING`
- * carrying an error is a retry in progress, since CameraX keeps the state and
- * exposes what it is recovering from. An error-free `CLOSING`/`CLOSED` is an
- * ordinary teardown and must read as [Ready], or leaving the screen would report
- * a broken camera every time.
+ * The type says where the camera is, the error only what happened on the way —
+ * so the type is read first. Measured on a Pixel 10 Pro XL with the permission
+ * revoked: `CLOSING(code=6)` then `PENDING_OPEN(code=6)`, the critical error
+ * carried into a state that is still waiting. Reading the error first called
+ * that camera broken.
+ *
+ * `OPENING` with an error is likewise a retry in progress, and an error-free
+ * `CLOSING`/`CLOSED` is an ordinary teardown that must read as [Ready], or
+ * leaving the screen would report a broken camera every time.
  */
 internal fun CameraState.toAvailability(): CameraAvailability {
     return when {
-        error?.type == CameraState.ErrorType.CRITICAL -> CameraAvailability.Failed
         type == CameraState.Type.PENDING_OPEN -> CameraAvailability.Unavailable
+        error?.type == CameraState.ErrorType.CRITICAL -> CameraAvailability.Failed
         else -> CameraAvailability.Ready
     }
 }
