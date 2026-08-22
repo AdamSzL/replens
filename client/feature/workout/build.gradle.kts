@@ -12,8 +12,10 @@ android {
 dependencies {
     implementation(projects.core.audio)
     implementation(projects.core.data)
+    implementation(projects.core.datastore)
     implementation(projects.core.designsystem)
     implementation(projects.core.exercise)
+    api(projects.core.model)
     implementation(projects.core.pose)
     implementation(projects.core.posemath)
     implementation(projects.core.text)
@@ -22,6 +24,7 @@ dependencies {
     api(libs.androidx.navigation3.runtime)
     implementation(libs.kotlinx.serialization.core)
 
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.camera.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
