@@ -4,7 +4,7 @@ Where RepLens actually is, what has been validated on a device, and what is next
 **This is the file that changes every session** — CLAUDE.md holds the rules, which
 should not churn just because a milestone landed.
 
-Last updated 2026-08-19.
+Last updated 2026-08-22.
 
 ## Milestones
 
@@ -165,9 +165,10 @@ Last updated 2026-08-19.
   See *The 30 fps path*; the short version is that ML Kit posts
   `detector.close()`'s cancellation onto an executor the old code had already
   shut down, and `AbortPolicy` throws on main.
-  **Known and carried deliberately:** `CameraPermissionGate` still wraps the whole
-  display, so denying the camera locks you out of History. Where the gate belongs
-  is a design question that lands with the picker — #9, noted there.
+  **Carried deliberately at the time, and resolved since:**
+  `CameraPermissionGate` wrapped the whole display, so denying the camera locked
+  you out of History. Where the gate belonged was a design question that landed
+  with the picker — #9, below.
 - **Reviewed by three agents, six fixes landed 2026-08-19.** Roughly two dozen
   findings; six were worth taking — the large app bar's actions being squeezed out
   by a long title, `internal` on the shell, dead `navigationBarsPadding()` in the
@@ -182,9 +183,40 @@ Last updated 2026-08-19.
   `NavigationBarItemDefaults.colors()` as a base, which is precisely the
   `MaterialTheme` leak the design system exists to expose. Filed instead: #30, for
   when a multi-pane layout breaks that invariant. 308 unit tests.
-- **Next:** unstarted. The nearest candidates are the real exercise picker with
-  the permission flow (#26 + #9) and the live geometric form rules, which need
-  footage before code.
+- **The exercise picker and the camera permission: done and validated on device
+  2026-08-22** (#26 + #9, PR #32, ten commits, 31 files). The permission moved
+  off the app's root and onto the tap that needs it, so denying the camera now
+  costs the workout and nothing else — History stays reachable, which is what #9
+  was about. `:core:datastore` is new, `:feature:workout` grew `domain/`,
+  `data/` and `di/`, and the design system gained a text button and an alert
+  dialog. 340 unit tests.
+  **The hard part was that Android reports no "permanently denied" state.** The
+  answer is one persisted bit plus a reading taken *after* each result: a
+  warranted rationale is the only informative one, because Android offers it only
+  while it has a denial on record. The rules are in CLAUDE.md; the device matrix
+  and the rejected designs are in `docs/decisions.md`.
+  **Verified by hand on Android 16 and on an API 29 emulator**, which become
+  permanent by different rules — two strikes against an explicit *Deny & don't
+  ask again* that only appears on the second dialog. Neither is encoded. The
+  finding that mattered on both: **a Settings revoke leaves the permission
+  askable again**, so the rationale on the next resume is the only notice the app
+  gets that a granted permission is gone.
+  **One design that survived a device test and one that did not.** Backing out of
+  the system dialog reports a denial Android records nowhere, which kills the
+  before/after comparison the flag started as. And a review's suggestion to clear
+  the flag on a grant is unreachable — the conditions contradict.
+  **Known and carried:** `WorkoutRoute` restored after a revoke shows a permanent
+  loading state rather than crashing (CameraX swallows
+  `ERROR_SECURITY_EXCEPTION`), filed as #33.
+- **Reviewed by three agents, and two changes came out of it 2026-08-22.** The
+  permission logic became `CameraGate`, a three-field state machine that made the
+  whole truth table plain JUnit, and `PreferencesDataSource` gave the shared
+  DataStore file one place that decides what an `IOException` means — **reads
+  absorb it, writes report it**, for reasons in CLAUDE.md. Both were mutation-
+  checked. Filed rather than fixed: #31 (raise minSdk to 29), #33, #34
+  (experiment with Gradle Managed Devices for instrumented tests).
+- **Next:** unstarted. The nearest candidates are the live geometric form rules,
+  which need footage before code, and stats.
 
 ## Roadmap
 
@@ -193,8 +225,8 @@ Last updated 2026-08-19.
    and the first two form cues done; **the live geometric rules (valgus, forward
    lean, heel lift) are what remains, and they need footage before code**.
 3. **Local persistence & app shell** — Room history, the Nav 3 wiring, the workout
-   summary, the history list and the shell itself all done; **stats remains**,
-   along with the real exercise picker and permission flow (#26, #9).
+   summary, the history list, the shell and the exercise picker with its
+   permission flow all done; **stats remains**.
 4. **Backend & sync** — Ktor API (auth or device-ID first), leaderboard.
 5. **Second/third exercise + Play release** — push-ups, bicep curls; privacy
    policy (camera!), data-safety form, signing, crash reporting.

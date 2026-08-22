@@ -678,6 +678,135 @@ with decaying confidence first.
 
 ---
 
+## The permanently-denied heuristic
+
+*Decided and verified on two Android versions, 2026-08-20/22.*
+
+**Android exposes no "permanently denied" state, and the obvious substitute is
+ambiguous.** `shouldShowRequestPermissionRationale` is false *before* the first
+denial and false again *after* the system stops asking — the same reading for
+opposite situations. Only something we persist ourselves separates them.
+
+**The discriminator is the reading taken *after* a result, and `true` is the only
+informative one.** Android offers a rationale only while it has a denial on
+record, so a warranted rationale is a fact about the past, not a suggestion about
+the future. A `false` reading decides nothing and is never written down.
+
+**A before/after comparison was the first design, and it is wrong.** Backing out
+of the system dialog with the back button reports `isGranted = false` while
+Android records *nothing* — confirmed on device: the callback fires with
+`isGranted = false` and `canShowCameraRationale = false`, and the next tap shows
+the system dialog again exactly as if nothing happened. A rule that marks a
+denial on every negative result therefore downgrades the user to the Settings
+route permanently, after one stray back press, on a permission they were never
+really asked about.
+
+**What the API actually computes**, which is why one reading suffices: roughly
+*not granted* **and** `USER_SET` **and** not `USER_FIXED` **and** not at the
+permanent-denial strike count. It is derived per call, not stored, so it tracks
+whether the system is *still willing to ask* — which is the question the gate
+wants answered anyway.
+
+The two versions disagree about how a permission becomes permanent, and the gate
+deliberately encodes neither rule:
+
+| | Android 16 | API 29 |
+|---|---|---|
+| becomes permanent by | two denials | an explicit *Deny & don't ask again* |
+| that option appears | — | only on the **second** dialog |
+| first denial reports | `rationale = true` | `rationale = true` |
+| a Settings revoke leaves | `USER_SET`, no `USER_FIXED` | `USER_SET`, no `USER_FIXED` |
+
+The last row is the one that matters and it was the surprise: **revoking in
+Settings makes the system willing to ask again**, so the next resume reads
+`rationale = true` — which is the whole of the notice the app gets that a
+permission it once held is gone. Nothing else reports it. That is why the same
+observation is fed from `ON_RESUME` and from the permission result, and why
+`ScreenResumed` carries both readings.
+
+On API 29 the permanent option only appears on the *second* dialog, so the first
+denial always yields `rationale = true` first — the flag is always written before
+it could ever be needed. No version has a hole where the app is told nothing.
+
+**`CameraGate` is three fields and no version checks**: granted, the last
+rationale reading, and the remembered denial. `Blocked` is *a denial we recorded*
+plus *the system's current silence*. Two details that look like slips:
+
+- **`restore` or-s rather than assigns.** The remembered bit is read from disk in
+  a coroutine, and a denial recorded while that read was in flight must not be
+  erased by an answer describing an earlier moment.
+- **The flag is never cleared on a grant**, and clearing it is unreachable rather
+  than merely unnecessary. A stale flag can only mislead when
+  `!canShowRationale`; if the system would still ask, `canShowRationale` is
+  `true`. The two conditions contradict, so the clear has no reachable effect.
+  Raised as a review finding and rejected on that ground.
+
+**Not solved, and not solvable here:** `WorkoutRoute` restored after a
+Settings revoke. CameraX swallows `ERROR_SECURITY_EXCEPTION` — retries twice,
+gives up, surfaces nothing — so no `SurfaceRequest` ever arrives and the
+viewfinder cover stays up forever. Observed as
+`Failed to open camera CameraId-1 after 2 attempts … ERROR_SECURITY_EXCEPTION`
+with **no** fatal exception. The fix is a "camera unavailable" state on the
+workout screen, which is a general capability question rather than a permission
+one — [#33](https://github.com/AdamSzL/replens/issues/33).
+
+---
+
+## Preferences: reads absorb, writes report
+
+*Decided 2026-08-22, when `PreferencesDataSource` was extracted.*
+
+DataStore's `ReplaceFileCorruptionHandler` covers `CorruptionException` only.
+Every other IO failure surfaces from `data` and from `edit {}`, and the question
+is who decides what that means.
+
+**The two directions get different answers, and the asymmetry is the design.**
+
+**A read cannot fail in a way the caller has not already answered**, because
+`read(key, default)` is handed the value to stand in for "no value". A missing
+key and an unreadable file are the same sentence — *I have no value for you* —
+and the call site answered it once, before the failure happened. Returning a
+`Result` would ask the same question twice and let the two answers disagree.
+
+**A failed write has no such answer.** Reverting an optimistic switch, ignoring
+it, or telling the user are each correct somewhere, and none of them is a value
+that can be passed in up front. So it comes back out.
+
+Three shapes were considered for that:
+
+- **Throwing** was the first recommendation and is wrong for a reason the author
+  caught immediately: a settings repository with six setters gets six identical
+  `try/catch` blocks. "The caller decides" must not cost the caller six lines to
+  decide *nothing*.
+- **`Result`/`AppError`** would be the codebase's own convention, except neither
+  type exists yet — CLAUDE.md earmarks them for the network layer and the Room
+  boundary. Building them now for a one-arm preferences error means two
+  migrations instead of one.
+- **`Boolean`**, chosen. The indifferent caller ignores it in one line; the
+  caller that cares passes it up in one line. Upgrading to
+  `EmptyResult<DataError>` later changes the pass-through setters and leaves the
+  ignoring site untouched.
+
+**Absorbing means absorbing IO, not everything.** A wrong-typed key or any other
+non-`IOException` still propagates, because those are our bugs rather than the
+disk's.
+
+**The trap in the read, worth stating because it is invisible:** `first()` throws
+`NoSuchElementException` when a flow completes with no emissions. Our `catch`
+either emits or rethrows, and `dataStore.data` always emits at least once, so
+there is no path to it — but writing `.catch { }` instead would create one, and
+turn a disk error into a confusing exception at a call site that has nothing to
+do with disks.
+
+**No `Flow` variant, and the trigger is specific.** The rule it waits for: the
+screen that *edits* a setting may read once, flip optimistically and
+fire-and-forget, provided the write can report failure so it can revert — which
+is what the `Boolean` buys. Every *other* consumer observes, because a one-shot
+read there is a cache with no invalidation. So the flow arrives with the first
+non-editing consumer, and until then it would be four lines nothing calls.
+
+---
+
 ## Sign-out is an unanswered question
 
 With no `userId` locally, the database is "this device's history" and signing in

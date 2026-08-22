@@ -79,7 +79,7 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
 ## Client tech stack
 
 - Kotlin, Jetpack Compose (pure, no Views), Jetpack Navigation 3
-- Hilt (DI), Room (local history), kotlinx.serialization
+- Hilt (DI), Room (local history), DataStore (preferences), kotlinx.serialization
 - CameraX (`ImageAnalysis`) + ML Kit Pose Detection
 - **Ktor Client**, not Retrofit. The margin was small and both sit on OkHttp, so
   this is settled rather than obvious. Two things to actually *use* when
@@ -133,6 +133,13 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
   not sit in the same module as the type.**
 - The Compose BOM is declared twice on purpose (`implementation` +
   `androidTestImplementation`); the IDE's duplicate warning is a false positive.
+- **An `AlertDialog` cannot render in the preview *pane*** — it draws into its own
+  window, and the pane renders a composition, so the preview looks empty and the
+  component looks broken. Use *Run preview*, which deploys to the device. That
+  path uses the **device's** theme, so `@PreviewLightDark` on a dialog preview
+  buys nothing: it produces two entries that render identically. Plain `@Preview`
+  is correct there, and it is the one place the design system's usual
+  light/dark pair is deliberately absent.
 - Release runs R8 + resource shrinking; verify `assembleRelease` when adding
   libraries.
 - **Only a `Configuration` change recreates a composition, and the 12/24-hour
@@ -157,8 +164,9 @@ exactly the regime where only the tax is paid. [Why](docs/decisions.md#ktor-not-
 Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 
 ```
-:app                MainActivity: camera permission gate -> NavDisplay. Owns
-                    every cross-feature edge. Everything here is internal.
+:app                MainActivity -> NavDisplay. Owns every cross-feature edge.
+                    Everything here is internal. It asks for no permissions —
+                    the camera is the workout feature's business.
                       …app.navigation/ NavigationState + Navigator (a back stack
                                        per tab), TopLevelDestination,
                                        RepLensBottomNavigation, and the scene
@@ -166,8 +174,14 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :feature:workout    …workout.navigation/    ExercisePickerRoute + WorkoutRoute +
                                             workoutEntries — the module's whole
                                             public surface
+                    …workout.domain/ …data/ …di/  CameraPermissionRepository:
+                                            one remembered bit, nothing more
                     …workout.ui.picker/     the Workout tab's root: one button
-                                            per exercise, no ViewModel yet (#26)
+                                            per exercise, the five files, plus
+                                            CameraGate (what the camera allows)
+                                            and CameraPermission (the readings
+                                            only an Activity can take)
+                    …workout.ui.picker.mapper/      Exercise -> UiText
                     …workout.ui.workout/    the camera: the five files, plus
                                             CueEngine (what to say), CueAnnouncer
                                             (whether to say it again) and
@@ -205,9 +219,10 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
                       …component.appbar/ RepLensTopAppBar, RepLensLargeTopAppBar
                                          (tab roots), and the shared container
                                          modifier keeping their insets in sync
-                      …component.button/ Primary, OverlayPrimary,
+                      …component.button/ Primary, Text, OverlayPrimary,
                                          OverlaySecondary, OverlayIcon, RepLensIcon
                       …component.card/   RepLensCard
+                      …component.dialog/ RepLensAlertDialog
                       …component.navigationbar/ RepLensNavigationBar + its item
 :core:model         Landmark, LandmarkType, BodyPose, PoseFrame; Rep, RepPhase,
                     RepUpdate, AbandonedDescent; Exercise, ExerciseSet, Workout.
@@ -225,6 +240,10 @@ Module map — each `build.gradle.kts` is convention plugins + namespace + deps:
 :core:data          WorkoutRepository + impl, the entity mappers, WORKOUT_GAP.
                     The only module speaking both vocabularies.
                       …mapper/  …di/
+:core:datastore     One preferences file and PreferencesDataSource, which owns
+                    what an IOException means (below). Features bring their own
+                    keys; nothing here knows what they mean.
+                      …di/
 ```
 
 Planned, not built: `:core:network`, `:feature:{stats,leaderboard}`.
@@ -1036,6 +1055,44 @@ than per-feature because `:feature:workout` writes it while `:feature:history` a
 `:feature:stats` read it — the one case the per-feature `domain/` rule does not
 cover.
 
+## Preferences
+
+One DataStore file (`"replens"`), one `PreferencesDataSource`, and features bring
+their own keys. **Keys are unprefixed** — `:core:datastore` does not know what a
+key means and must not, so a collision is prevented the same way the rejected
+`resourcePrefix` would have been: one owner per key, trivially renamed. Revisit
+when a second feature adds keys, which is the settings screen.
+
+**Reads absorb, writes report — the asymmetry is the point, not a compromise.**
+
+```kotlin
+suspend fun <T> read(key: Preferences.Key<T>, default: T): T
+suspend fun <T> write(key: Preferences.Key<T>, value: T): Boolean
+```
+
+A read cannot fail in a way the caller has not already answered: `default` is
+handed in, and a missing key and an unreadable file are the same sentence. A
+failed write has no such answer — revert the switch, ignore it, tell the user are
+each right somewhere — so it comes back out. **Throwing was rejected** because it
+costs every indifferent caller a `try/catch`; **`Result` was rejected for now**
+because `AppError` does not exist and a one-arm error type means two migrations
+instead of one.
+[The full trade](docs/decisions.md#preferences-reads-absorb-writes-report).
+
+- **Absorbing means IO, not everything** —
+  `catch { if (it is IOException) emit(emptyPreferences()) else throw it }`. A
+  wrong-typed key is our bug and must still crash.
+- **Never `.catch { }` without an `emit`**, or the flow completes empty and
+  `first()` throws `NoSuchElementException` — a disk error surfacing as something
+  with nothing to do with disks.
+- **No `Flow` variant yet.** The rule it waits for: **the screen that edits a
+  setting may read once, flip optimistically and fire-and-forget** — which is
+  what the `Boolean` is for — **while every other consumer observes**, because a
+  one-shot read elsewhere is a cache with no invalidation. The flow lands with
+  the first non-editing consumer.
+- A caller that drops the `Boolean` says why in a comment. Losing a write is a
+  decision, not an oversight.
+
 ## Product decisions
 
 **Voice feedback: platform TTS, on-device.** Non-obvious requirements, all of
@@ -1114,8 +1171,10 @@ confirmation that line would have given.
   user is listening.
 - **Settings, when they land: switch by category, not by message** — setup
   guidance, rep counting, form cues, summary. Per-message granularity sounds
-  respectful and is unusable. Needs DataStore, so it rides with the setup and
-  settings work; and the categories cannot be designed before form cues exist.
+  respectful and is unusable. DataStore exists now (see *Preferences*), so what
+  it waits on is the categories, which cannot be designed before form cues do.
+  It is also the first screen that *edits* what it reads, so it is what decides
+  whether `PreferencesDataSource` grows a `Flow`.
 
 **Form feedback: hand-written geometry rules, not an LLM.** Cues must fire within
 ~100 ms, and knee valgus is a measurement, not a judgement. Per-exercise rule =
@@ -1454,6 +1513,16 @@ before there is history worth keeping.
 one:** they need signing secrets, and CI needs none. Keeping them apart means no
 workflow with access to the keystore ever runs on an untrusted PR.
 
+- **A permission flow is testable once the decision leaves the framework**
+  (2026-08-22, 24 tests). `CameraGate` takes two booleans and a remembered bit,
+  so the whole truth table — including the back-dismiss hole and a denial
+  recorded while the disk read was in flight — is plain JUnit with no
+  Robolectric, no `Activity` and no fake. `ExercisePickerViewModel` is then left
+  routing, and its tests read as sequences of taps and resumes.
+  **`PreferencesDataSource` was mutation-checked both ways**: removing the read's
+  IO `catch` fails exactly one test, and flipping the write's `false` to `true`
+  fails exactly one other. Two tests that each pin one decision beat six that
+  overlap.
 - **`Navigator` is tested; `NavigationState` mostly isn't** (2026-08-19, 5
   tests). `mutableStateOf` and `NavBackStack(vararg)` are constructible
   off-composition, so the tab and back rules need no Compose rule and no
@@ -1488,6 +1557,52 @@ workflow with access to the keystore ever runs on an untrusted PR.
   `Active` after 3.5 s of `READY` frames, and a rep only counts after a smoothed
   168 → 115 → 168 sweep, so the fixture builds a body at a given interior knee angle
   rather than stubbing the angle.
+
+## Camera permission — built 2026-08-20/22
+
+**The permission is asked for where it is needed, not at the app's root.** The
+exercise picker asks when an exercise is tapped, so denying the camera costs you
+the workout tab and nothing else; History stays reachable. `:app` requests no
+permissions at all.
+
+**Android reports no "permanently denied" state, so one bit is persisted.**
+`shouldShowRequestPermissionRationale` reads false both *before* the first denial
+and *after* the system stops asking — the same value for opposite situations.
+
+- **The only informative reading is a warranted rationale taken *after* a
+  result.** Android offers one only while it has a denial on record, so `true` is
+  a fact about the past. `false` decides nothing and is never written down.
+- **Do not compare the reading before and after.** Backing out of the system
+  dialog with the back button reports `isGranted = false` while Android records
+  nothing, so a rule that marks a denial on every negative result routes the user
+  to Settings forever after one stray back press.
+- **Feed the same observation from `ON_RESUME`.** A Settings revoke leaves the
+  permission askable again on every version tested, so the warranted rationale on
+  the next resume is the *whole* of the notice the app gets that a granted
+  permission is gone. Nothing else reports it.
+- **`CameraGate` holds the three readings and answers one question** —
+  `Granted` / `Requestable` / `Blocked`, where `Blocked` is a recorded denial
+  plus the system's current silence. No `Build.VERSION` checks: the versions
+  disagree about how a permission becomes permanent, and the gate asks whether
+  Android is still willing to ask rather than predicting when it will stop.
+- **The flag is never cleared on a grant, and clearing it is unreachable** — a
+  stale flag can only mislead when `!canShowRationale`, and if the system would
+  still ask, `canShowRationale` is `true`. Raised in review, rejected on that.
+- **`restore()` or-s rather than assigns**, because the disk read is a coroutine
+  and a denial recorded while it was in flight must not be erased by an answer
+  describing an earlier moment.
+- **`canShowCameraRationale` takes an `Activity?` and reads `null` as false**, so
+  a failed cast routes the user to Settings quietly. Pass the real `Activity`.
+- **`openAppSettings` is on `Activity` for a reason**: `startActivity` elsewhere
+  needs `NEW_TASK`, which puts Settings in its own task and stops the return from
+  resuming the picker — which is how a granted permission is noticed.
+
+[The device matrix and the rejected designs](docs/decisions.md#the-permanently-denied-heuristic).
+
+**Known gap:** `WorkoutRoute` restored after a Settings revoke shows a permanent
+loading state rather than crashing — CameraX swallows `ERROR_SECURITY_EXCEPTION`,
+so no `SurfaceRequest` ever arrives. The fix is a camera-unavailable state, not a
+permission check ([#33](https://github.com/AdamSzL/replens/issues/33)).
 
 ## Camera selection vs capabilities — built 2026-08-08
 
