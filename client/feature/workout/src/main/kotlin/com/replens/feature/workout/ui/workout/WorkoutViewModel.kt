@@ -18,11 +18,9 @@ import com.replens.core.model.Exercise
 import com.replens.core.model.PoseFrame
 import com.replens.core.model.Rep
 import com.replens.core.model.RepPhase
-import com.replens.core.pose.CameraAvailability
 import com.replens.core.pose.PoseCameraDataSource
 import com.replens.core.posemath.PoseSmoother
 import com.replens.core.ui.EventChannel
-import com.replens.feature.workout.ui.workout.model.CameraProblem
 import com.replens.feature.workout.ui.workout.model.cameraProblem
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -33,6 +31,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
@@ -115,11 +114,8 @@ internal class WorkoutViewModel @AssistedInject constructor(
      */
     private var recordJob: Deferred<Long>? = null
 
-    /**
-     * Not defaulted to true: the camera binds on composition and can fail before
-     * the first reading, which arrives on resume.
-     */
-    private var isCameraGranted: Boolean? = null
+    /** Null, not true: the camera can fail before the first reading arrives on resume. */
+    private val isCameraGranted = MutableStateFlow<Boolean?>(null)
 
     init {
         viewModelScope.launch {
@@ -134,9 +130,8 @@ internal class WorkoutViewModel @AssistedInject constructor(
             }
         }
         viewModelScope.launch {
-            poseCamera.availability.collect { availability ->
-                state.update { it.copy(cameraProblem = problemFrom(availability)) }
-            }
+            combine(poseCamera.availability, isCameraGranted, ::cameraProblem)
+                .collect { problem -> state.update { it.copy(cameraProblem = problem) } }
         }
     }
 
@@ -189,13 +184,8 @@ internal class WorkoutViewModel @AssistedInject constructor(
      * so a permission granted while we were away has already been retried. Only
      * the name for a failure that survived it is missing.
      */
-    private fun onScreenResumed(isCameraGranted: Boolean) {
-        this.isCameraGranted = isCameraGranted
-        state.update { it.copy(cameraProblem = problemFrom(poseCamera.availability.value)) }
-    }
-
-    private fun problemFrom(availability: CameraAvailability): CameraProblem? {
-        return cameraProblem(availability = availability, isCameraGranted = isCameraGranted)
+    private fun onScreenResumed(isGranted: Boolean) {
+        isCameraGranted.value = isGranted
     }
 
     private fun selectZoom(ratio: Float) {
