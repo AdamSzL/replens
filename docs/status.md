@@ -195,9 +195,10 @@ Last updated 2026-08-22.
   warranted rationale is the only informative one, because Android offers it only
   while it has a denial on record. The rules are in CLAUDE.md; the device matrix
   and the rejected designs are in `docs/decisions.md`.
-  **Verified by hand on Android 16 and on an API 29 emulator**, which become
-  permanent by different rules — two strikes against an explicit *Deny & don't
-  ask again* that only appears on the second dialog. Neither is encoded. The
+  **Verified by hand on a Pixel 10 Pro XL (Android 17) and a Pixel 4 emulator
+  (API 29)**, which become permanent by different rules — two strikes against an
+  explicit *Deny & don't ask again* that only appears on the second dialog, the
+  split arriving in Android 11. Neither is encoded. The
   finding that mattered on both: **a Settings revoke leaves the permission
   askable again**, so the rationale on the next resume is the only notice the app
   gets that a granted permission is gone.

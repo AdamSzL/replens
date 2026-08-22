@@ -710,12 +710,17 @@ wants answered anyway.
 The two versions disagree about how a permission becomes permanent, and the gate
 deliberately encodes neither rule:
 
-| | Android 16 | API 29 |
+| | Android 11+ (tested on 17) | API 29 |
 |---|---|---|
 | becomes permanent by | two denials | an explicit *Deny & don't ask again* |
 | that option appears | — | only on the **second** dialog |
 | first denial reports | `rationale = true` | `rationale = true` |
 | a Settings revoke leaves | `USER_SET`, no `USER_FIXED` | `USER_SET`, no `USER_FIXED` |
+
+Tested on a Pixel 10 Pro XL (Android 17, API 37) and a Pixel 4 emulator (API 29).
+The left column names Android 11 rather than the phone, because 11 is where the
+two-strike rule arrived — that is the boundary, not the device that happened to
+be on the desk.
 
 The last row is the one that matters and it was the surprise: **revoking in
 Settings makes the system willing to ask again**, so the next resume reads
