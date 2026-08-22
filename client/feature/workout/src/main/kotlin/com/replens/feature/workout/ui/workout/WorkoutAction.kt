@@ -15,6 +15,16 @@ internal sealed interface WorkoutAction {
 
     data object ScreenDetached : WorkoutAction
 
+    /**
+     * Visibility, unlike [ScreenAttached]: a trip to Settings leaves the screen
+     * composed, so this is the only signal that the permission may have changed.
+     */
+    data class ScreenResumed(val isCameraGranted: Boolean) : WorkoutAction
+
+    data object OpenSettingsClicked : WorkoutAction
+
+    data object GoBackClicked : WorkoutAction
+
     data class ZoomSelected(val ratio: Float) : WorkoutAction
 
     data object CameraFlipClicked : WorkoutAction

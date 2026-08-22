@@ -19,6 +19,13 @@ interface PoseCameraDataSource {
     val options: StateFlow<CameraOptions?>
 
     /**
+     * Whether a camera can be expected. Separate from [surfaceRequests] because a
+     * camera that never opens produces no request at all, so its absence reads as
+     * "still loading" forever.
+     */
+    val availability: StateFlow<CameraAvailability>
+
+    /**
      * [facings] is awaited *after* [options] first publishes, so a caller can
      * resolve a lens that exists before anything binds. A fake must keep that
      * order or it will describe a handshake the real camera does not perform.

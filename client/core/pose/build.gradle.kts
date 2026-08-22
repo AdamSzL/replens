@@ -26,6 +26,8 @@ dependencies {
     // CameraInfo.zoomState is LiveData; asFlow() keeps it out of the callback world.
     implementation(libs.androidx.lifecycle.livedata.ktx)
 
+    testImplementation(libs.junit)
+
     // The fixture generator: real pipeline, real device, recorded clips in, CSV out.
     androidTestImplementation(projects.core.exercise)
     androidTestImplementation(libs.junit)

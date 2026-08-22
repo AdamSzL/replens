@@ -5,12 +5,8 @@ import com.replens.core.model.Exercise
 import com.replens.core.testing.FakeClock
 import com.replens.core.testing.FakeWorkoutRepository
 import com.replens.core.testing.MainDispatcherRule
+import com.replens.core.testing.collectEvents
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -101,24 +97,9 @@ class WorkoutViewModelTest {
         viewModel.onAction(WorkoutAction.StartClicked)
     }
 
-    /**
-     * Fills as events arrive, so a test can assert that none did. Unconfined
-     * explicitly: `backgroundScope` inherits runTest's *standard* dispatcher, so a
-     * plain launch would leave the events buffered and unread until the scheduler
-     * next ran — and every assertion here is about the moment an event appears.
-     */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun TestScope.collectEvents(): List<WorkoutEvent> {
-        val events = mutableListOf<WorkoutEvent>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.events.toList(events)
-        }
-        return events
-    }
-
     @Test
     fun `Done navigates to the workout the set landed in`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         start()
         standUntilCountedIn()
         rep()
@@ -136,7 +117,7 @@ class WorkoutViewModelTest {
      */
     @Test
     fun `Done pressed before the write lands still navigates, once it has`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         repository.writeInFlight = CompletableDeferred()
         start()
         standUntilCountedIn()
@@ -155,7 +136,7 @@ class WorkoutViewModelTest {
     /** No reps and no abandoned descents means no workout to show. */
     @Test
     fun `Done after a set that wrote nothing stays on the camera`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         start()
         standUntilCountedIn()
         viewModel.onAction(WorkoutAction.FinishClicked)

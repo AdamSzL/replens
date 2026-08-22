@@ -3,6 +3,7 @@ package com.replens.feature.workout.ui.workout
 import androidx.camera.core.SurfaceRequest
 import androidx.lifecycle.LifecycleOwner
 import com.replens.core.model.PoseFrame
+import com.replens.core.pose.CameraAvailability
 import com.replens.core.pose.CameraFacing
 import com.replens.core.pose.CameraOptions
 import com.replens.core.pose.PoseCameraDataSource
@@ -27,6 +28,10 @@ internal class FakePoseCameraDataSource : PoseCameraDataSource {
     )
 
     override val options: StateFlow<CameraOptions?> = cameraOptions
+
+    val cameraAvailability = MutableStateFlow(CameraAvailability.Ready)
+
+    override val availability: StateFlow<CameraAvailability> = cameraAvailability
 
     val frames = MutableSharedFlow<PoseFrame>(extraBufferCapacity = 256)
 
