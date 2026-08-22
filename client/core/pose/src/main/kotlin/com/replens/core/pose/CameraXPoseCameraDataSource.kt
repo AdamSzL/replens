@@ -76,6 +76,9 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
     override val options: StateFlow<CameraOptions?>
         field = MutableStateFlow(null)
 
+    override val availability: StateFlow<CameraAvailability>
+        field = MutableStateFlow(CameraAvailability.Ready)
+
     override fun poseFrames(
         lifecycleOwners: Flow<LifecycleOwner?>,
         facings: Flow<CameraFacing>,
@@ -150,6 +153,10 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
                     // handing that one a request the last one declined renders
                     // black permanently.
                     surfaceRequests.value = null
+                    // Nothing is bound, so nothing is wrong. Left as it was, a
+                    // camera that failed would still read as failed on the way
+                    // back, before anything had tried to open.
+                    availability.value = CameraAvailability.Ready
                     return@collectLatest
                 }
                 val (owner, facing) = target
@@ -170,6 +177,13 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
                             )
                         }
                     }
+                    // bindToLifecycle succeeds whether or not the device opens, and
+                    // a failure to open is never thrown — this is the only report.
+                    launch {
+                        camera.cameraInfo.cameraState.asFlow().collect { state ->
+                            availability.value = state.toAvailability()
+                        }
+                    }
                     // Re-collected per binding because a rebind resets zoom to 1x.
                     zoomRatios.distinctUntilChanged()
                         .collect { camera.cameraControl.setZoomRatio(it) }
@@ -187,6 +201,7 @@ internal class CameraXPoseCameraDataSource @Inject constructor(
             detector.close()
             surfaceRequests.value = null
             options.value = null
+            availability.value = CameraAvailability.Ready
         }
     }.flowOn(Dispatchers.Main)
 
