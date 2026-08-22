@@ -1,24 +1,22 @@
 package com.replens.feature.workout.data
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
+import com.replens.core.datastore.PreferencesDataSource
 import com.replens.feature.workout.domain.CameraPermissionRepository
-import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 private val CameraPermissionDeniedKey = booleanPreferencesKey("camera_permission_denied")
 
 internal class CameraPermissionRepositoryImpl @Inject constructor(
-    private val dataStore: DataStore<Preferences>,
+    private val preferences: PreferencesDataSource,
 ) : CameraPermissionRepository {
 
     override suspend fun hasBeenDenied(): Boolean {
-        return dataStore.data.first()[CameraPermissionDeniedKey] ?: false
+        return preferences.read(CameraPermissionDeniedKey, false)
     }
 
+    /** The result is dropped: losing this costs one tap, and the next denial rewrites it. */
     override suspend fun markDenied() {
-        dataStore.edit { preferences -> preferences[CameraPermissionDeniedKey] = true }
+        preferences.write(CameraPermissionDeniedKey, true)
     }
 }
