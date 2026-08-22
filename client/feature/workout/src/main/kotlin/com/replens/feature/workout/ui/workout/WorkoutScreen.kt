@@ -52,6 +52,7 @@ import com.replens.feature.workout.ui.workout.components.PoseOverlay
 import com.replens.feature.workout.ui.workout.components.RepCounter
 import com.replens.feature.workout.ui.workout.components.SessionControls
 import com.replens.feature.workout.ui.workout.components.ZoomControl
+import com.replens.feature.workout.ui.workout.model.CameraProblem
 import androidx.camera.core.Preview as CameraPreview
 
 @Composable
@@ -114,19 +115,6 @@ private fun WorkoutScreen(
     val haptics = LocalHapticFeedback.current
     var hasStreamed by remember { mutableStateOf(false) }
 
-    // Replaces the screen rather than covering it, so Start cannot be pressed
-    // against a camera that will not count anything.
-    val problem = state.cameraProblem
-    if (problem != null) {
-        CameraProblemPanel(
-            problem = problem,
-            onOpenSettings = { onAction(WorkoutAction.OpenSettingsClicked) },
-            onGoBack = { onAction(WorkoutAction.GoBackClicked) },
-            modifier = modifier,
-        )
-        return
-    }
-
     Box(modifier = modifier.fillMaxSize()) {
         surfaceRequest?.let { request ->
             CameraXViewfinder(
@@ -155,60 +143,69 @@ private fun WorkoutScreen(
                     .background(RepLensTheme.colors.background),
             )
         }
-        // The preview and overlay stay edge to edge; only the controls are inset,
-        // or the system bars and a punch-hole cutout sit on top of them.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding(),
-        ) {
-            if (state.cameraOptions?.facings.orEmpty().size > 1) {
-                OverlayIconButton(
-                    icon = RepLensIcons.CameraSwitch,
-                    contentDescription = stringResource(R.string.workout_flip_camera),
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                        onAction(WorkoutAction.CameraFlipClicked)
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(24.dp),
-                )
-            }
-            if (state.session == SessionState.Active) {
-                RepCounter(
-                    repCount = state.repCount,
-                    phase = state.phase,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(24.dp),
-                )
-            }
-            Column(
+        // Gone rather than covered: an opaque panel does not consume touches.
+        if (state.cameraProblem == null) {
+            // The preview and overlay stay edge to edge; only the controls are inset,
+            // or the system bars and a punch-hole cutout sit on top of them.
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 24.dp, vertical = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .fillMaxSize()
+                    .safeDrawingPadding(),
             ) {
-                // Framing yourself is the point of the pre-set states, so the camera
-                // controls stay until the set is over.
-                val zoomStops = state.cameraOptions?.zoomRange?.stops.orEmpty()
-                // One stop is nothing to choose between.
-                if (zoomStops.size > 1 && state.session != SessionState.Finished) {
-                    ZoomControl(
-                        stops = zoomStops,
-                        selected = state.zoomRatio,
-                        onSelect = { onAction(WorkoutAction.ZoomSelected(it)) },
+                if (state.cameraOptions?.facings.orEmpty().size > 1) {
+                    OverlayIconButton(
+                        icon = RepLensIcons.CameraSwitch,
+                        contentDescription = stringResource(R.string.workout_flip_camera),
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            onAction(WorkoutAction.CameraFlipClicked)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(24.dp),
                     )
                 }
-                SessionControls(
-                    session = state.session,
-                    repCount = state.repCount,
-                    repsAtDepth = state.repsAtDepth,
-                    onAction = onAction,
-                )
+                if (state.session == SessionState.Active) {
+                    RepCounter(
+                        repCount = state.repCount,
+                        phase = state.phase,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(24.dp),
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    // Framing yourself is the point of the pre-set states, so the camera
+                    // controls stay until the set is over.
+                    val zoomStops = state.cameraOptions?.zoomRange?.stops.orEmpty()
+                    // One stop is nothing to choose between.
+                    if (zoomStops.size > 1 && state.session != SessionState.Finished) {
+                        ZoomControl(
+                            stops = zoomStops,
+                            selected = state.zoomRatio,
+                            onSelect = { onAction(WorkoutAction.ZoomSelected(it)) },
+                        )
+                    }
+                    SessionControls(
+                        session = state.session,
+                        repCount = state.repCount,
+                        repsAtDepth = state.repsAtDepth,
+                        onAction = onAction,
+                    )
+                }
             }
+        } else {
+            CameraProblemPanel(
+                problem = state.cameraProblem,
+                onOpenSettings = { onAction(WorkoutAction.OpenSettingsClicked) },
+                onGoBack = { onAction(WorkoutAction.GoBackClicked) },
+            )
         }
     }
 }
@@ -225,6 +222,28 @@ private fun WorkoutScreenIdlePreview() {
                     facings = setOf(CameraFacing.FRONT, CameraFacing.BACK),
                     zoomRange = ZoomRange(min = 0.5f, max = 10f),
                 ),
+            ),
+            surfaceRequest = null,
+            poseFrame = { null },
+            onAction = {},
+        )
+    }
+}
+
+/** The camera controls are gone rather than covered — compare with the idle preview. */
+@Preview
+@Composable
+private fun WorkoutScreenCameraProblemPreview() {
+    RepLensOverlayPreview {
+        WorkoutScreen(
+            state = WorkoutState(
+                session = SessionState.Idle,
+                cameraFacing = CameraFacing.FRONT,
+                cameraOptions = CameraOptions(
+                    facings = setOf(CameraFacing.FRONT, CameraFacing.BACK),
+                    zoomRange = ZoomRange(min = 0.5f, max = 10f),
+                ),
+                cameraProblem = CameraProblem.PermissionMissing,
             ),
             surfaceRequest = null,
             poseFrame = { null },
