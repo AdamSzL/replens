@@ -5,12 +5,8 @@ import com.replens.core.pose.CameraAvailability
 import com.replens.core.testing.FakeClock
 import com.replens.core.testing.FakeWorkoutRepository
 import com.replens.core.testing.MainDispatcherRule
+import com.replens.core.testing.collectEvents
 import com.replens.feature.workout.ui.workout.model.CameraProblem
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -45,15 +41,6 @@ class WorkoutCameraProblemTest {
 
     private fun resume(isCameraGranted: Boolean) {
         viewModel.onAction(WorkoutAction.ScreenResumed(isCameraGranted))
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun TestScope.collectEvents(): List<WorkoutEvent> {
-        val events = mutableListOf<WorkoutEvent>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.events.toList(events)
-        }
-        return events
     }
 
     @Test
@@ -137,7 +124,7 @@ class WorkoutCameraProblemTest {
 
     @Test
     fun `the settings button asks for settings`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
 
         viewModel.onAction(WorkoutAction.OpenSettingsClicked)
 
@@ -146,7 +133,7 @@ class WorkoutCameraProblemTest {
 
     @Test
     fun `the back button leaves the screen`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
 
         viewModel.onAction(WorkoutAction.GoBackClicked)
 

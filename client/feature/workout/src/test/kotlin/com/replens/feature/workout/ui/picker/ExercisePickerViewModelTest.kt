@@ -2,12 +2,8 @@ package com.replens.feature.workout.ui.picker
 
 import com.replens.core.model.Exercise
 import com.replens.core.testing.MainDispatcherRule
+import com.replens.core.testing.collectEvents
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -50,19 +46,9 @@ class ExercisePickerViewModelTest {
     private val isBlockedDialogVisible: Boolean
         get() = viewModel.state.value.isCameraBlockedDialogVisible
 
-    /** Fills as events arrive, so a test can assert that none did. */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun TestScope.collectEvents(): List<ExercisePickerEvent> {
-        val events = mutableListOf<ExercisePickerEvent>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.events.toList(events)
-        }
-        return events
-    }
-
     @Test
     fun `an exercise picked with the camera granted opens the workout`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume(isGranted = true)
 
         pickSquat()
@@ -72,7 +58,7 @@ class ExercisePickerViewModelTest {
 
     @Test
     fun `an exercise picked without the camera asks for it`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
 
         pickSquat()
@@ -82,7 +68,7 @@ class ExercisePickerViewModelTest {
 
     @Test
     fun `granting the camera opens the exercise that asked for it`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
 
@@ -116,7 +102,7 @@ class ExercisePickerViewModelTest {
      */
     @Test
     fun `backing out of the system dialog is not a denial`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
 
@@ -134,7 +120,7 @@ class ExercisePickerViewModelTest {
 
     @Test
     fun `an exercise picked once the system stops asking shows the blocked dialog`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
         answer(isGranted = false, canShowRationale = true)
@@ -151,7 +137,7 @@ class ExercisePickerViewModelTest {
     @Test
     fun `a denial remembered from an earlier process blocks without asking`() = runTest {
         cameraPermission.isDenied = true
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
 
         pickSquat()
@@ -174,7 +160,7 @@ class ExercisePickerViewModelTest {
     @Test
     fun `opening settings dismisses the blocked dialog`() = runTest {
         cameraPermission.isDenied = true
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
 
@@ -187,7 +173,7 @@ class ExercisePickerViewModelTest {
     @Test
     fun `granting in settings opens the exercise that was blocked`() = runTest {
         cameraPermission.isDenied = true
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
         viewModel.onAction(ExercisePickerAction.OpenSettingsClicked)
@@ -209,7 +195,7 @@ class ExercisePickerViewModelTest {
     @Test
     fun `returning from settings without the camera forgets the exercise`() = runTest {
         cameraPermission.isDenied = true
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
         viewModel.onAction(ExercisePickerAction.OpenSettingsClicked)
@@ -227,7 +213,7 @@ class ExercisePickerViewModelTest {
     @Test
     fun `dismissing the blocked dialog forgets the exercise`() = runTest {
         cameraPermission.isDenied = true
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
 
@@ -244,7 +230,7 @@ class ExercisePickerViewModelTest {
      */
     @Test
     fun `a result followed by the resume navigates once`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
 
@@ -256,7 +242,7 @@ class ExercisePickerViewModelTest {
 
     @Test
     fun `a resume followed by the result navigates once`() = runTest {
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
         pickSquat()
 
@@ -274,7 +260,7 @@ class ExercisePickerViewModelTest {
     fun `an exercise picked before the flag has loaded asks the system`() = runTest {
         cameraPermission.isDenied = true
         cameraPermission.readInFlight = CompletableDeferred()
-        val events = collectEvents()
+        val events = collectEvents(viewModel.events)
         resume()
 
         pickSquat()
